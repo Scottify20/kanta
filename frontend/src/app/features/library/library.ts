@@ -117,7 +117,13 @@ export class Library {
     const additive = event.ctrlKey || event.metaKey;
     if (event.shiftKey && this.anchorIndex >= 0) {
       const [from, to] = [this.anchorIndex, index].sort((a, b) => a - b);
-      this.selection.set(new Set(this.entries().slice(from, to + 1).map((e) => e.key)));
+      this.selection.set(
+        new Set(
+          this.entries()
+            .slice(from, to + 1)
+            .map((e) => e.key),
+        ),
+      );
       return;
     }
     if (additive || this.selection().size > 0) {
@@ -238,7 +244,13 @@ export class Library {
     if (index < 0) return;
     this.playlistsService.removeSong(detail.playlistId, index).subscribe(() => {
       this.detail.update((d) =>
-        d ? { ...d, songs: d.songs.filter((_, i) => i !== index), subtitle: `${d.songs.length - 1} songs` } : d,
+        d
+          ? {
+              ...d,
+              songs: d.songs.filter((_, i) => i !== index),
+              subtitle: `${d.songs.length - 1} songs`,
+            }
+          : d,
       );
     });
   }
@@ -247,7 +259,9 @@ export class Library {
     const songs = [...detail.songs];
     if (detail.kind === 'album') {
       songs.sort(
-        (a, b) => (a.disc_number ?? 1) - (b.disc_number ?? 1) || (a.track_number ?? 0) - (b.track_number ?? 0),
+        (a, b) =>
+          (a.disc_number ?? 1) - (b.disc_number ?? 1) ||
+          (a.track_number ?? 0) - (b.track_number ?? 0),
       );
     }
     return songs.map(songEntry);

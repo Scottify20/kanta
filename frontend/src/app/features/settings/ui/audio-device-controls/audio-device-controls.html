@@ -41,6 +41,6 @@
       }
     </p>
   }
-  <label class="monitor-toggle"><input type="checkbox" [checked]="monitor()" (change)="setMonitor($any($event.target).checked)" /><span>Monitor / loopback</span><svg lucideVolume2 [size]="16"></svg></label>
+  <label class="monitor-toggle"><input class="switch" type="checkbox" role="switch" [checked]="monitor()" (change)="setMonitor($any($event.target).checked)" /><span>Monitor / loopback</span><svg lucideVolume2 [size]="16"></svg></label>
   @if (monitor()) { <p class="feedback-warning" role="note">Feedback warning: microphone audio will play through your speakers. Use headphones or keep the level low.</p> }
 </div>

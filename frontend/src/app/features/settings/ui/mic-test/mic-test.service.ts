@@ -12,6 +12,7 @@ export class MicTestService {
   private context: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private sink: GainNode | null = null;
   private frame = 0;
   private monitor = false;
   private samples = new Float32Array(0);
@@ -24,7 +25,12 @@ export class MicTestService {
       return;
     }
     try {
-      const audio: MediaTrackConstraints = deviceId ? { deviceId: { exact: deviceId } } : {};
+      const audio: MediaTrackConstraints = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      };
+      if (deviceId) audio.deviceId = { exact: deviceId };
       this.stream = await navigator.mediaDevices.getUserMedia({ audio, video: false });
       this.context = new AudioContext();
       await this.context.resume();
@@ -33,6 +39,11 @@ export class MicTestService {
       this.analyser.fftSize = 1024;
       this.samples = new Float32Array(this.analyser.fftSize);
       this.source.connect(this.analyser);
+      // Some engines only pull samples through nodes that reach the destination, so route the analyser to a muted sink.
+      this.sink = this.context.createGain();
+      this.sink.gain.value = 0;
+      this.analyser.connect(this.sink);
+      this.sink.connect(this.context.destination);
       if (this.monitor) this.source.connect(this.context.destination);
       this.stream.getAudioTracks().forEach((track) => {
         track.addEventListener('ended', this.onTrackEnded, { once: true });
@@ -86,7 +97,8 @@ export class MicTestService {
       peak = Math.max(peak, absolute);
     }
     const rms = Math.sqrt(sum / this.samples.length);
-    this.level.set(Math.max(0, Math.min(1, rms * 3.2)));
+    const db = rms > 0 ? 20 * Math.log10(rms) : -90;
+    this.level.set(Math.max(0, Math.min(1, (db + 60) / 60)));
     this.peak.set(Math.max(0, Math.min(1, peak)));
     this.frame = requestAnimationFrame(() => this.measure());
   }
@@ -99,6 +111,8 @@ export class MicTestService {
     this.source = null;
     this.analyser?.disconnect();
     this.analyser = null;
+    this.sink?.disconnect();
+    this.sink = null;
     const context = this.context;
     this.context = null;
     if (context && context.state !== 'closed') void context.close();

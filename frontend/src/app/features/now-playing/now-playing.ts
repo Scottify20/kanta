@@ -243,18 +243,14 @@ export class NowPlaying implements OnDestroy {
     this.clearHideTimer();
   }
 
-  @HostListener('document:mousemove')
-  @HostListener('document:keydown')
-  onUserActivity(): void {
-    if (!this.isFullScreen()) return;
-    this.trackAreaCollapsed.set(false);
-    if (!this.pointerInsideTrackArea) {
-      this.startHideTimer();
-    }
-  }
-
   onTrackAreaMouseEnter(): void {
     this.pointerInsideTrackArea = true;
+    if (!this.trackAreaCollapsed()) this.clearHideTimer();
+  }
+
+  // Controls only re-appear while hovering (or focusing) the timeline.
+  revealTrackArea(): void {
+    if (!this.isFullScreen()) return;
     this.clearHideTimer();
     this.trackAreaCollapsed.set(false);
   }

@@ -1,11 +1,11 @@
-import { Component, OnInit, input, output, inject, signal } from '@angular/core';
-import { LucideHardDrive, LucideRefreshCw } from '@lucide/angular';
+import { Component, OnInit, computed, input, output, inject, signal } from '@angular/core';
+import { LucideHardDrive, LucideRefreshCw, LucideX } from '@lucide/angular';
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { OutputDirectoryStatus, SettingsService, StorageDevice } from '../../../../shared/services/settings.service';
 
 @Component({
   selector: 'app-settings-storage-devices',
-  imports: [LucideHardDrive, LucideRefreshCw, Tooltip],
+  imports: [LucideHardDrive, LucideRefreshCw, LucideX, Tooltip],
   templateUrl: './storage-devices.html',
   styleUrl: './storage-devices.scss',
 })
@@ -14,6 +14,8 @@ export class StorageDevices implements OnInit {
   readonly statuses = input<OutputDirectoryStatus[]>([]);
   readonly addPath = output<string>();
   readonly devices = signal<StorageDevice[]>([]);
+  readonly modalOpen = signal(false);
+  readonly writableDevices = computed(() => this.devices().filter((device) => device.mounted && device.writable));
   readonly loading = signal(false);
   readonly unavailable = signal(false);
   private readonly settings = inject(SettingsService);
@@ -29,11 +31,15 @@ export class StorageDevices implements OnInit {
     });
   }
 
+  openModal(): void { this.modalOpen.set(true); this.refresh(); }
+  closeModal(): void { this.modalOpen.set(false); }
+
   add(device: StorageDevice): void {
     if (!device.mounted || !device.writable) return;
     const separator = /[\\]/.test(device.path) || /^[A-Za-z]:/.test(device.path) ? '\\' : '/';
     const path = device.path.replace(/[\\/]+$/, '');
     this.addPath.emit(`${path}${separator}Kanta`);
+    this.closeModal();
   }
 
   usage(device: StorageDevice): number {

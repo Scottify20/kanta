@@ -84,7 +84,7 @@
           <span class="processing-progress">{{ selectedTrack()?.progress }}%</span>
         </div>
       } @else {
-        <div class="timeline">
+        <div class="timeline" (mouseenter)="revealTrackArea()" (focusin)="revealTrackArea()">
           <span class="time-label">{{ formatTime(audioPlayer.currentTime()) }}</span>
           <div
             class="progress-track"

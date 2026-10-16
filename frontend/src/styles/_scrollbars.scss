@@ -1,18 +1,27 @@
 // Sleek, compact scrollbars shared by every scrollable surface.
 :root {
-  --scrollbar-size: 0.375rem;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --scrollbar-size: 0.5rem;
+  --scrollbar-size-hover: 0.8rem;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
 }
 
 *::-webkit-scrollbar {
   width: var(--scrollbar-size);
   height: var(--scrollbar-size);
+  transition: width var(--dur-fast, 150ms) ease;
+}
+
+*:hover::-webkit-scrollbar {
+  width: var(--scrollbar-size-hover);
+  height: var(--scrollbar-size-hover);
 }
 
 *::-webkit-scrollbar-track,
@@ -23,6 +32,8 @@
 *::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
   border-radius: 999px;
+  border: 0.125rem solid transparent;
+  background-clip: padding-box;
   transition: background-color var(--dur-fast, 150ms) ease;
 }
 

@@ -15,7 +15,7 @@
         <app-settings-audio-device-controls />
         <div class="replaygain-controls">
           <label class="replaygain-toggle">
-            <input type="checkbox" [checked]="replayGainEnabled()" (change)="setReplayGainEnabled($any($event.target).checked)" />
+            <input class="switch" type="checkbox" role="switch" [checked]="replayGainEnabled()" (change)="setReplayGainEnabled($any($event.target).checked)" />
             <span><strong>Apply ReplayGain</strong><small>Normalize playback loudness using embedded ReplayGain tags.</small></span>
           </label>
           <div class="replaygain-segment" role="group" aria-label="ReplayGain mode">

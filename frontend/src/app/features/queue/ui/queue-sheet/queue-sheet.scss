@@ -120,7 +120,7 @@
   border-radius: 0.75rem;
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.8rem;
-  animation: queue-gap-open var(--dur-base) var(--ease-out) forwards;
+  animation: queue-gap-open var(--dur-drag) var(--ease-drag) forwards;
 }
 
 @keyframes queue-gap-open {
@@ -163,7 +163,7 @@
   display: grid;
   flex: 1 0 auto;
   grid-template-rows: 1fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.2, 0, 0.2, 1);
+  transition: grid-template-rows var(--dur-drag) var(--ease-drag);
 
   &.is-collapsed {
     grid-template-rows: 0fr;
@@ -202,7 +202,7 @@
   }
 
   &.is-entering {
-    animation: queue-row-in var(--dur-base) var(--ease-spring) both;
+    animation: queue-row-in var(--dur-drag) var(--ease-drag) both;
   }
 
   &:active {
@@ -252,13 +252,13 @@
 /* 3. CRITICAL FIX: High-specificity classes to ensure the transform animation is NEVER overridden */
 .track-list li.cdk-drag-animating {
   transition:
-    transform var(--dur-base) var(--ease-out),
+    transform var(--dur-drag) var(--ease-drag),
     background-color var(--dur-fast) var(--ease-out) !important;
 }
 
 .track-list.cdk-drop-list-dragging li:not(.cdk-drag-preview) {
   transition:
-    transform var(--dur-base) var(--ease-out),
+    transform var(--dur-drag) var(--ease-drag),
     background-color var(--dur-fast) var(--ease-out) !important;
 }
 /* ---------------------------------------- */

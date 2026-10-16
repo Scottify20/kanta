@@ -22,3 +22,11 @@
 .configured-status p { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: 0; padding: .4rem .55rem; border-radius: .5rem; background: rgba(255,255,255,.035); }
 .configured-status p > span { overflow: hidden; color: rgba(255,255,255,.57); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 540px) { .storage-list { grid-template-columns: 1fr; } }
+
+.add-button { display: inline-flex; align-items: center; gap: .4rem; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); animation: modal-fade var(--dur-base) var(--ease-out) both; }
+.modal { display: grid; gap: .8rem; width: min(40rem, 100%); max-height: min(34rem, 85dvh); overflow-y: auto; padding: 1.1rem; border: 1px solid rgba(255,255,255,.14); border-radius: 1.25rem; background: rgba(24,28,31,.96); box-shadow: 0 1.5rem 3rem rgba(0,0,0,.5); animation: modal-pop var(--dur-base) var(--ease-out) both; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; color: #fff; }
+.modal-actions { display: flex; gap: .4rem; }
+@keyframes modal-fade { from { opacity: 0; } }
+@keyframes modal-pop { from { opacity: 0; transform: translateY(.6rem) scale(.97); } }
