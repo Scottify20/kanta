@@ -4,7 +4,7 @@
       @if (detail()) { <svg lucideChevronLeft [size]="20"></svg> } @else { <svg lucideMenu [size]="20"></svg> }
     </button>
     <h1>{{ detail() ? detail()!.title : 'Library' }}</h1>
-    <app-search-bar class="header-search" />
+    @if (!layoutService.sidebarOpen()) { <app-search-bar class="header-search" /> }
   </header>
 
   @if (detail(); as current) {

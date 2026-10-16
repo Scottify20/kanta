@@ -6,12 +6,12 @@
 .refresh-button:disabled { opacity: .45; }
 .storage-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; }
 .storage-card { display: grid; gap: .65rem; padding: .75rem; border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; background: rgba(255,255,255,.035); }
-.device-line { display: flex; align-items: center; gap: .55rem; min-width: 0; color: #f4b297; }
+.device-line { display: flex; align-items: center; gap: .55rem; min-width: 0; color: rgba(255,255,255,.85); }
 .device-name { display: grid; flex: 1; min-width: 0; gap: .18rem; color: rgba(255,255,255,.84); }
 .device-name strong { overflow: hidden; font-size: .77rem; text-overflow: ellipsis; white-space: nowrap; }
 .device-name span { overflow: hidden; color: rgba(255,255,255,.43); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
 .badge { flex: 0 0 auto; padding: .2rem .4rem; border-radius: 999px; font-size: .63rem; }
-.badge.warning { color: #f2bc99; background: rgba(242,188,153,.12); }
+.badge.warning { color: #e6c184; background: rgba(230,193,132,.14); }
 .usage-track { height: .36rem; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.09); }
 .usage-track span { display: block; height: 100%; border-radius: inherit; background: #9dc4a2; transition: width var(--motion-base,260ms) var(--ease-out,ease-out); }
 .device-footer { display: flex; align-items: center; justify-content: space-between; gap: .4rem; color: rgba(255,255,255,.47); font-size: .66rem; }

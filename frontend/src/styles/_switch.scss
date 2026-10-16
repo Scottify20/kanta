@@ -24,8 +24,8 @@ input.switch {
     transition: transform var(--dur-base, 260ms) var(--ease-out, ease-out);
   }
 
-  &:checked { background: #f4b297; }
-  &:checked::after { transform: translateX(1rem); background: #1b1512; }
-  &:focus-visible { outline: 2px solid rgba(244, 178, 151, 0.7); outline-offset: 2px; }
+  &:checked { background: rgba(255,255,255,.9); }
+  &:checked::after { transform: translateX(1rem); background: #111; }
+  &:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
 }

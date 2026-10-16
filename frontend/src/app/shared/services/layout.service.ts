@@ -11,16 +11,21 @@ export class LayoutService {
   private queueAutoOpened = false;
 
   toggleSidebar(): void {
-    this.sidebarOpen.update((open) => !open);
+    const next = !this.sidebarOpen();
+    if (next) this.closeQueue();
+    this.sidebarOpen.set(next);
   }
 
   toggleQueue(): void {
     this.queueAutoOpened = false;
-    this.queueOpen.update((open) => !open);
+    const next = !this.queueOpen();
+    if (next) this.sidebarOpen.set(false);
+    this.queueOpen.set(next);
   }
 
   openQueue(): void {
     this.queueAutoOpened = false;
+    this.sidebarOpen.set(false);
     this.queueOpen.set(true);
   }
 
@@ -37,6 +42,7 @@ export class LayoutService {
     this.dragActive.set(true);
     if (!this.queueOpen()) {
       this.queueAutoOpened = true;
+      this.sidebarOpen.set(false);
       this.queueOpen.set(true);
     }
   }

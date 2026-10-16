@@ -1,15 +1,6 @@
 <aside class="sidebar" aria-label="Main navigation">
   <header class="sidebar-header">
     <strong>Kanta</strong>
-    <button
-      class="sidebar-close"
-      type="button"
-      aria-label="Close menu"
-      title="Close menu"
-      (click)="closeSidebar()"
-    >
-      <svg lucideX [size]="18"></svg>
-    </button>
   </header>
 
   <app-search-bar class="sidebar-search" />
@@ -28,10 +19,6 @@
       <svg lucideLibrary [size]="18"></svg>
       <span>Library</span>
     </a>
-    <button class="sidebar-link" type="button" (click)="openQueue()">
-      <svg lucideListMusic [size]="18"></svg>
-      <span>Queue</span>
-    </button>
     <a class="sidebar-link" routerLink="/settings" routerLinkActive="is-active">
       <svg lucideSettings2 [size]="18"></svg>
       <span>Settings</span>

@@ -1,17 +1,18 @@
 :host { display: grid; gap: 1rem; }
-.folder-list { display: grid; gap: .55rem; }
-.folder-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; padding: .65rem .8rem; border: 1px solid rgba(255,255,255,.1); border-radius: .7rem; background: rgba(255,255,255,.035); }
-.folder-choice { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: .7rem; min-width: 0; cursor: pointer; }
-.folder-choice input { width: 1rem; height: 1rem; margin: 0; accent-color: #f4b297; }
-.folder-path { overflow-wrap: anywhere; color: rgba(255,255,255,.84); font-size: .84rem; }
-.folder-choice small { color: #f4b297; font-size: .7rem; }
-.path-entry { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: .55rem; }
-input { min-width: 0; height: 2.7rem; box-sizing: border-box; padding: .65rem .8rem; border: 1px solid rgba(255,255,255,.14); border-radius: .7rem; outline: none; color: #fff; background: rgba(0,0,0,.15); font: inherit; font-size: .85rem; }
-input:focus { border-color: rgba(244,178,151,.7); }
-button { display: inline-flex; align-items: center; justify-content: center; gap: .42rem; min-height: 2.7rem; padding: .55rem .8rem; border-radius: .7rem; font: inherit; font-size: .82rem; cursor: pointer; }
-.browse-button, .add-button { border: 1px solid rgba(255,255,255,.13); color: rgba(255,255,255,.88); background: rgba(255,255,255,.06); }
-.browse-button:hover, .add-button:hover { background: var(--surface-hover, rgba(255,255,255,.1)); }
-.add-button { border-color: transparent; color: #2a201c; background: #f4b297; font-weight: 650; }
-.icon-button { display: grid; place-items: center; width: 2rem; min-height: 2rem; padding: 0; border: 0; border-radius: 50%; color: rgba(255,255,255,.72); background: transparent; }
-.icon-button:hover { color: white; background: rgba(255,255,255,.1); }
+.folder-list { display: grid; gap: .6rem; }
+.folder-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; padding: .8rem 1rem; border: 1px solid rgba(255,255,255,.1); border-radius: .85rem; background: rgba(255,255,255,.04); }
+.folder-choice { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: .85rem; min-width: 0; cursor: pointer; }
+.folder-choice input { width: 1.05rem; height: 1.05rem; margin: 0; accent-color: #fff; }
+.folder-path { overflow-wrap: anywhere; color: rgba(255,255,255,.88); font-size: .9rem; }
+.folder-choice small { padding: .2rem .55rem; border-radius: 999px; color: #fff; background: rgba(255,255,255,.14); font-size: .72rem; }
+.path-entry { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: .75rem; }
+input[type='text'] { min-width: 0; height: 2.9rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid rgba(255,255,255,.14); border-radius: .75rem; outline: none; color: #fff; background: rgba(0,0,0,.22); font: inherit; font-size: .9rem; transition: border-color var(--motion-fast); }
+input[type='text']:focus { border-color: rgba(255,255,255,.55); }
+button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; height: 2.9rem; padding: 0 1.1rem; border-radius: .75rem; font: inherit; font-size: .88rem; cursor: pointer; transition: background var(--motion-fast); }
+.browse-button { border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.9); background: rgba(255,255,255,.07); }
+.browse-button:hover { background: var(--surface-hover, rgba(255,255,255,.12)); }
+.add-button { border: 0; color: #111; background: #fff; font-weight: 600; }
+.add-button:hover { background: rgba(255,255,255,.85); }
+.icon-button { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; padding: 0; border: 0; border-radius: 50%; color: rgba(255,255,255,.7); background: transparent; }
+.icon-button:hover { color: #fff; background: rgba(255,255,255,.12); }
 @media (max-width: 520px) { .path-entry { grid-template-columns: minmax(0,1fr) auto; } .path-entry > input { grid-column: 1 / -1; } .browse-button span, .add-button span { display: none; } }

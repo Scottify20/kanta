@@ -10,7 +10,7 @@ h2 { margin: 0; font-size: 1.05rem; }
 .directory-list { min-height: 0; overflow-y: auto; }
 .directory { display: flex; align-items: center; gap: .75rem; width: 100%; padding: .72rem .8rem; border: 0; border-bottom: 1px solid rgba(255,255,255,.07); color: #f6f3ef; background: transparent; text-align: left; cursor: pointer; }
 .directory:hover { background: rgba(255,255,255,.08); }
-.folder-icon { color: #f4b297; }
+.folder-icon { color: rgba(255,255,255,.85); }
 .empty, .error { color: rgba(255,255,255,.56); font-size: .85rem; }
 .error { color: #ffad9b; }
 footer { justify-content: flex-end; }
@@ -19,6 +19,6 @@ button { font: inherit; }
 .icon-button:hover:not(:disabled) { background: rgba(255,255,255,.1); }
 .icon-button:disabled { opacity: .35; }
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.5rem; padding: .55rem .85rem; border-radius: .65rem; cursor: pointer; }
-.primary { border: 0; color: #28201d; background: #f4b297; font-weight: 650; }
+.primary { border: 0; color: #111; background: #fff; font-weight: 650; }
 .secondary { border: 1px solid rgba(255,255,255,.16); color: inherit; background: transparent; }
 .primary:disabled { opacity: .5; cursor: wait; }

@@ -35,14 +35,14 @@ export interface SettingsOption {
     :host { display: block; }
     .option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
     .option-grid.compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .option-card { display: grid; align-content: start; gap: .6rem; min-height: 6.7rem; padding: 1rem 1.05rem; border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius-md, .75rem); color: rgba(255,255,255,.7); background: rgba(255,255,255,.045); text-align: left; cursor: pointer; transition: border-color var(--motion-fast, 160ms), background var(--motion-fast, 160ms), transform var(--motion-fast, 160ms); }
-    .option-card:hover:not(:disabled) { border-color: rgba(255,255,255,.3); background: var(--surface-hover, rgba(255,255,255,.1)); transform: translateY(-1px); }
-    .option-card.selected { border-color: rgba(244,178,151,.8); color: #fff; background: rgba(244,178,151,.11); box-shadow: inset 0 0 0 1px rgba(244,178,151,.14); }
+    .option-card { display: grid; align-content: start; gap: .5rem; min-height: 5.5rem; padding: 1.1rem 1.25rem; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; color: rgba(255,255,255,.65); background: rgba(255,255,255,.04); text-align: left; cursor: pointer; transition: border-color var(--motion-fast), background var(--motion-fast), color var(--motion-fast); }
+    .option-card:hover:not(:disabled) { border-color: rgba(255,255,255,.25); background: var(--surface-hover, rgba(255,255,255,.09)); }
+    .option-card.selected { border-color: rgba(255,255,255,.7); color: #fff; background: rgba(255,255,255,.13); }
     .option-card:disabled { cursor: not-allowed; opacity: .45; }
-    .card-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; color: #fff; font-size: .95rem; }
-    .selected-mark { color: #f4b297; font-size: 1rem; }
-    .card-description, .card-note { font-size: .78rem; line-height: 1.45; }
-    .card-note { color: #efb69e; }
+    .card-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; color: #fff; font-size: .98rem; font-weight: 600; }
+    .selected-mark { color: #fff; font-size: 1rem; }
+    .card-description, .card-note { font-size: .82rem; line-height: 1.45; }
+    .card-note { color: rgba(255,255,255,.5); }
     @media (max-width: 640px) { .option-grid, .option-grid.compact-grid { grid-template-columns: 1fr; } .option-card { min-height: 0; } }
   `,
 })

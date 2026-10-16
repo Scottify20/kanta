@@ -35,7 +35,6 @@
   letter-spacing: 0.04em;
 }
 
-.sidebar-close,
 .sidebar-link {
   border: 0;
   color: #e9e5e0;
@@ -43,14 +42,6 @@
   cursor: pointer;
   text-decoration: none;
   transition: background var(--motion-fast), color var(--motion-fast);
-}
-
-.sidebar-close {
-  display: inline-grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
 }
 
 .sidebar-nav {
@@ -71,11 +62,10 @@
 }
 
 .sidebar-link:hover,
-.sidebar-close:hover,
 .sidebar-link.is-active {
   background: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-link.is-active {
-  color: #f5ac93;
+  color: #fff;
 }

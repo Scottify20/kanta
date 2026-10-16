@@ -13,6 +13,7 @@ export class OverlayScrollbarService {
   private thumb: HTMLElement | null = null;
   private target: HTMLElement | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private frame = 0;
   private dragging = false;
   private dragStartY = 0;
   private dragStartScroll = 0;
@@ -84,6 +85,16 @@ export class OverlayScrollbarService {
       return;
     }
     const rect = target.getBoundingClientRect();
+    const view = this.doc.defaultView;
+    // Hidden, collapsed or off-screen targets (e.g. a closing panel) must not leave a stray thumb behind.
+    if (
+      rect.width < 40 || rect.height < 40 || target.closest('[inert]') ||
+      (view && (rect.right <= 0 || rect.left >= view.innerWidth || rect.bottom <= 0 || rect.top >= view.innerHeight))
+    ) {
+      this.target = null;
+      this.hide();
+      return;
+    }
     const trackHeight = rect.height;
     const ratio = target.clientHeight / target.scrollHeight;
     const thumbHeight = Math.max(MIN_THUMB, trackHeight * ratio);
@@ -92,17 +103,28 @@ export class OverlayScrollbarService {
     thumb.style.height = `${thumbHeight}px`;
     thumb.style.transform = `translate(${rect.right - 14}px, ${top}px)`;
     thumb.classList.add('visible');
+    this.track();
+  }
+
+  // Follow the target while visible so layout animations never strand the thumb.
+  private track(): void {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      if (this.thumb?.classList.contains('visible')) this.update();
+    });
   }
 
   private hide(): void {
     this.cancelHide();
     if (!this.dragging) this.thumb?.classList.remove('visible');
+    if (this.frame) { cancelAnimationFrame(this.frame); this.frame = 0; }
   }
 
   private scheduleHide(): void {
     this.cancelHide();
     this.hideTimer = setTimeout(() => {
-      if (!this.dragging && !this.thumb?.matches(':hover')) this.thumb?.classList.remove('visible');
+      if (!this.dragging && !this.thumb?.matches(':hover')) this.hide();
     }, IDLE_HIDE_MS);
   }
 

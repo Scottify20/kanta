@@ -6,7 +6,7 @@
   [class.queue-open]="layout.queueOpen()"
 >
   <aside class="panel panel-left" [attr.inert]="layout.sidebarOpen() ? null : ''">
-    <app-sidebar (close)="layout.closeSidebar()" (queueSelected)="layout.openQueue()" />
+    <app-sidebar />
   </aside>
 
   <div class="content">
