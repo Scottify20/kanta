@@ -422,10 +422,12 @@ export class NowPlaying implements OnDestroy {
     );
   });
   readonly hasPrevious = computed(() => this.currentQueueIndex() > 0 || this.audioPlayer.currentTime() > 3);
+  // Next is only available once the upcoming track has finished processing.
   readonly hasNext = computed(() => {
     const items = this.queueItems();
     const index = this.currentQueueIndex();
-    return index < 0 ? items.length > 0 : index < items.length - 1;
+    const upcoming = items[index < 0 ? 0 : index + 1];
+    return !!upcoming && upcoming.status === 'completed';
   });
 
   async playPrevious(): Promise<void> {
@@ -439,8 +441,12 @@ export class NowPlaying implements OnDestroy {
 
   async playNext(): Promise<void> {
     if (!this.hasNext()) {
-      this.audioPlayer.pause();
-      this.audioPlayer.seek(0);
+      // Reaching the true end of the queue stops playback; a still-processing next track does nothing.
+      const items = this.queueItems();
+      if (this.currentQueueIndex() >= items.length - 1) {
+        this.audioPlayer.pause();
+        this.audioPlayer.seek(0);
+      }
       return;
     }
     await this.playRelative(1);
@@ -633,6 +639,8 @@ export class NowPlaying implements OnDestroy {
   }
 
   private async loadLyrics(song: SongManifest): Promise<void> {
+    this.lyricsService.lyrics.set(null);
+    this.lyricsService.lyricsLevel.set('none');
     const wordLyrics = song.lyrics.find(
       (file) => file.level === 'word' || (!file.level && file.name.toLowerCase().endsWith('.ttml')),
     );

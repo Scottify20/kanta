@@ -62,7 +62,6 @@
             (cdkDragStarted)="onDragStarted()"
             (cdkDragEnded)="onDragEnded()"
             class="queue-row"
-            [class.is-active]="item.status === 'processing'"
             [class.is-current]="activeTaskId() === item.task_id"
             [class.is-paused]="item.status === 'paused'"
             [class.is-entering]="isEntering(item)"

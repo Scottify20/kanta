@@ -1,6 +1,6 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2 } from '@lucide/angular';
+import { Select } from '../../../../shared/components/select/select';
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { AudioPlayerService } from '../../../../shared/services/audio-player.service';
 import { MicTestService } from '../mic-test/mic-test.service';
@@ -9,13 +9,21 @@ interface DeviceChoice { id: string; label: string; }
 
 @Component({
   selector: 'app-settings-audio-device-controls',
-  imports: [FormsModule, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip],
+  imports: [Select, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip],
   templateUrl: './audio-device-controls.html',
   styleUrl: './audio-device-controls.scss',
 })
 export class AudioDeviceControls implements OnInit, OnDestroy {
   readonly outputs = signal<DeviceChoice[]>([]);
   readonly inputs = signal<DeviceChoice[]>([]);
+  readonly outputOptions = computed(() => [
+    { value: '', label: 'System default' },
+    ...this.outputs().map((d) => ({ value: d.id, label: d.label })),
+  ]);
+  readonly inputOptions = computed(() => [
+    { value: '', label: 'System default' },
+    ...this.inputs().map((d) => ({ value: d.id, label: d.label })),
+  ]);
   readonly outputId = signal('');
   readonly inputId = signal('');
   readonly outputRoutingAvailable = signal(false);

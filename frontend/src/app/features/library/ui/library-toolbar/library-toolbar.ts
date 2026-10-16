@@ -3,9 +3,7 @@ import { LucideChevronDown, LucideLayoutGrid, LucideList, LucidePlus } from '@lu
 
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { Tooltip } from '../../../../shared/directives/tooltip';
-import { LibraryTab, SortMode } from '../../data/library-entries';
-
-const SORT_LABELS: Record<SortMode, string> = { az: 'A → Z', za: 'Z → A', recent: 'Recently added' };
+import { LibraryTab, SORT_LABELS, SORT_MODES, SortMode } from '../../data/library-entries';
 
 @Component({
   selector: 'app-library-toolbar',
@@ -25,7 +23,7 @@ export class LibraryToolbar {
     { id: 'artists', label: 'Artists' },
     { id: 'playlists', label: 'Playlists' },
   ];
-  readonly sortModes = Object.keys(SORT_LABELS) as SortMode[];
+  readonly sortModes = computed(() => SORT_MODES[this.tab()]);
   readonly sortLabel = computed(() => SORT_LABELS[this.sort()]);
   readonly labelOf = (mode: SortMode): string => SORT_LABELS[mode];
   readonly showLayoutToggle = computed(() => this.tab() !== 'songs');

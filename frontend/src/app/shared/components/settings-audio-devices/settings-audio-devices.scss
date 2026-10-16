@@ -1,7 +1,0 @@
-:host { display: grid; gap: .7rem; }
-.device-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
-.device-field { display: grid; gap: .5rem; color: rgba(255,255,255,.72); font-size: .8rem; }
-select { width: 100%; height: 2.8rem; padding: .55rem .7rem; border: 1px solid rgba(255,255,255,.14); border-radius: .7rem; color: #fff; background: rgba(0,0,0,.22); font: inherit; }
-select option { color: #f5f2ef; background: #25292c; }
-.hint { margin: 0; color: rgba(255,255,255,.42); font-size: .74rem; }
-@media (max-width: 560px) { .device-grid { grid-template-columns: 1fr; } }

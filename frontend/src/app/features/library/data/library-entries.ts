@@ -3,7 +3,38 @@ import { Playlist } from '../../../shared/services/playlists.service';
 import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
 
 export type LibraryTab = 'songs' | 'albums' | 'artists' | 'playlists';
-export type SortMode = 'az' | 'za' | 'recent';
+export type SortMode =
+  | 'az'
+  | 'za'
+  | 'recent'
+  | 'artist'
+  | 'album'
+  | 'year-new'
+  | 'year-old'
+  | 'longest'
+  | 'shortest'
+  | 'most-songs';
+
+export const SORT_LABELS: Record<SortMode, string> = {
+  az: 'A → Z',
+  za: 'Z → A',
+  recent: 'Recently added',
+  artist: 'Artist',
+  album: 'Album',
+  'year-new': 'Year (newest)',
+  'year-old': 'Year (oldest)',
+  longest: 'Longest',
+  shortest: 'Shortest',
+  'most-songs': 'Most songs',
+};
+
+// Sort options offered per content type; karaoke searches lean on artist and year.
+export const SORT_MODES: Record<LibraryTab, SortMode[]> = {
+  songs: ['az', 'za', 'artist', 'album', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
+  albums: ['az', 'za', 'artist', 'year-new', 'year-old', 'recent', 'most-songs'],
+  artists: ['az', 'za', 'most-songs', 'recent'],
+  playlists: ['az', 'za', 'most-songs', 'longest', 'shortest'],
+};
 
 export interface LibraryEntry {
   key: string;
@@ -14,7 +45,19 @@ export interface LibraryEntry {
   songs: SongManifest[];
   playlistId?: string;
   added: number;
+  artist: string;
+  album: string;
+  year: number;
+  duration: number;
+  count: number;
 }
+
+const yearOf = (song: SongManifest): number => parseInt(String(song.year ?? ''), 10) || 0;
+const stats = (songs: SongManifest[]) => ({
+  year: songs.reduce((max, song) => Math.max(max, yearOf(song)), 0),
+  duration: songs.reduce((sum, song) => sum + Number(song.duration_seconds ?? 0), 0),
+  count: songs.length,
+});
 
 const newest = (songs: SongManifest[]): number =>
   songs.reduce((max, song) => Math.max(max, Number(song.date_added ?? 0)), 0);
@@ -27,6 +70,9 @@ export const songEntry = (song: SongManifest): LibraryEntry => ({
   covers: [songCover(song)].filter((c): c is string => !!c),
   songs: [song],
   added: Number(song.date_added ?? 0),
+  artist: songArtist(song),
+  album: songAlbum(song),
+  ...stats([song]),
 });
 
 export const albumEntry = (album: AlbumEntry): LibraryEntry => ({
@@ -37,6 +83,9 @@ export const albumEntry = (album: AlbumEntry): LibraryEntry => ({
   covers: album.coverUrl ? [album.coverUrl] : [],
   songs: album.songs,
   added: newest(album.songs),
+  artist: album.displayArtist,
+  album: album.displayAlbum,
+  ...stats(album.songs),
 });
 
 export const artistEntry = (artist: ArtistEntry): LibraryEntry => ({
@@ -47,6 +96,9 @@ export const artistEntry = (artist: ArtistEntry): LibraryEntry => ({
   covers: artist.coverUrl ? [artist.coverUrl] : [],
   songs: artist.songs,
   added: newest(artist.songs),
+  artist: artist.displayArtist,
+  album: '',
+  ...stats(artist.songs),
 });
 
 export function playlistEntry(playlist: Playlist, all: Map<string, SongManifest>): LibraryEntry {
@@ -62,15 +114,36 @@ export function playlistEntry(playlist: Playlist, all: Map<string, SongManifest>
     songs,
     playlistId: playlist.id,
     added: 0,
+    artist: '',
+    album: '',
+    ...stats(songs),
   };
 }
 
 export function sortEntries(entries: LibraryEntry[], mode: SortMode): LibraryEntry[] {
-  const sorted = [...entries];
-  const byTitle = (a: LibraryEntry, b: LibraryEntry): number =>
-    a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
-  if (mode === 'recent') return sorted.sort((a, b) => b.added - a.added || byTitle(a, b));
-  return sorted.sort((a, b) => (mode === 'az' ? byTitle(a, b) : byTitle(b, a)));
+  const text = (a: string, b: string): number =>
+    a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+  const byTitle = (a: LibraryEntry, b: LibraryEntry): number => text(a.title, b.title);
+  // Entries without a value (e.g. no year tag) always sink to the end.
+  const byNumber = (pick: (e: LibraryEntry) => number, desc: boolean) =>
+    (a: LibraryEntry, b: LibraryEntry): number => {
+      const [x, y] = [pick(a), pick(b)];
+      if (!x !== !y) return x ? -1 : 1;
+      return (desc ? y - x : x - y) || byTitle(a, b);
+    };
+  const compare: Record<SortMode, (a: LibraryEntry, b: LibraryEntry) => number> = {
+    az: byTitle,
+    za: (a, b) => byTitle(b, a),
+    recent: byNumber((e) => e.added, true),
+    artist: (a, b) => text(a.artist, b.artist) || text(a.album, b.album) || byTitle(a, b),
+    album: (a, b) => text(a.album, b.album) || byTitle(a, b),
+    'year-new': byNumber((e) => e.year, true),
+    'year-old': byNumber((e) => e.year, false),
+    longest: byNumber((e) => e.duration, true),
+    shortest: byNumber((e) => e.duration, false),
+    'most-songs': byNumber((e) => e.count, true),
+  };
+  return [...entries].sort(compare[mode]);
 }
 
 export const formatRuntime = (seconds: number): string => {

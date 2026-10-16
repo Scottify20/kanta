@@ -1,21 +1,15 @@
 <div class="devices-heading"><span>Audio devices</span><button class="refresh-audio" type="button" appTooltip="Refresh audio devices" aria-label="Refresh audio devices" (click)="refreshDevices()"><svg lucideRefreshCw [size]="15"></svg></button></div>
 <div class="devices-grid">
   @if (outputRoutingAvailable()) {
-    <label class="device-field">
+    <div class="device-field">
       <span>Audio output</span>
-      <select [ngModel]="outputId()" (ngModelChange)="changeOutput($event)">
-        <option value="">System default</option>
-        @for (device of outputs(); track $index) { <option [value]="device.id">{{ device.label }}</option> }
-      </select>
-    </label>
+      <app-select label="Audio output" [options]="outputOptions()" [value]="outputId()" (valueChange)="changeOutput($event)" />
+    </div>
   }
-  <label class="device-field">
+  <div class="device-field">
     <span>Microphone input</span>
-    <select [ngModel]="inputId()" (ngModelChange)="changeInput($event)">
-      <option value="">System default</option>
-      @for (device of inputs(); track $index) { <option [value]="device.id">{{ device.label }}</option> }
-    </select>
-  </label>
+    <app-select label="Microphone input" [options]="inputOptions()" [value]="inputId()" (valueChange)="changeInput($event)" />
+  </div>
 </div>
 @if (!outputRoutingAvailable()) { <p class="fallback">Output-device routing is not supported by this audio system; using the system default.</p> }
 <div class="mic-test">

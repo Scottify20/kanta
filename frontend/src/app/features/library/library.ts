@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideChevronLeft, LucideMenu } from '@lucide/angular';
 
@@ -13,6 +13,7 @@ import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-
 import {
   LibraryEntry,
   LibraryTab,
+  SORT_MODES,
   SortMode,
   albumEntry,
   artistEntry,
@@ -90,7 +91,8 @@ export class Library {
     this.playlistsService.refresh();
     effect(() => {
       // Switching tabs resets the drill-down and the selection.
-      this.tab();
+      const tab = this.tab();
+      if (!SORT_MODES[tab].includes(untracked(this.sort))) this.sort.set('az');
       this.detail.set(null);
       this.selection.set(new Set());
     });

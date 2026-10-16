@@ -135,6 +135,7 @@ export class LyricsService {
         throw new Error(`Could not load stored lyrics (${response.status}).`);
       }
       const text = await response.text();
+      if (this.requestController !== requestController) return false;
       const lyrics = url.toLowerCase().endsWith('.ttml')
         ? parseTTMLContent(text).lyrics
         : parseLRC(text, 0);
