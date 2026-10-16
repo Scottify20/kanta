@@ -23,3 +23,7 @@
     />
   </aside>
 </div>
+
+@if (setup.needsSetup()) {
+  <app-setup-modal />
+}

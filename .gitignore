@@ -13,6 +13,9 @@
 /backend/queue_state.json
 /backend/temp_processing/
 /backend/separated/
+/backend/build/
+/backend/dist/
+/backend/vendor/
 /backend/models/*
 !/backend/models/*.yaml
 

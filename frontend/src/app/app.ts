@@ -3,17 +3,19 @@ import { Router, RouterOutlet } from '@angular/router';
 
 import { QueueSheet } from './features/queue/ui/queue-sheet/queue-sheet';
 import { Backdrop } from './shared/components/backdrop/backdrop';
+import { SetupModal } from './shared/components/setup-modal/setup-modal';
 import { Sidebar } from './shared/components/sidebar/sidebar';
 import { AudioPlayerService } from './shared/services/audio-player.service';
 import { KANTA_DRAG_TYPE, LayoutService } from './shared/services/layout.service';
 import { OverlayScrollbarService } from './shared/services/overlay-scrollbar.service';
 import { autoScrollDuringDrag } from './shared/util/drag-autoscroll';
+import { SetupService } from './shared/services/setup.service';
 import { SongsService } from './shared/services/songs.service';
 import { QueueItem } from './features/queue/interfaces/queue.models';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet],
+  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -21,6 +23,7 @@ export class App {
   readonly layout = inject(LayoutService);
   readonly songs = inject(SongsService);
   readonly audioPlayer = inject(AudioPlayerService);
+  readonly setup = inject(SetupService);
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly overlayScrollbar = inject(OverlayScrollbarService);

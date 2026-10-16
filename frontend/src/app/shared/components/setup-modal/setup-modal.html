@@ -1,0 +1,35 @@
+@if (setup.status(); as status) {
+  <div class="backdrop" role="presentation">
+    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+      <h2 id="setup-title">Finish setting up Kanta</h2>
+      <p class="lead">Some large files aren't bundled with the app and need to be downloaded once.</p>
+      <ul>
+        <li [class.ok]="status.models">
+          <span>Separation models</span>
+          <small>{{ status.models ? 'Ready' : 'About 1.6 GB' }}</small>
+        </li>
+        <li [class.ok]="status.ffmpeg">
+          <span>ffmpeg</span>
+          <small>{{ status.ffmpeg ? 'Ready' : status.ffmpeg_downloadable ? 'About 100 MB' : 'Install it manually' }}</small>
+        </li>
+      </ul>
+      @if (job(); as job) {
+        @if (job.running) {
+          <div class="progress" role="progressbar" [attr.aria-valuenow]="percent()" aria-valuemin="0" aria-valuemax="100">
+            <div class="bar" [style.width.%]="percent()"></div>
+          </div>
+          <p class="step">{{ job.step }}</p>
+        }
+        @if (job.error) {
+          <p class="error" role="alert">{{ job.error }}</p>
+        }
+      }
+      <footer>
+        <button class="secondary" type="button" [disabled]="job()?.running" (click)="setup.dismiss()">Later</button>
+        <button class="primary" type="button" [disabled]="job()?.running" (click)="setup.install()">
+          {{ job()?.running ? 'Downloading…' : job()?.error ? 'Retry' : 'Download now' }}
+        </button>
+      </footer>
+    </section>
+  </div>
+}

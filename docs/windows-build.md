@@ -47,6 +47,8 @@ Fetch the large assets into the user data dir (also useful on a dev machine):
 npm run assets:fetch     # models + ffmpeg;  assets:models / assets:ffmpeg for one of them
 ```
 
+On first launch the app shows a setup dialog (`/api/setup/status`, `/api/setup/install`) offering to download missing models and ffmpeg. The installer target is pinned to NSIS in `tauri.bundle.conf.json`.
+
 Models are also downloaded automatically on first use, and ffmpeg is picked up from
 `<data dir>/bin`, `KANTA_FFMPEG`, or PATH. To bundle ffmpeg anyway, put it in `backend\vendor\` and
 set `KANTA_BUNDLE_FFMPEG=1` before building.
