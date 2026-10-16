@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-import { SongManifest, SongsService } from './songs.service';
+import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
 
 export interface SongRef {
   artist: string;
@@ -13,6 +13,8 @@ export interface AlbumEntry {
   key: string;
   artist: string;
   album: string;
+  displayArtist: string;
+  displayAlbum: string;
   coverUrl: string | null;
   songs: SongManifest[];
 }
@@ -20,6 +22,7 @@ export interface AlbumEntry {
 export interface ArtistEntry {
   key: string;
   artist: string;
+  displayArtist: string;
   coverUrl: string | null;
   albums: AlbumEntry[];
   songs: SongManifest[];
@@ -54,7 +57,7 @@ export class LibraryService {
       const key = `${song.artist}\u0000${song.album}`;
       let entry = groups.get(key);
       if (!entry) {
-        entry = { key, artist: song.artist, album: song.album, coverUrl: null, songs: [] };
+        entry = { key, artist: song.artist, album: song.album, displayArtist: songArtist(song), displayAlbum: songAlbum(song), coverUrl: null, songs: [] };
         groups.set(key, entry);
       }
       entry.songs.push(song);
@@ -68,7 +71,7 @@ export class LibraryService {
     for (const album of this.albums()) {
       let entry = groups.get(album.artist);
       if (!entry) {
-        entry = { key: album.artist, artist: album.artist, coverUrl: null, albums: [], songs: [] };
+        entry = { key: album.artist, artist: album.artist, displayArtist: album.displayArtist, coverUrl: null, albums: [], songs: [] };
         groups.set(album.artist, entry);
       }
       entry.albums.push(album);
@@ -82,11 +85,11 @@ export class LibraryService {
   private readonly index = computed(() => ({
     songs: this.songs().map((song) => ({
       song,
-      text: normalize(`${song.title} ${song.artist} ${song.album}`),
-      title: normalize(song.title),
+      text: normalize(`${songTitle(song)} ${songArtist(song)} ${songAlbum(song)}`),
+      title: normalize(songTitle(song)),
     })),
-    albums: this.albums().map((album) => ({ album, text: normalize(`${album.album} ${album.artist}`), title: normalize(album.album) })),
-    artists: this.artists().map((artist) => ({ artist, text: normalize(artist.artist), title: normalize(artist.artist) })),
+    albums: this.albums().map((album) => ({ album, text: normalize(`${album.displayAlbum} ${album.displayArtist}`), title: normalize(album.displayAlbum) })),
+    artists: this.artists().map((artist) => ({ artist, text: normalize(artist.displayArtist), title: normalize(artist.displayArtist) })),
   }));
 
   load(force = false): Promise<void> {
@@ -124,7 +127,7 @@ export class LibraryService {
     const artists = collect(index.artists, (e) => e).map(({ item }): SearchHit => ({
       kind: 'artist',
       key: `artist:${item.artist.key}`,
-      title: item.artist.artist,
+      title: item.artist.displayArtist,
       subtitle: `Artist • ${item.artist.songs.length} songs`,
       coverUrl: item.artist.coverUrl,
       songs: item.artist.songs,
@@ -132,16 +135,16 @@ export class LibraryService {
     const albums = collect(index.albums, (e) => e).map(({ item }): SearchHit => ({
       kind: 'album',
       key: `album:${item.album.key}`,
-      title: item.album.album,
-      subtitle: `Album • ${item.album.artist}`,
+      title: item.album.displayAlbum,
+      subtitle: `Album • ${item.album.displayArtist}`,
       coverUrl: item.album.coverUrl,
       songs: item.album.songs,
     }));
     const songs = collect(index.songs, (e) => e).map(({ item }): SearchHit => ({
       kind: 'song',
       key: `song:${songKey(item.song)}`,
-      title: item.song.title,
-      subtitle: `${item.song.artist} • ${item.song.album}`,
+      title: songTitle(item.song),
+      subtitle: `${songArtist(item.song)} • ${songAlbum(item.song)}`,
       coverUrl: songCover(item.song),
       songs: [item.song],
     }));

@@ -31,6 +31,7 @@ from app.services.tagging import (
     audio_files,
     embed_cover,
     get_basic_tag,
+    read_display_names,
     read_duration,
     remove_cover,
     write_tags,
@@ -126,13 +127,14 @@ async def add_processed_to_queue(song: ProcessedSongRequest) -> Dict[str, Any]:
     if reference is None:
         raise HTTPException(status_code=409, detail="Processed song has no playable audio file")
 
+    names = await asyncio.to_thread(read_display_names, reference)
     task_id = str(uuid.uuid4())
     item = QueueItem(
         task_id=task_id,
         file_path=str(reference.resolve()),
-        raw_title=song.title,
-        raw_artist=song.artist,
-        raw_album=song.album,
+        raw_title=names.get("title") or song.title,
+        raw_artist=names.get("artist") or song.artist,
+        raw_album=names.get("album") or song.album,
         title=song.title,
         artist=song.artist,
         album=song.album,
@@ -228,6 +230,16 @@ async def reorder_queue(request: QueueReorderRequest) -> Dict[str, str]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"message": "Queue reordered"}
+
+
+class ProcessingReorderRequest(BaseModel):
+    processing_queue: list[str]
+
+
+@router.patch("/reorder-processing")
+async def reorder_processing_queue(request: ProcessingReorderRequest) -> Dict[str, str]:
+    await queue_manager.reorder_processing(request.processing_queue)
+    return {"message": "Processing queue reordered"}
 
 
 @router.delete("/karaoke/{task_id}")

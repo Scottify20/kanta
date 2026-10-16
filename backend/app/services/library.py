@@ -21,7 +21,7 @@ from app.services.settings import (
     get_output_dirs,
     get_settings_version,
 )
-from app.services.tagging import AUDIO_SUFFIXES, EXTENDED_FIELDS, read_duration, read_tags
+from app.services.tagging import AUDIO_SUFFIXES, EXTENDED_FIELDS, read_display_names, read_duration, read_tags
 
 LIST_TTL_SECONDS = 60.0
 ASSET_HIT_TTL = 30.0
@@ -130,6 +130,7 @@ def build_song_record(
         cover_url = covers[0]["url"]
 
     tags = read_tags(reference) if reference else {field: None for field in EXTENDED_FIELDS}
+    names = read_display_names(reference) if reference else {}
     duration = read_duration(reference) if reference else None
     duration_seconds = round(duration, 3) if duration else 0
     masters = top_level_audio(song_dir)
@@ -137,6 +138,9 @@ def build_song_record(
         "artist": artist,
         "album": album,
         "title": title,
+        "display_title": names.get("title") or title,
+        "display_artist": names.get("artist") or artist,
+        "display_album": names.get("album") or album,
         "stems": [{"name": f.name, "url": media(f)} for f in _files_in(song_dir / "stems")],
         "lyrics": [
             {"name": f.name, "url": media(f), "level": classify_lyrics_file(f)}

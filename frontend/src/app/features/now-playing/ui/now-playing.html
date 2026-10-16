@@ -21,8 +21,8 @@
     <nav class="next-tracks" aria-label="Queue preview">
       @for (item of queuePreview(); track item.task_id) {
         <span
-          ><strong>{{ item.title }}</strong
-          ><small>{{ item.artist }}</small></span
+          ><strong>{{ item.raw_title || item.title }}</strong
+          ><small>{{ item.raw_artist || item.artist }}</small></span
         >
       }
     </nav>
@@ -47,7 +47,7 @@
   >
     <app-lyrics-stage
       [coverUrl]="coverUrl()"
-      [coverAlt]="selectedTrack()?.title ?? selectedManifest()?.title ?? 'Current album cover'"
+      [coverAlt]="selectedTrack()?.raw_title ?? selectedManifest()?.title ?? 'Current album cover'"
       [lyrics]="lyricsService.lyrics()"
       [currentTime]="lyricsTimeSeconds()"
       [playing]="audioPlayer.isPlaying()"
@@ -111,16 +111,17 @@
         <!-- Track details -->
         <div class="track-details">
           <h1 class="track-title">
-            {{ selectedTrack()?.title ?? selectedManifest()?.title ?? 'No track selected' }}
+            {{ selectedTrack()?.raw_title ?? selectedManifest()?.display_title ?? selectedManifest()?.title ?? 'No track selected' }}
           </h1>
           <p class="track-artist-album">
             {{
-              selectedTrack()?.artist ??
+              selectedTrack()?.raw_artist ??
+                selectedManifest()?.display_artist ??
                 selectedManifest()?.artist ??
                 'Drop an audio file into the queue'
             }}
-            @if (selectedTrack()?.album ?? selectedManifest()?.album) {
-              <span>•</span> {{ selectedTrack()?.album ?? selectedManifest()?.album }}
+            @if (selectedTrack()?.raw_album ?? selectedManifest()?.display_album ?? selectedManifest()?.album) {
+              <span>•</span> {{ selectedTrack()?.raw_album ?? selectedManifest()?.display_album ?? selectedManifest()?.album }}
             }
           </p>
         </div>

@@ -3,6 +3,7 @@ import { Component, ElementRef, HostListener, computed, inject, input, signal } 
 import { LucideSearch, LucideX } from '@lucide/angular';
 
 import { LibraryService, SearchHit } from '../../services/library.service';
+import { songArtist, songTitle } from '../../services/songs.service';
 import { PlaybackActions } from '../../services/playback-actions.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../util/drag-payload';
 import { LayoutService } from '../../services/layout.service';
@@ -83,8 +84,8 @@ export class SearchBar {
     writeDragPayload(event, hit.songs);
     setQueueItemDragImage(event, {
       songs: hit.songs.map((song) => ({
-        title: hit.kind === 'song' ? song.title : hit.title,
-        artist: hit.kind === 'song' ? song.artist : hit.subtitle,
+        title: hit.kind === 'song' ? songTitle(song) : hit.title,
+        artist: hit.kind === 'song' ? songArtist(song) : hit.subtitle,
         coverUrl: hit.coverUrl,
       })),
     });

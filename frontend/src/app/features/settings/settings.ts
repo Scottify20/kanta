@@ -1,8 +1,7 @@
 import { OverlayModule } from '@angular/cdk/overlay';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { LucideChevronLeft, LucideFolderOpen } from '@lucide/angular';
+import { LucideFolderOpen, LucideMenu } from '@lucide/angular';
 import { catchError, debounceTime, EMPTY, Subject, switchMap } from 'rxjs';
 import { SettingsFolderPicker } from '../../shared/components/settings-folder-picker/settings-folder-picker';
 import { SettingsFolders } from '../../shared/components/settings-folders/settings-folders';
@@ -11,6 +10,7 @@ import { SettingsSection } from '../../shared/components/settings-section/settin
 import { AudioDeviceControls } from './ui/audio-device-controls/audio-device-controls';
 import { StorageDevices } from './ui/storage-devices/storage-devices';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
+import { LayoutService } from '../../shared/services/layout.service';
 import { Tooltip } from '../../shared/directives/tooltip';
 import { InferenceDevice, OutputDirectoryStatus, SettingsService } from '../../shared/services/settings.service';
 
@@ -24,7 +24,7 @@ interface ReplayGainControls {
 @Component({
   selector: 'app-settings',
   imports: [
-    FormsModule, RouterLink, OverlayModule, LucideChevronLeft, LucideFolderOpen, Tooltip,
+    FormsModule, OverlayModule, LucideFolderOpen, LucideMenu, Tooltip,
     AudioDeviceControls, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
   ],
   templateUrl: './settings.html',
@@ -32,6 +32,7 @@ interface ReplayGainControls {
 })
 export class Settings {
   private readonly settingsService = inject(SettingsService);
+  protected readonly layout = inject(LayoutService);
   private readonly audioPlayer = inject(AudioPlayerService) as AudioPlayerService & ReplayGainControls;
   readonly replayGainEnabled = computed(() => this.audioPlayer.replayGainEnabled?.() ?? false);
   readonly replayGainMode = computed(() => this.audioPlayer.replayGainMode?.() ?? 'track');
@@ -133,9 +134,17 @@ export class Settings {
     if (this.defaultOutputDir() === path) this.setDefaultOutputDir(this.outputDirs()[0]);
   }
 
-  openPicker(target: 'output' | 'model'): void {
+  async openPicker(target: 'output' | 'model'): Promise<void> {
+    const start = target === 'model' ? this.modelDir() : this.newOutputDir();
+    const picked = await this.settingsService.pickFolder(target === 'model' ? 'Select models folder' : 'Select output folder', start);
+    if (picked === null) return;
+    if (picked) {
+      if (target === 'model') this.setModelDir(picked);
+      else this.setNewOutputDir(picked);
+      return;
+    }
     this.pickerTarget.set(target);
-    this.pickerStartPath.set(target === 'model' ? this.modelDir() : this.newOutputDir());
+    this.pickerStartPath.set(start);
   }
 
   acceptFolder(path: string): void {

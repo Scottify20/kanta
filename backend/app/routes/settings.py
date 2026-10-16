@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -5,7 +6,7 @@ from typing import Any, Literal, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services import storage
+from app.services import folder_dialog, storage
 from app.services.settings import (
     device_availability,
     get_default_output_dir,
@@ -96,12 +97,26 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
     )
 
 
+class PickFolderRequest(BaseModel):
+    title: str = "Select folder"
+    start: str = ""
+
+
 fs_router = APIRouter(prefix="/api/fs", tags=["Filesystem"])
 
 
 @fs_router.get("/devices")
 def list_storage_devices() -> list[dict[str, Any]]:
     return storage.list_volumes(force=True)
+
+
+@fs_router.post("/pick-folder")
+async def pick_native_folder(request: PickFolderRequest) -> dict[str, Optional[str]]:
+    try:
+        path = await asyncio.to_thread(folder_dialog.pick_folder, request.title, request.start)
+    except folder_dialog.DialogUnavailable as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    return {"path": path}
 
 
 @fs_router.get("/browse")

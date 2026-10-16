@@ -179,6 +179,12 @@ export class QueueService {
       .pipe(tap(() => this.refresh()));
   }
 
+  reorderProcessingTracks(processingQueue: string[]): Observable<{ message: string }> {
+    return this.http.patch<{ message: string }>(`${QUEUE_API_URL}/api/queue/reorder-processing`, {
+      processing_queue: processingQueue,
+    });
+  }
+
   reorderKaraokeTracks(karaokeQueue: string[]): Observable<{ message: string }> {
     return this.http.patch<{ message: string }>(`${QUEUE_API_URL}/api/queue/reorder`, {
       karaoke_queue: karaokeQueue,

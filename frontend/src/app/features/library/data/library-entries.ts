@@ -1,6 +1,6 @@
 import { AlbumEntry, ArtistEntry, songCover, songKey } from '../../../shared/services/library.service';
 import { Playlist } from '../../../shared/services/playlists.service';
-import { SongManifest } from '../../../shared/services/songs.service';
+import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
 
 export type LibraryTab = 'songs' | 'albums' | 'artists' | 'playlists';
 export type SortMode = 'az' | 'za' | 'recent';
@@ -22,8 +22,8 @@ const newest = (songs: SongManifest[]): number =>
 export const songEntry = (song: SongManifest): LibraryEntry => ({
   key: `song:${songKey(song)}`,
   kind: 'song',
-  title: song.title,
-  subtitle: `${song.artist} • ${song.album}`,
+  title: songTitle(song),
+  subtitle: `${songArtist(song)} • ${songAlbum(song)}`,
   covers: [songCover(song)].filter((c): c is string => !!c),
   songs: [song],
   added: Number(song.date_added ?? 0),
@@ -32,8 +32,8 @@ export const songEntry = (song: SongManifest): LibraryEntry => ({
 export const albumEntry = (album: AlbumEntry): LibraryEntry => ({
   key: `album:${album.key}`,
   kind: 'album',
-  title: album.album,
-  subtitle: album.artist,
+  title: album.displayAlbum,
+  subtitle: album.displayArtist,
   covers: album.coverUrl ? [album.coverUrl] : [],
   songs: album.songs,
   added: newest(album.songs),
@@ -42,7 +42,7 @@ export const albumEntry = (album: AlbumEntry): LibraryEntry => ({
 export const artistEntry = (artist: ArtistEntry): LibraryEntry => ({
   key: `artist:${artist.key}`,
   kind: 'artist',
-  title: artist.artist,
+  title: artist.displayArtist,
   subtitle: `${artist.songs.length} ${artist.songs.length === 1 ? 'song' : 'songs'}`,
   covers: artist.coverUrl ? [artist.coverUrl] : [],
   songs: artist.songs,

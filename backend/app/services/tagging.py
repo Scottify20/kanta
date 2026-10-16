@@ -125,6 +125,22 @@ def read_tags(path: Path) -> dict[str, Any]:
     return result
 
 
+def read_display_names(path: Path) -> dict[str, Optional[str]]:
+    """Return the real title/artist/album tags (not the sanitized folder names)."""
+    names: dict[str, Optional[str]] = {"title": None, "artist": None, "album": None}
+    try:
+        audio = mutagen.File(path, easy=True)
+        tags = audio.tags if audio else None
+        if tags:
+            for key in names:
+                values = tags.get(key)
+                if values and str(values[0]).strip():
+                    names[key] = str(values[0]).strip()
+    except Exception:
+        pass
+    return names
+
+
 def read_duration(path: Path) -> Optional[float]:
     try:
         audio = mutagen.File(path)

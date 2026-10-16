@@ -24,6 +24,9 @@ export interface SongManifest {
   artist: string;
   album: string;
   title: string;
+  display_title?: string;
+  display_artist?: string;
+  display_album?: string;
   stems: SongFile[];
   lyrics: SongFile[];
   lyrics_level?: LyricsLevel;
@@ -46,6 +49,11 @@ export interface SongManifest {
   date_added?: string | null;
   max_offset_ms?: number | null;
 }
+
+// Folder keys are sanitized; these return the real tag values for display.
+export const songTitle = (song: SongManifest): string => song.display_title || song.title;
+export const songArtist = (song: SongManifest): string => song.display_artist || song.artist;
+export const songAlbum = (song: SongManifest): string => song.display_album || song.album;
 
 @Injectable({ providedIn: 'root' })
 export class SongsService {

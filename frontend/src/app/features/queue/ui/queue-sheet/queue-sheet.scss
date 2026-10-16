@@ -3,27 +3,6 @@
   height: 100%;
 }
 
-.queue-section,
-.track-list {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-
-  &::-webkit-scrollbar {
-    width: 0.375rem;
-    height: 0.375rem;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-radius: 0.5rem;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-  }
-}
-
 .queue-panel {
   display: flex;
   flex-direction: column;
@@ -123,8 +102,22 @@
   animation: queue-gap-open var(--dur-drag) var(--ease-drag) forwards;
 }
 
+// One queue row tall: 2.75rem cover + 2 * 0.6rem padding.
 @keyframes queue-gap-open {
-  to { height: min(7.8rem, 18dvh); }
+  to { height: 3.95rem; }
+}
+
+@keyframes queue-gap-close {
+  from { height: 3.95rem; }
+  to { height: 0; opacity: 0; border-width: 0; }
+}
+
+.insert-gap.gap-leave {
+  animation: queue-gap-close var(--dur-drag) var(--ease-drag) forwards;
+}
+
+.queue-panel.committing .insert-gap.gap-leave {
+  animation-duration: 0s;
 }
 
 @keyframes queue-row-in {
@@ -145,6 +138,11 @@
 .queue-section.karaoke {
   flex: 1 1 0;
   min-height: 7rem;
+  flex-grow: 2;
+
+  &.is-empty {
+    flex-grow: 1;
+  }
 
   &.collapsed {
     flex: 0 0 auto;
@@ -156,6 +154,17 @@
   flex: 0 0 auto;
   max-height: 42%;
   padding-top: 1rem;
+
+  &.is-empty {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 7rem;
+  }
+
+  &.collapsed {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -163,7 +172,7 @@
   display: grid;
   flex: 1 0 auto;
   grid-template-rows: 1fr;
-  transition: grid-template-rows var(--dur-drag) var(--ease-drag);
+  transition: grid-template-rows var(--dur-base) var(--ease-out);
 
   &.is-collapsed {
     grid-template-rows: 0fr;
@@ -195,6 +204,10 @@
   border-radius: 0.75rem;
   cursor: grab;
   background: transparent;
+
+  &.is-static {
+    cursor: default;
+  }
   transition: background-color var(--dur-fast) var(--ease-out);
 
   &:hover {
@@ -252,13 +265,13 @@
 /* 3. CRITICAL FIX: High-specificity classes to ensure the transform animation is NEVER overridden */
 .track-list li.cdk-drag-animating {
   transition:
-    transform var(--dur-drag) var(--ease-drag),
+    transform var(--dur-base) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out) !important;
 }
 
 .track-list.cdk-drop-list-dragging li:not(.cdk-drag-preview) {
   transition:
-    transform var(--dur-drag) var(--ease-drag),
+    transform var(--dur-base) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out) !important;
 }
 /* ---------------------------------------- */
@@ -275,8 +288,12 @@
   display: grid;
   place-items: center;
   flex: 1 1 auto;
-  min-height: min(12rem, 24dvh);
+  min-height: 6rem;
   padding: 1rem;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
   border: 2px dashed rgba(255, 255, 255, 0.2);
   border-radius: 0.75rem;
   color: rgba(255, 255, 255, 0.5);
@@ -284,6 +301,12 @@
   font-size: 0.85rem;
   text-align: center;
   background: rgba(255, 255, 255, 0.02);
+
+  &.is-over {
+    border-color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 @media (max-width: 700px) {

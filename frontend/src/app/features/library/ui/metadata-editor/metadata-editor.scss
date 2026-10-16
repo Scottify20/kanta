@@ -12,7 +12,7 @@
 .tabs { display:flex; gap:.25rem; padding:.3rem; border:1px solid var(--surface-border); border-radius:var(--radius-lg); background:rgba(255,255,255,.035); }
 .tabs button { display:flex; align-items:center; justify-content:center; gap:.5rem; min-width:0; flex:1; padding:.68rem .5rem; border:0; border-radius:var(--radius-md); color:rgba(255,255,255,.64); background:transparent; font:inherit; font-size:.78rem; cursor:pointer; transition:color var(--motion-fast),background var(--motion-fast); }
 .tabs button.active { color:#fff; background:var(--surface-hover); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); }
-.editor-content { flex:1; min-height:0; overflow:auto; padding:1.4rem .15rem 1rem; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.18) transparent; }
+.editor-content { flex:1; min-height:0; overflow:auto; padding:1.4rem .15rem 1rem; }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem .85rem; }
 .field-grid label { display:grid; gap:.45rem; color:rgba(255,255,255,.68); font-size:.75rem; }
 .field-grid label.wide { grid-column:1/-1; }

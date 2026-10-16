@@ -1,5 +1,10 @@
-<section class="queue-panel" (dragover)="handleDragOver($event)">
-  <article class="queue-section karaoke" [class.collapsed]="karaokeCollapsed()">
+<section class="queue-panel" [class.committing]="committing()" (dragover)="handleDragOver($event)">
+  <article
+    cdkScrollable
+    class="queue-section karaoke"
+    [class.collapsed]="karaokeCollapsed()"
+    [class.is-empty]="karaokeItems().length === 0"
+  >
     <header
       class="section-header"
       (click)="karaokeCollapsed.set(!karaokeCollapsed())"
@@ -39,15 +44,15 @@
         (dragleave)="onExternalDragLeave($event)"
         (drop)="dropExternal($event, 'karaoke_queue')"
       >
-        @if (karaokeItems().length === 0 && dropIndex() === null) {
-          <li class="drop-zone">
+        @if (karaokeItems().length === 0) {
+          <li class="drop-zone" [class.is-over]="overQueue() === 'karaoke_queue'">
             <span>Drop songs here to add them to the Karaoke Queue</span>
           </li>
         }
 
         @for (item of karaokeItems(); track item.task_id; let i = $index) {
           @if (dropIndex() === i) {
-            <li class="insert-gap" aria-hidden="true"><span>Drop to add here</span></li>
+            <li class="insert-gap" animate.leave="gap-leave" aria-hidden="true"><span>Drop to add here</span></li>
           }
           <li
             cdkDrag
@@ -78,17 +83,20 @@
             />
           </li>
         }
-        @if (dropIndex() !== null && dropIndex() === karaokeItems().length) {
-          <li class="insert-gap" aria-hidden="true"><span>Drop to add here</span></li>
+        @if (dropIndex() !== null && karaokeItems().length > 0 && dropIndex() === karaokeItems().length) {
+          <li class="insert-gap" animate.leave="gap-leave" aria-hidden="true"><span>Drop to add here</span></li>
         }
       </ol>
     </div>
   </article>
 
   <article
+    cdkScrollable
     class="queue-section processing"
     [class.collapsed]="processingCollapsed()"
-    (dragover)="$event.preventDefault()"
+    [class.is-empty]="processingView().length === 0"
+    (dragover)="onProcessingDragOver($event)"
+    (dragleave)="onProcessingDragLeave($event)"
     (drop)="dropExternal($event, 'processing_queue')"
   >
     <header
@@ -107,6 +115,7 @@
         <h2>Processing Queue</h2>
       </div>
       <div class="section-actions" (click)="$event.stopPropagation()">
+        @if (processingView().length > 0) {
         <button
           class="icon-button"
           type="button"
@@ -120,12 +129,13 @@
             <svg lucidePause [size]="16"></svg>
           }
         </button>
+        }
         <button
           class="icon-button"
           type="button"
           appTooltip="Clear queue"
           aria-label="Clear processing queue"
-          [disabled]="processingItems().length === 0"
+          [disabled]="processingView().length === 0"
           (click)="clearQueue(2)"
         >
           <svg lucideTrash2 [size]="16"></svg>
@@ -134,17 +144,29 @@
     </header>
 
     <div class="track-list-wrapper" [class.is-collapsed]="processingCollapsed()">
-      <ol class="track-list">
-        @if (processingItems().length === 0) {
-          <li class="drop-zone">
+      <ol
+        class="track-list"
+        cdkDropList
+        [cdkDropListData]="processingView()"
+        [cdkDropListSortPredicate]="canSortProcessing"
+        (cdkDropListDropped)="onProcessingDrop($event)"
+      >
+        @if (processingView().length === 0) {
+          <li class="drop-zone" [class.is-over]="overQueue() === 'processing_queue'">
             <span>Drop audio files here to process</span>
           </li>
         }
-        @for (item of processingItems(); track item.task_id) {
+        @for (item of processingView(); track item.task_id) {
           <li
+            cdkDrag
+            cdkDragLockAxis="y"
+            cdkDragPreviewContainer="parent"
+            [cdkDragDisabled]="!canDragProcessing(item)"
             class="queue-row"
             [class.is-active]="item.status === 'processing'"
             [class.is-paused]="item.status === 'paused'"
+            [class.is-static]="!canDragProcessing(item)"
+            [class.is-entering]="isUpload(item)"
           >
             <app-queue-track-summary [item]="item" variant="processing" />
             <app-queue-item-actions
@@ -155,6 +177,9 @@
               (remove)="remove(item, 'processing_queue')"
             />
           </li>
+        }
+        @if (processingView().length > 0 && overQueue() === 'processing_queue') {
+          <li class="insert-gap" animate.leave="gap-leave" aria-hidden="true"><span>Drop to process here</span></li>
         }
       </ol>
     </div>

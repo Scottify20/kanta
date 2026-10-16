@@ -1,10 +1,12 @@
-import { ApplicationRef, Component, DestroyRef, OnInit, inject, input, output, signal } from '@angular/core';
+import { ApplicationRef, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideChevronDown, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { LibraryService, SongRef, songCover, songKey } from '../../../../shared/services/library.service';
+import { SongManifest, songAlbum, songArtist, songTitle } from '../../../../shared/services/songs.service';
 import { PlaybackActions } from '../../../../shared/services/playback-actions.service';
 import { KANTA_DRAG_TYPE } from '../../../../shared/services/layout.service';
 import { readDragPayload } from '../../../../shared/util/drag-payload';
@@ -16,6 +18,8 @@ import { QueueService } from '../../data-access/queue.service';
 type QueueName = 'karaoke_queue' | 'processing_queue';
 
 const SERVER_TRUST_DELAY_MS = 1200;
+const ACTIVE_STATUSES = new Set(['pending', 'processing', 'paused', 'cancelling']);
+const UPLOAD_PREFIX = 'upload:';
 
 @Component({
   selector: 'app-queue-sheet',
@@ -28,6 +32,7 @@ const SERVER_TRUST_DELAY_MS = 1200;
     LucidePlay,
     LucideTrash2,
     DragDropModule,
+    ScrollingModule,
   ],
   templateUrl: './queue-sheet.html',
   styleUrl: './queue-sheet.scss',
@@ -58,6 +63,17 @@ export class QueueSheet implements OnInit {
   readonly karaokeItems = signal<QueueItem[]>([]);
   readonly processingItems = signal<QueueItem[]>([]);
   readonly processingPaused = signal(false);
+  // Optimistic rows for files that are still uploading, so a drop morphs into a queue item immediately.
+  private readonly uploads = signal<QueueItem[]>([]);
+  readonly processingView = computed(() => {
+    const base = this.processingItems().filter((item) => ACTIVE_STATUSES.has(item.status));
+    const known = new Set(base.map((item) => item.task_id));
+    return [...base, ...this.uploads().filter((item) => !known.has(item.task_id))];
+  });
+  readonly overQueue = signal<QueueName | null>(null);
+  readonly committing = signal(false);
+  private processingLocked = false;
+  readonly canSortProcessing = (index: number): boolean => this.processingView()[index]?.status === 'pending';
   // Index at which an externally dragged item would be inserted; renders a gap that shifts rows.
   readonly dropIndex = signal<number | null>(null);
 
@@ -66,7 +82,10 @@ export class QueueSheet implements OnInit {
 
   ngOnInit(): void {
     this.queueService.queue$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((snapshot) => {
-      this.processingItems.set(snapshot.processing_queue);
+      if (!this.processingLocked) this.processingItems.set(snapshot.processing_queue);
+      this.uploads.update((list) =>
+        list.filter((item) => item.task_id.startsWith(UPLOAD_PREFIX) || !snapshot.processing_queue.some((queued) => queued.task_id === item.task_id)),
+      );
       this.processingPaused.set(snapshot.processing_paused ?? false);
 
       if (this.isDragging || this.isReordering) {
@@ -141,14 +160,50 @@ export class QueueSheet implements OnInit {
     });
   }
 
+  isUpload(item: QueueItem): boolean {
+    return item.task_id.startsWith(UPLOAD_PREFIX);
+  }
+
+  canDragProcessing(item: QueueItem): boolean {
+    return item.status === 'pending' && !this.isUpload(item);
+  }
+
+  onProcessingDrop(event: CdkDragDrop<QueueItem[]>): void {
+    if (event.previousIndex === event.currentIndex) return;
+    const view = this.processingView();
+    const reordered = [...view];
+    moveItemInArray(reordered, event.previousIndex, event.currentIndex);
+    this.processingLocked = true;
+    this.processingItems.set(reordered.filter((item) => !this.isUpload(item)));
+    this.appRef.tick();
+    const release = (): void => { setTimeout(() => (this.processingLocked = false), 400); };
+    this.queueService.reorderProcessingTracks(reordered.filter((item) => !this.isUpload(item)).map((item) => item.task_id)).subscribe({
+      next: release,
+      error: () => { this.processingLocked = false; this.queueService.refresh(); },
+    });
+  }
+
+  onProcessingDragOver(event: DragEvent): void {
+    if (!(event.dataTransfer?.types ?? []).includes('Files')) return;
+    event.preventDefault();
+    if (this.overQueue() !== 'processing_queue') this.overQueue.set('processing_queue');
+  }
+
+  onProcessingDragLeave(event: DragEvent): void {
+    const area = event.currentTarget as HTMLElement;
+    if (!area.contains(event.relatedTarget as Node | null)) this.overQueue.set(null);
+  }
+
   onExternalDragOver(event: DragEvent): void {
     const types = event.dataTransfer?.types ?? [];
     if (!types.includes(KANTA_DRAG_TYPE) && !types.includes('Files')) return;
     event.preventDefault();
+    if (this.overQueue() !== 'karaoke_queue') this.overQueue.set('karaoke_queue');
     const list = event.currentTarget as HTMLElement;
     const rows = Array.from(list.querySelectorAll<HTMLElement>(':scope > li.queue-row'));
     let index = rows.length;
-    for (let i = 0; i < rows.length; i++) {
+    // Dropped files are appended by the server, so only library songs get a positional gap.
+    for (let i = 0; types.includes(KANTA_DRAG_TYPE) && i < rows.length; i++) {
       const rect = rows[i].getBoundingClientRect();
       if (event.clientY < rect.top + rect.height / 2) {
         index = i;
@@ -160,7 +215,10 @@ export class QueueSheet implements OnInit {
 
   onExternalDragLeave(event: DragEvent): void {
     const list = event.currentTarget as HTMLElement;
-    if (!list.contains(event.relatedTarget as Node | null)) this.dropIndex.set(null);
+    if (!list.contains(event.relatedTarget as Node | null)) {
+      this.dropIndex.set(null);
+      this.overQueue.set(null);
+    }
   }
 
   dropExternal(event: DragEvent, targetQueue: QueueName): void {
@@ -169,6 +227,10 @@ export class QueueSheet implements OnInit {
     this.processedDrag.set(false);
     const index = this.dropIndex();
     this.dropIndex.set(null);
+    this.overQueue.set(null);
+    // The gap is replaced by a row of the same height, so it must vanish instantly rather than animate out.
+    this.committing.set(true);
+    setTimeout(() => this.committing.set(false), 80);
 
     const songs = readDragPayload(event);
     if (songs.length) {
@@ -192,20 +254,24 @@ export class QueueSheet implements OnInit {
   }
 
   selectTrack(item: QueueItem): void {
+    if (this.isUpload(item)) return;
     if (item.priority === 1 && !['failed', 'cancelled', 'cancelling'].includes(item.status)) {
       this.trackSelected.emit(item);
     }
   }
 
   pause(item: QueueItem): void {
+    if (this.isUpload(item)) return;
     this.queueService.pauseTrack(item.task_id).subscribe();
   }
 
   resume(item: QueueItem): void {
+    if (this.isUpload(item)) return;
     this.queueService.resumeTrack(item.task_id).subscribe();
   }
 
   remove(item: QueueItem, queue: QueueName): void {
+    if (this.isUpload(item)) return;
     if (queue === 'karaoke_queue') {
       this.karaokeItems.update((items) =>
         items.filter((queued) => queued.task_id !== item.task_id),
@@ -227,9 +293,9 @@ export class QueueSheet implements OnInit {
       return {
         task_id: taskId,
         file_path: '',
-        raw_title: song.title,
-        raw_artist: song.artist,
-        raw_album: song.album,
+        raw_title: songTitle(song as SongManifest),
+        raw_artist: songArtist(song as SongManifest),
+        raw_album: songAlbum(song as SongManifest),
         ...song,
         priority: 1,
         status: 'completed',
@@ -274,7 +340,49 @@ export class QueueSheet implements OnInit {
   private addFiles(files: FileList, targetQueue: QueueName): void {
     const priority = targetQueue === 'karaoke_queue' ? 1 : 2;
     Array.from(files).forEach((file) => {
-      this.queueService.addTrack(file, priority).subscribe();
+      const temp = this.uploadPlaceholder(file, priority);
+      this.uploads.update((list) => [...list, temp]);
+      if (priority === 1) {
+        this.entering.set(temp.task_id, 0);
+        this.karaokeItems.update((items) => [...items, temp]);
+        this.lockServerOrder(true);
+      }
+      this.queueService.addTrack(file, priority).subscribe({
+        next: ({ item }) => {
+          this.entering.delete(temp.task_id);
+          this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
+          if (priority === 1) {
+            this.karaokeItems.update((items) => items.map((entry) => (entry === temp ? item : entry)));
+            this.lockServerOrder();
+          }
+        },
+        error: () => {
+          this.entering.delete(temp.task_id);
+          this.uploads.update((list) => list.filter((entry) => entry !== temp));
+          this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
+          this.releaseServerOrder();
+        },
+      });
     });
+  }
+
+  private uploadPlaceholder(file: File, priority: 1 | 2): QueueItem {
+    const name = file.name.replace(/\.[^/.]+$/, '');
+    return {
+      task_id: `${UPLOAD_PREFIX}${++this.tempCounter}`,
+      file_path: '',
+      raw_title: name,
+      raw_artist: 'Uploading…',
+      raw_album: '',
+      title: name,
+      artist: 'Uploading…',
+      album: '',
+      priority,
+      status: 'pending',
+      progress: 0,
+      step: 'Uploading…',
+      position: 0,
+      cover_url: null,
+    };
   }
 }

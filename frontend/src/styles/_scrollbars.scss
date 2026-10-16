@@ -1,42 +1,51 @@
-// Sleek, compact scrollbars shared by every scrollable surface.
-:root {
-  --scrollbar-size: 0.5rem;
-  --scrollbar-size-hover: 0.8rem;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.22);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
-}
-
-@supports not selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
-  }
+// Native scrollbars never take layout space: they are hidden and replaced by the floating thumb
+// drawn by OverlayScrollbarService.
+* {
+  scrollbar-width: none;
 }
 
 *::-webkit-scrollbar {
-  width: var(--scrollbar-size);
-  height: var(--scrollbar-size);
-  transition: width var(--dur-fast, 150ms) ease;
+  display: none;
 }
 
-*:hover::-webkit-scrollbar {
-  width: var(--scrollbar-size-hover);
-  height: var(--scrollbar-size-hover);
+.kanta-overlay-scrollbar {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
 }
 
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
+.kanta-overlay-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base, 260ms) var(--ease-out, ease-out);
 
-*::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb);
-  border-radius: 999px;
-  border: 0.125rem solid transparent;
-  background-clip: padding-box;
-  transition: background-color var(--dur-fast, 150ms) ease;
-}
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 3px;
+    bottom: 0;
+    width: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.3);
+    transition:
+      width var(--dur-fast, 160ms) var(--ease-out, ease-out),
+      background-color var(--dur-fast, 160ms) var(--ease-out, ease-out);
+  }
 
-*::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-hover);
+  &.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &:hover::after,
+  &.dragging::after {
+    width: 10px;
+    background: rgba(255, 255, 255, 0.55);
+  }
 }

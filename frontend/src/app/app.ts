@@ -1,4 +1,4 @@
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 
 import { QueueSheet } from './features/queue/ui/queue-sheet/queue-sheet';
@@ -6,6 +6,8 @@ import { Backdrop } from './shared/components/backdrop/backdrop';
 import { Sidebar } from './shared/components/sidebar/sidebar';
 import { AudioPlayerService } from './shared/services/audio-player.service';
 import { KANTA_DRAG_TYPE, LayoutService } from './shared/services/layout.service';
+import { OverlayScrollbarService } from './shared/services/overlay-scrollbar.service';
+import { autoScrollDuringDrag } from './shared/util/drag-autoscroll';
 import { SongsService } from './shared/services/songs.service';
 import { QueueItem } from './features/queue/interfaces/queue.models';
 
@@ -20,6 +22,8 @@ export class App {
   readonly songs = inject(SongsService);
   readonly audioPlayer = inject(AudioPlayerService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly overlayScrollbar = inject(OverlayScrollbarService);
 
   @HostListener('document:dragover', ['$event'])
   onDragOver(event: DragEvent): void {
@@ -27,6 +31,7 @@ export class App {
     if (types.includes(KANTA_DRAG_TYPE) || types.includes('Files')) {
       if (!this.layout.dragActive()) this.layout.beginDrag();
       event.preventDefault();
+      autoScrollDuringDrag(event, this.host.nativeElement.querySelectorAll<HTMLElement>('.content, .queue-section'));
     }
   }
 

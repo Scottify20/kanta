@@ -3,7 +3,7 @@ import { Component, HostListener, effect, inject, input, output, signal, untrack
 import { FormsModule } from '@angular/forms';
 import { LucideCheck, LucideFileText, LucideImage, LucideSlidersHorizontal, LucideX } from '@lucide/angular';
 import { Tooltip } from '../../../../shared/directives/tooltip';
-import { SongManifest, SongsService } from '../../../../shared/services/songs.service';
+import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from '../../../../shared/services/songs.service';
 import { CoverDropZone } from './cover-drop-zone';
 import { LyricsFilesPanel } from './lyrics-files-panel';
 import { ReplaygainPanel } from './replaygain-panel';
@@ -163,7 +163,7 @@ export class MetadataEditor {
 
   private toDraft(song: SongManifest): MetadataDraft {
     return {
-      artist: song.artist, album: song.album, title: song.title, album_artist: song.album_artist ?? '',
+      artist: songArtist(song), album: songAlbum(song), title: songTitle(song), album_artist: song.album_artist ?? '',
       year: song.year == null ? '' : String(song.year), genre: song.genre ?? '', track_number: song.track_number ?? null,
       disc_number: song.disc_number ?? null, composer: song.composer ?? '', bpm: song.bpm ?? null, comment: song.comment ?? '',
       replaygain_track_gain: song.replaygain_track_gain ?? '', replaygain_track_peak: song.replaygain_track_peak ?? '',

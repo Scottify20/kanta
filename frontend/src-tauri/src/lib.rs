@@ -21,6 +21,7 @@ fn start_backend(app: &tauri::AppHandle) {
 pub fn run() {
   let app = tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_dialog::init())
     .manage(Backend(Mutex::new(None)))
     .setup(|app| {
       if cfg!(debug_assertions) {

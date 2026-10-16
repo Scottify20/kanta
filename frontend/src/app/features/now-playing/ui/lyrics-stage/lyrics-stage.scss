@@ -78,6 +78,7 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
+    --no-overlay-scrollbar: 1;
     padding-left: 3rem;
     text-align: left;
     pointer-events: auto;

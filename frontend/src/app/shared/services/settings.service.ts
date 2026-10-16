@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 
 export const API_URL = 'http://127.0.0.1:8000';
 
@@ -58,6 +58,26 @@ export class SettingsService {
     'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
   >): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
+  }
+
+  // Native OS folder dialog: Tauri's dialog plugin in the desktop app, the backend host's dialog otherwise.
+  // Resolves to undefined when no native dialog is available so callers can fall back.
+  async pickFolder(title: string, start = ''): Promise<string | null | undefined> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const picked = await open({ directory: true, multiple: false, title, defaultPath: start || undefined });
+        return typeof picked === 'string' ? picked : null;
+      } catch {
+        return undefined;
+      }
+    }
+    try {
+      const result = await firstValueFrom(this.http.post<{ path: string | null }>(`${API_URL}/api/fs/pick-folder`, { title, start }));
+      return result.path;
+    } catch {
+      return undefined;
+    }
   }
 
   getStorageDevices(): Observable<StorageDevice[]> {

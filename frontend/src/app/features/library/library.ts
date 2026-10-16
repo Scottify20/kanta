@@ -1,6 +1,6 @@
 import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { LucideChevronLeft } from '@lucide/angular';
+import { LucideChevronLeft, LucideMenu } from '@lucide/angular';
 
 import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { Tooltip } from '../../shared/directives/tooltip';
@@ -8,7 +8,7 @@ import { LayoutService } from '../../shared/services/layout.service';
 import { LibraryService, SongRef, songKey } from '../../shared/services/library.service';
 import { PlaybackActions, isPlayable } from '../../shared/services/playback-actions.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
-import { SongManifest, SongsService } from '../../shared/services/songs.service';
+import { SongManifest, SongsService, songArtist } from '../../shared/services/songs.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-payload';
 import {
   LibraryEntry,
@@ -35,6 +35,7 @@ import { MetadataEditor } from './ui/metadata-editor/metadata-editor';
     LibraryDetailHeader,
     MetadataEditor,
     LucideChevronLeft,
+    LucideMenu,
   ],
   templateUrl: './library.html',
   styleUrl: './library.scss',
@@ -44,7 +45,7 @@ export class Library {
   private readonly songsService = inject(SongsService);
   private readonly actions = inject(PlaybackActions);
   private readonly playlistsService = inject(PlaylistsService);
-  private readonly layoutService = inject(LayoutService);
+  protected readonly layoutService = inject(LayoutService);
   private readonly router = inject(Router);
 
   readonly tab = signal<LibraryTab>('songs');
@@ -181,7 +182,7 @@ export class Library {
     setQueueItemDragImage(event, {
       songs: dragged.map((e) => ({
         title: e.title,
-        artist: e.kind === 'song' ? e.songs[0].artist : e.subtitle,
+        artist: e.kind === 'song' ? songArtist(e.songs[0]) : e.subtitle,
         coverUrl: e.covers[0] ?? null,
       })),
       count: songs.length,

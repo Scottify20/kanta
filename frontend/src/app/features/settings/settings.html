@@ -1,9 +1,9 @@
 <main class="settings-page">
   <div class="settings-shell">
     <header class="settings-header">
-      <a class="back-button" routerLink="/" appTooltip="Back to now playing" aria-label="Back to now playing">
-        <svg lucideChevronLeft [size]="20"></svg>
-      </a>
+      <button class="back-button" type="button" appTooltip="Menu" aria-label="Toggle menu" [attr.aria-expanded]="layout.sidebarOpen()" (click)="layout.toggleSidebar()">
+        <svg lucideMenu [size]="20"></svg>
+      </button>
       <h1>Settings</h1>
       <span class="save-status" [class.error-status]="!!error()" role="status" aria-live="polite">
         @if (saving()) { Saving… } @else if (saved()) { Saved } @else if (error()) { {{ error() }} }

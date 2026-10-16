@@ -1,7 +1,7 @@
 <div class="library-page">
   <header class="library-header">
-    <button class="back" type="button" [appTooltip]="detail() ? 'Back to library' : 'Back to player'" aria-label="Back" (click)="back()">
-      <svg lucideChevronLeft [size]="20"></svg>
+    <button class="back" type="button" [appTooltip]="detail() ? 'Back to library' : 'Menu'" [attr.aria-label]="detail() ? 'Back to library' : 'Toggle menu'" [attr.aria-expanded]="detail() ? null : layoutService.sidebarOpen()" (click)="detail() ? back() : layoutService.toggleSidebar()">
+      @if (detail()) { <svg lucideChevronLeft [size]="20"></svg> } @else { <svg lucideMenu [size]="20"></svg> }
     </button>
     <h1>{{ detail() ? detail()!.title : 'Library' }}</h1>
     <app-search-bar class="header-search" />

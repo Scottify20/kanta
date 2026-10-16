@@ -239,6 +239,7 @@ class QueueManager:
             clear_task_control(task_id)
             if item.source_type != "processed":
                 self._delete_input(item)
+            self._release_pause_if_idle()
             self._save_state()
             return item
 
@@ -271,6 +272,7 @@ class QueueManager:
                 if item.source_type != "processed":
                     self._delete_input(item)
             self.queue = retained
+            self._release_pause_if_idle()
             self._save_state()
             self._wake_event.set()
 
@@ -348,6 +350,26 @@ class QueueManager:
                 )
             self._save_state()
             self._wake_event.set()
+
+    def _release_pause_if_idle(self) -> None:
+        # A global pause is meaningless once nothing is left to process.
+        active = {"pending", "processing", "paused", "cancelling"}
+        if self.processing_paused and not any(item.status in active for item in self.queue):
+            self.processing_paused = False
+
+    async def reorder_processing(self, task_ids: List[str]) -> None:
+        async with self._lock:
+            pending = {item.task_id: item for item in self.queue if item.status == "pending"}
+            counters: Dict[QueuePriority, int] = {}
+            for task_id in task_ids:
+                item = pending.get(task_id)
+                if item is None:
+                    continue
+                item.position = counters.get(item.priority, 0)
+                counters[item.priority] = item.position + 1
+            self._sort_pending_items()
+            self._save_state()
+            self._notify()
 
     async def reorder_karaoke(self, karaoke_ids: List[str]) -> None:
         async with self._lock:
