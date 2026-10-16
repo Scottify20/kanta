@@ -82,6 +82,10 @@ def find_tool(name: str, env_var: Optional[str] = None) -> str:
             if resolved:
                 return resolved
     exe_names = [name + ".exe", name] if sys.platform == "win32" else [name]
+    for exe in exe_names:
+        downloaded = get_data_dir() / "bin" / exe
+        if downloaded.is_file():
+            return str(downloaded)
     for directory in _bundle_dirs():
         for exe in exe_names:
             for sub in ("", "bin"):

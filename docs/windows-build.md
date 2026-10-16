@@ -27,23 +27,29 @@ executable that Tauri starts and stops (release builds only; in dev you run the 
    pip install -r requirements.txt pyinstaller
    pip install torch --index-url https://download.pytorch.org/whl/cu121   # NVIDIA; plain `pip install torch` for CPU
    ```
-3. `ffmpeg.exe` copied to `backend\vendor\` (bundled) or `KANTA_FFMPEG` set at runtime.
+3. ffmpeg: `npm run assets:ffmpeg`, `KANTA_FFMPEG`, or PATH (not bundled by default).
 
 ## Build
 
-```powershell
-# 1. Backend sidecar (single executable, as Tauri expects)
-cd backend
-$env:KANTA_ONEFILE = "1"
-pyinstaller kanta-backend.spec --noconfirm
-# Tauri needs the Rust target triple in the file name:
-copy dist\kanta-backend.exe ..\frontend\src-tauri\binaries\kanta-backend-x86_64-pc-windows-msvc.exe
+Models and ffmpeg are **not** bundled; the installer only contains the app and the Python sidecar.
 
-# 2. App + installer (NSIS/MSI)
-cd ..\frontend
+```powershell
+cd frontend
 npm ci
-npx tauri build --config src-tauri/tauri.bundle.conf.json
+npm run app:build        # PyInstaller sidecar -> src-tauri/binaries, then tauri build
 ```
+
+Individual steps: `npm run backend:build` (sidecar only), `npm run tauri:dev`.
+
+Fetch the large assets into the user data dir (also useful on a dev machine):
+
+```powershell
+npm run assets:fetch     # models + ffmpeg;  assets:models / assets:ffmpeg for one of them
+```
+
+Models are also downloaded automatically on first use, and ffmpeg is picked up from
+`<data dir>/bin`, `KANTA_FFMPEG`, or PATH. To bundle ffmpeg anyway, put it in `backend\vendor\` and
+set `KANTA_BUNDLE_FFMPEG=1` before building.
 
 Installers land in `frontend/src-tauri/target/release/bundle/`. Use `rustc -vV` to read the host triple
 for other platforms (`aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`).

@@ -11,9 +11,9 @@
 # -x86_64-pc-windows-msvc.exe, -aarch64-apple-darwin. With the one-folder build, ship the
 # folder via bundle.resources and launch the executable inside it.
 #
-# Provide ffmpeg by placing ffmpeg(.exe) in backend/vendor/ before building (bundled into
-# the app) or by setting KANTA_FFMPEG at runtime. Model weights are downloaded into the
-# user data dir on first use and are not bundled.
+# Model weights and ffmpeg are NOT bundled; fetch them with `npm run assets:fetch`
+# (python scripts/fetch_assets.py) or let the app download models on first use.
+# To bundle ffmpeg anyway, put it in backend/vendor/ and set KANTA_BUNDLE_FFMPEG=1.
 import os
 from pathlib import Path
 
@@ -35,8 +35,9 @@ for package in ("audio_separator", "onnxruntime", "librosa", "soundfile", "mutag
 hiddenimports += collect_submodules("uvicorn") + collect_submodules("app")
 hiddenimports += ["multipart", "python_multipart", "email.mime.multipart"]
 
+# ffmpeg is fetched on first run unless KANTA_BUNDLE_FFMPEG=1 (then backend/vendor/ is bundled).
 vendor = ROOT / "vendor"
-if vendor.is_dir():
+if os.environ.get("KANTA_BUNDLE_FFMPEG") == "1" and vendor.is_dir():
     for tool in vendor.iterdir():
         if tool.is_file():
             binaries.append((str(tool), "."))
