@@ -4,25 +4,37 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideChevronLeft, LucideFolderOpen } from '@lucide/angular';
 import { catchError, debounceTime, EMPTY, Subject, switchMap } from 'rxjs';
-import { SettingsAudioDevices } from '../../shared/components/settings-audio-devices/settings-audio-devices';
 import { SettingsFolderPicker } from '../../shared/components/settings-folder-picker/settings-folder-picker';
 import { SettingsFolders } from '../../shared/components/settings-folders/settings-folders';
 import { SettingsOption, SettingsOptionGroup } from '../../shared/components/settings-option-group/settings-option-group';
 import { SettingsSection } from '../../shared/components/settings-section/settings-section';
+import { AudioDeviceControls } from './ui/audio-device-controls/audio-device-controls';
+import { StorageDevices } from './ui/storage-devices/storage-devices';
+import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { Tooltip } from '../../shared/directives/tooltip';
-import { InferenceDevice, SettingsService } from '../../shared/services/settings.service';
+import { InferenceDevice, OutputDirectoryStatus, SettingsService } from '../../shared/services/settings.service';
+
+interface ReplayGainControls {
+  replayGainEnabled?: () => boolean;
+  replayGainMode?: () => 'track' | 'album';
+  setReplayGainEnabled?: (value: boolean) => void;
+  setReplayGainMode?: (value: 'track' | 'album') => void;
+}
 
 @Component({
   selector: 'app-settings',
   imports: [
     FormsModule, RouterLink, OverlayModule, LucideChevronLeft, LucideFolderOpen, Tooltip,
-    SettingsAudioDevices, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection,
+    AudioDeviceControls, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
   ],
   templateUrl: './settings.html',
   styleUrl: './settings.scss',
 })
 export class Settings {
   private readonly settingsService = inject(SettingsService);
+  private readonly audioPlayer = inject(AudioPlayerService) as AudioPlayerService & ReplayGainControls;
+  readonly replayGainEnabled = computed(() => this.audioPlayer.replayGainEnabled?.() ?? false);
+  readonly replayGainMode = computed(() => this.audioPlayer.replayGainMode?.() ?? 'track');
   private readonly saveRequests = new Subject<void>();
   readonly outputDirs = signal<string[]>([]);
   readonly defaultOutputDir = signal('');
@@ -32,6 +44,7 @@ export class Settings {
   readonly outputQuality = signal<'high' | 'standard' | 'low'>('standard');
   readonly inferenceDevice = signal<'cuda' | 'vulkan' | 'cpu'>('cpu');
   readonly devices = signal<InferenceDevice[]>([]);
+  readonly outputDirsStatus = signal<OutputDirectoryStatus[]>([]);
   readonly loaded = signal(false);
   readonly saving = signal(false);
   readonly saved = signal(false);
@@ -48,12 +61,12 @@ export class Settings {
   });
   readonly modeOptions: SettingsOption[] = [
     { value: 'basic', label: 'Basic', description: 'Instrumentals and vocals' },
-    { value: 'full', label: 'Full', description: 'Lead & backing vocals, bass, drums, piano, and others' },
+    { value: 'full', label: 'Full', description: 'Lead & backing vocals, bass, drum, piano, others' },
   ];
   readonly qualityOptions: SettingsOption[] = [
-    { value: 'high', label: 'High', description: 'FLAC · 16 bit / 44.1 kHz' },
-    { value: 'standard', label: 'Standard', description: 'MP3 · 320 kbps' },
-    { value: 'low', label: 'Low', description: 'MP3 · 128 kbps' },
+    { value: 'high', label: 'High', description: 'FLAC, 16 bit/44.1 kHz' },
+    { value: 'standard', label: 'Standard', description: 'MP3, 320kbps' },
+    { value: 'low', label: 'Low', description: 'MP3, 128kbps' },
   ];
 
   constructor() {
@@ -66,7 +79,8 @@ export class Settings {
           return EMPTY;
         }),
       )),
-    ).subscribe(() => {
+    ).subscribe((settings) => {
+      this.outputDirsStatus.set(settings.output_dirs_status ?? this.outputDirsStatus());
       this.saved.set(true);
       this.saving.set(false);
     });
@@ -80,6 +94,7 @@ export class Settings {
         this.outputMode.set(settings.output_mode || 'full');
         this.outputQuality.set(settings.output_quality || 'standard');
         this.inferenceDevice.set(settings.inference_device || 'cpu');
+        this.outputDirsStatus.set(settings.output_dirs_status ?? []);
         this.loaded.set(true);
       },
       error: () => this.error.set('Could not load settings.'),
@@ -94,6 +109,14 @@ export class Settings {
   setOutputMode(value: string): void { this.outputMode.set(value as 'basic' | 'full'); this.changed(); }
   setOutputQuality(value: string): void { this.outputQuality.set(value as 'high' | 'standard' | 'low'); this.changed(); }
   setInferenceDevice(value: string): void { this.inferenceDevice.set(value as 'cuda' | 'vulkan' | 'cpu'); this.changed(); }
+  setReplayGainEnabled(value: boolean): void { this.audioPlayer.setReplayGainEnabled?.(value); }
+  setReplayGainMode(value: 'track' | 'album'): void { this.audioPlayer.setReplayGainMode?.(value); }
+  addOutputFolder(path: string): void {
+    if (!path || this.outputDirs().includes(path)) return;
+    const dirs = [...this.outputDirs(), path];
+    this.setOutputDirs(dirs);
+    if (!this.defaultOutputDir()) this.setDefaultOutputDir(path);
+  }
 
   addOutputDir(): void {
     const path = this.newOutputDir().trim();

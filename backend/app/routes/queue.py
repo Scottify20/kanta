@@ -13,6 +13,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.services import library, playlists
+from app.services.fsutil import safe_upload_name
+from app.services.paths import UPLOADS_DIR, ffmpeg_path, subprocess_kwargs
 from app.services.lyrics import (
     LOCK_FILE,
     classify_lyrics_file,
@@ -37,8 +39,7 @@ from app.services.tagging import (
 router = APIRouter(prefix="/api/queue", tags=["Queue"])
 songs_router = APIRouter(prefix="/api", tags=["Songs"])
 search_router = APIRouter(prefix="/api", tags=["Search"])
-UPLOADS_DIR = Path("uploads")
-UPLOADS_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -91,7 +92,7 @@ async def add_to_queue(
         raise HTTPException(status_code=400, detail="priority must be 1 or 2")
 
     task_id = str(uuid.uuid4())
-    safe_name = Path(file.filename or "track.audio").name
+    safe_name = safe_upload_name(file.filename, "track.audio")
     input_path = UPLOADS_DIR / f"{task_id}_{safe_name}"
 
     try:
@@ -358,10 +359,21 @@ def _apply_metadata(
     new_song_dir = (root / new[0] / new[1] / new[2]).resolve()
     if not new_song_dir.is_relative_to(root):
         raise HTTPException(status_code=400, detail="Invalid song metadata path")
-    if new_song_dir != old_song_dir and new_song_dir.exists():
+    case_only = (
+        new_song_dir != old_song_dir
+        and str(new_song_dir).casefold() == str(old_song_dir).casefold()
+        and new_song_dir.exists()
+        and new_song_dir.samefile(old_song_dir)
+    )
+    if new_song_dir != old_song_dir and not case_only and new_song_dir.exists():
         raise HTTPException(status_code=409, detail="A song with that metadata already exists")
 
-    if new_song_dir != old_song_dir:
+    if case_only:
+        # Case-insensitive filesystems (Windows/macOS) need a two-step rename.
+        staging = old_song_dir.with_name(f".{old_song_dir.name}.{uuid.uuid4().hex[:8]}")
+        old_song_dir.rename(staging)
+        staging.rename(new_song_dir)
+    elif new_song_dir != old_song_dir:
         new_song_dir.parent.mkdir(parents=True, exist_ok=True)
         old_song_dir.rename(new_song_dir)
     for audio_file in audio_files(new_song_dir):
@@ -587,12 +599,15 @@ def _analyze_replaygain(song_dir: Path) -> Dict[str, float]:
     try:
         result = subprocess.run(
             [
-                "ffmpeg", "-hide_banner", "-nostats", "-i", str(reference),
+                ffmpeg_path(), "-hide_banner", "-nostats", "-i", str(reference),
                 "-vn", "-af", "ebur128=peak=true", "-f", "null", "-",
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
+            **subprocess_kwargs(),
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         raise HTTPException(status_code=500, detail=f"Loudness analysis failed: {exc}") from exc

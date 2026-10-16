@@ -12,6 +12,8 @@ from app.services.metadata import (
     convert_and_tag_stem,
 )
 from app.services.lyrics import fetch_and_save_lyrics
+from app.services.paths import TEMP_DIR, configure_environment, seed_bundled_models
+from app.services.storage import ensure_output_root_available
 from app.services.settings import (
     audio_extension,
     device_availability,
@@ -20,7 +22,6 @@ from app.services.settings import (
     get_output_dir,
 )
 
-TEMP_DIR = Path("temp_processing")
 
 
 class TaskProgressTqdm(tqdm.tqdm):
@@ -58,6 +59,9 @@ tqdm.tqdm = TaskProgressTqdm
 
 
 def _create_separator() -> Separator:
+    configure_environment()
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    seed_bundled_models(get_model_dir())
     separator = Separator(
         model_file_dir=str(get_model_dir()), output_dir=str(TEMP_DIR), output_format="wav"
     )
@@ -71,6 +75,14 @@ def _apply_inference_device(separator: Separator) -> None:
     if device == "cpu":
         separator.torch_device = separator.torch_device_cpu
         separator.onnx_execution_provider = ["CPUExecutionProvider"]
+    elif device == "mps" and device_availability().get("mps"):
+        import torch
+
+        separator.torch_device = torch.device("mps")
+        separator.onnx_execution_provider = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+    elif device == "directml" and device_availability().get("directml"):
+        separator.torch_device = separator.torch_device_cpu
+        separator.onnx_execution_provider = ["DmlExecutionProvider", "CPUExecutionProvider"]
     elif device == "vulkan" and device_availability().get("vulkan"):
         import torch
 
@@ -99,6 +111,7 @@ def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> 
     audio_info = mutagen.File(input_file_path)
 
     output_root = get_output_dir()
+    ensure_output_root_available(output_root)
     temp_song_dir = output_root / "temp" / input_file_path.stem
     (
         raw_artist,
@@ -179,6 +192,7 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
     audio_info = mutagen.File(input_file_path)
 
     output_root = get_output_dir()
+    ensure_output_root_available(output_root)
     temp_song_dir = output_root / "temp" / input_file_path.stem
     (
         raw_artist,

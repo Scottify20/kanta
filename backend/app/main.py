@@ -16,6 +16,8 @@ from app.routes.playlists import router as playlists_router
 from app.routes.queue import router as queue_router, search_router, songs_router
 from app.routes.settings import fs_router, router as settings_router
 from app.services import library
+from app.services.fsutil import safe_join, safe_upload_name
+from app.services.paths import UPLOADS_DIR, configure_environment
 from app.services.metadata import sanitize_filename
 from app.services.lyrics import (
     classify_lyrics_file,
@@ -46,11 +48,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-get_output_dir().mkdir(exist_ok=True)
+configure_environment()
+UPLOAD_DIR = UPLOADS_DIR
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app.mount("/separated", StaticFiles(directory=get_output_dir()), name="separated")
+# check_dir=False: the default folder may live on a drive that is currently unplugged.
+app.mount(
+    "/separated",
+    StaticFiles(directory=get_output_dir(), check_dir=False),
+    name="separated",
+)
 app.include_router(queue_router)
 app.include_router(songs_router)
 app.include_router(settings_router)
@@ -61,9 +68,8 @@ app.include_router(search_router)
 
 @app.get("/media/{file_path:path}")
 def get_media(file_path: str) -> FileResponse:
-    root = get_output_dir()
-    candidate = (root / file_path).resolve()
-    if not candidate.is_relative_to(root) or not candidate.is_file():
+    candidate = safe_join(get_output_dir(), file_path)
+    if candidate is None or not candidate.is_file():
         raise HTTPException(status_code=404, detail="Media file not found")
     return FileResponse(candidate)
 
@@ -73,9 +79,8 @@ def get_media_from_root(root_index: int, file_path: str) -> FileResponse:
     roots = get_output_dirs()
     if root_index < 0 or root_index >= len(roots):
         raise HTTPException(status_code=404, detail="Media file not found")
-    root = roots[root_index]
-    candidate = (root / file_path).resolve()
-    if not candidate.is_relative_to(root) or not candidate.is_file():
+    candidate = safe_join(roots[root_index], file_path)
+    if candidate is None or not candidate.is_file():
         raise HTTPException(status_code=404, detail="Media file not found")
     return FileResponse(candidate)
 
@@ -84,14 +89,14 @@ async def process_audio_input(file: Optional[UploadFile], url: Optional[str]) ->
         raise HTTPException(status_code=400, detail="Must provide either a file or a url.")
 
     if file and file.filename:
-        input_path = UPLOAD_DIR / file.filename
+        input_path = UPLOAD_DIR / safe_upload_name(file.filename)
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         return input_path
 
     if url:
         try:
-            filename = Path(url.split("?")[0]).name or "downloaded_track.flac"
+            filename = safe_upload_name(url.split("?")[0].rsplit("/", 1)[-1], "downloaded_track.flac")
             input_path = UPLOAD_DIR / filename
             async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
                 resp = await client.get(url)
@@ -215,7 +220,7 @@ async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: 
             run_basic_pipeline, input_path, active_task_id
         )
         library.invalidate(output_song_dir)
-        relative_dir = output_song_dir.relative_to(get_output_dir())
+        relative_dir = output_song_dir.relative_to(get_output_dir()).as_posix()
         result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
@@ -239,7 +244,7 @@ async def separate_full_endpoint(file: Optional[UploadFile] = File(None), url: O
             run_karaoke_pipeline, input_path, active_task_id
         )
         library.invalidate(output_song_dir)
-        relative_dir = output_song_dir.relative_to(get_output_dir())
+        relative_dir = output_song_dir.relative_to(get_output_dir()).as_posix()
         result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result

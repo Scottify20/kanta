@@ -1,24 +1,38 @@
 import copy
 import re
-import subprocess
 from pathlib import Path
 import mutagen
 from mutagen.easyid3 import EasyID3
 from mutagen.flac import FLAC
 from mutagen.id3 import APIC, ID3
 
+from app.services.paths import run_ffmpeg
 from app.services.settings import get_output_quality
 from app.services.tagging import embed_cover
 
 
+_WINDOWS_RESERVED = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+MAX_NAME_LENGTH = 120
+
+
 def sanitize_filename(name: str) -> str:
-    """Replaces illegal OS path characters (< > : " / \\ | ? *) with safe alternatives."""
+    """Makes a name safe as a single path component on Windows, macOS and Linux."""
     if not name:
         return "Unknown"
-    # Replace forbidden OS characters with an underscore
-    sanitized = re.sub(r'[\\/*?:"<>|]', "_", str(name))
-    # Strip leading/trailing spaces and periods (Windows restriction)
-    return sanitized.strip(". ")
+    # Illegal characters and control characters become underscores
+    sanitized = re.sub(r'[\\/*?:"<>|\x00-\x1f]', "_", str(name))
+    # Windows disallows trailing spaces/periods; strip leading ones too
+    sanitized = sanitized.strip(". ")
+    if len(sanitized) > MAX_NAME_LENGTH:
+        sanitized = sanitized[:MAX_NAME_LENGTH].rstrip(". ")
+    # Reserved device names (CON, NUL, COM1...) are invalid even with an extension
+    if sanitized.split(".")[0].strip().upper() in _WINDOWS_RESERVED:
+        sanitized = f"_{sanitized}"
+    return sanitized
 
 
 def extract_raw_metadata(input_file: Path):
@@ -148,7 +162,6 @@ def convert_and_tag_stem(
 ):
     """Converts a WAV stem to MP3, preserving source metadata and cover art."""
     cmd = [
-        "ffmpeg",
         "-v",
         "error",
         "-y",
@@ -165,7 +178,7 @@ def convert_and_tag_stem(
         *_encoding_args(output_mp3_path),
         str(output_mp3_path),
     ]
-    subprocess.run(cmd, check=True)
+    run_ffmpeg(cmd)
     _preserve_id3_metadata(metadata_source, output_mp3_path)
     _set_basic_tags(output_mp3_path, artist, album, title)
 
@@ -261,7 +274,6 @@ def create_compressed_original_with_cover(
 ):
     """Creates a 320k MP3 copy while retaining source metadata and cover art."""
     cmd = [
-        "ffmpeg",
         "-v",
         "error",
         "-y",
@@ -274,7 +286,7 @@ def create_compressed_original_with_cover(
         "0",
         str(output_mp3_path),
     ]
-    subprocess.run(cmd, check=True)
+    run_ffmpeg(cmd)
     _preserve_id3_metadata(input_file, output_mp3_path)
     _set_basic_tags(output_mp3_path, artist, album, title)
 

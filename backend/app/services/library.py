@@ -15,6 +15,7 @@ from app.services.lyrics import (
     max_offset_ms_for_duration,
     saved_lyrics_level,
 )
+from app.services.storage import is_available
 from app.services.settings import (
     find_song_directory,
     get_output_dirs,
@@ -175,24 +176,32 @@ def _scan() -> list[dict[str, Any]]:
     seen: set[tuple[str, str, str]] = set()
     live: set[Path] = set()
     for root_index, root in enumerate(get_output_dirs()):
-        if not root.is_dir():
+        if not is_available(root):
             continue
-        for artist_dir in sorted(root.iterdir(), key=lambda p: p.name.lower()):
-            if not artist_dir.is_dir() or artist_dir.name == "temp":
-                continue
-            for album_dir in sorted(artist_dir.iterdir(), key=lambda p: p.name.lower()):
-                if not album_dir.is_dir():
+        try:
+            for artist_dir in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+                if (
+                    not artist_dir.is_dir()
+                    or artist_dir.name == "temp"
+                    or artist_dir.name.startswith((".", "$"))
+                    or artist_dir.name == "System Volume Information"
+                ):
                     continue
-                for song_dir in sorted(album_dir.iterdir(), key=lambda p: p.name.lower()):
-                    if not song_dir.is_dir():
+                for album_dir in sorted(artist_dir.iterdir(), key=lambda p: p.name.lower()):
+                    if not album_dir.is_dir():
                         continue
-                    key = (artist_dir.name, album_dir.name, song_dir.name)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    resolved = song_dir.resolve()
-                    live.add(resolved)
-                    records.append(build_song_record(resolved, root, root_index, *key))
+                    for song_dir in sorted(album_dir.iterdir(), key=lambda p: p.name.lower()):
+                        if not song_dir.is_dir():
+                            continue
+                        key = (artist_dir.name, album_dir.name, song_dir.name)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        resolved = song_dir.resolve()
+                        live.add(resolved)
+                        records.append(build_song_record(resolved, root, root_index, *key))
+        except OSError:
+            continue  # drive removed mid-scan; it is rescanned once it is back
     with _lock:
         for stale in set(_song_cache) - live:
             _song_cache.pop(stale, None)
@@ -200,7 +209,7 @@ def _scan() -> list[dict[str, Any]]:
 
 
 def _ensure_records() -> list[dict[str, Any]]:
-    version = get_settings_version()
+    version = (get_settings_version(), tuple(is_available(root) for root in get_output_dirs()))
     with _lock:
         fresh = (
             _state["records"] is not None

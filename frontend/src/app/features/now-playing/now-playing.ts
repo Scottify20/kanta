@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, untracked, DOCUMENT, HostListener } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal, untracked, DOCUMENT, HostListener } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -17,6 +17,8 @@ import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
 import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
+import { Tooltip } from '../../shared/directives/tooltip';
+import { FullscreenService } from '../../shared/services/fullscreen.service';
 import { LyricsService } from '../../shared/services/lyrics';
 import { QueueItem, QueueSnapshot } from '../queue/interfaces/queue.models';
 import { QueueService } from '../queue/data-access/queue.service';
@@ -27,6 +29,7 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
 @Component({
   selector: 'app-now-playing',
   imports: [
+    Tooltip,
     LyricsStage,
     SearchBar,
     LyricsTimingControl,
@@ -44,14 +47,14 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
   templateUrl: './ui/now-playing.html',
   styleUrl: './ui/now-playing.scss',
 })
-export class NowPlaying {
+export class NowPlaying implements OnDestroy {
   readonly lyricsService = inject(LyricsService);
   readonly audioPlayer = inject(AudioPlayerService);
   private readonly queueService = inject(QueueService);
   private readonly songsService = inject(SongsService);
   private readonly popupState = inject(PopupStateService);
   private pointerInsideTrackArea = false;
-  private fullScreen = signal(false);
+  private readonly fullscreen = inject(FullscreenService);
   private readonly document = inject(DOCUMENT);
   readonly layout = inject(LayoutService);
   readonly lyricsOffsetMs = signal(0);
@@ -110,6 +113,17 @@ export class NowPlaying {
     if (savedSong) {
       this.restoreCurrentSong(savedSong);
     }
+
+    effect(() => {
+      if (this.fullscreen.active()) {
+        untracked(() => this.startHideTimer());
+      } else {
+        untracked(() => {
+          this.clearHideTimer();
+          this.trackAreaCollapsed.set(false);
+        });
+      }
+    });
 
     effect(() => {
       // Popups are portaled out of the track area, so resume idle hiding once they close.
@@ -196,43 +210,37 @@ export class NowPlaying {
       }
     });
 
+    this.queueService.karaokeRemoved$.pipe(takeUntilDestroyed()).subscribe((taskId) => {
+      if (taskId !== null && taskId !== this.selectedTrack()?.task_id) return;
+      this.stopPlayback();
+    });
+
     this.audioPlayer.trackEnded.pipe(takeUntilDestroyed()).subscribe(() => {
       void this.playNext();
     });
   }
 
   isFullScreen(): boolean {
-    return this.fullScreen();
+    return this.fullscreen.active();
   }
 
-  @HostListener('document:fullscreenchange')
-  onFullScreenChange(): void {
-    const isFs = !!this.document.fullscreenElement;
-    this.fullScreen.set(isFs);
-
-    if (isFs) {
-      this.startHideTimer();
-    } else {
-      this.clearHideTimer();
-      this.trackAreaCollapsed.set(false);
-    }
+  toggleFullScreen(): Promise<void> {
+    return this.fullscreen.toggle();
   }
 
-  async toggleFullScreen(): Promise<void> {
-    try {
-      if (!this.document.fullscreenElement) {
-        await this.document.documentElement.requestFullscreen();
-        this.fullScreen.set(true);
-        this.startHideTimer();
-      } else if (this.document.exitFullscreen) {
-        await this.document.exitFullscreen();
-        this.fullScreen.set(false);
-        this.clearHideTimer();
-        this.trackAreaCollapsed.set(false);
-      }
-    } catch (error) {
-      console.error('Error toggling fullscreen:', error);
-    }
+  @HostListener('document:keydown', ['$event'])
+  onShortcut(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    const typing = !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    const isToggle = event.key === 'F11' || (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey && !typing);
+    if (!isToggle || event.repeat) return;
+    event.preventDefault();
+    void this.fullscreen.toggle();
+  }
+
+  ngOnDestroy(): void {
+    void this.fullscreen.exit();
+    this.clearHideTimer();
   }
 
   @HostListener('document:mousemove')
@@ -409,12 +417,49 @@ export class NowPlaying {
     });
   }
 
+  readonly currentQueueIndex = computed(() => {
+    const items = this.queueItems();
+    const taskId = this.selectedTrack()?.task_id ?? this.songsService.currentQueueTaskId();
+    const song = this.selectedManifest();
+    return items.findIndex((item) =>
+      taskId ? item.task_id === taskId : !!song && this.sameSong(song, item),
+    );
+  });
+  readonly hasPrevious = computed(() => this.currentQueueIndex() > 0 || this.audioPlayer.currentTime() > 3);
+  readonly hasNext = computed(() => {
+    const items = this.queueItems();
+    const index = this.currentQueueIndex();
+    return index < 0 ? items.length > 0 : index < items.length - 1;
+  });
+
   async playPrevious(): Promise<void> {
+    // Like most players: restart the song first, go to the previous item when near the start.
+    if (this.audioPlayer.currentTime() > 3 || this.currentQueueIndex() <= 0) {
+      if (this.selectedManifest()) this.audioPlayer.seek(0);
+      return;
+    }
     await this.playRelative(-1);
   }
 
   async playNext(): Promise<void> {
+    if (!this.hasNext()) {
+      this.audioPlayer.pause();
+      this.audioPlayer.seek(0);
+      return;
+    }
     await this.playRelative(1);
+  }
+
+  private stopPlayback(): void {
+    this.audioPlayer.release();
+    this.lyricsService.clearLyrics();
+    this.selectedTrack.set(null);
+    this.selectedManifest.set(null);
+    this.coverUrl.set(null);
+    this.loadedSongKey = null;
+    this.loadedTaskId = null;
+    this.queuedAutoplayTaskId = null;
+    this.songsService.setNowPlaying(null);
   }
 
   // Offsets may shift lyrics by up to half of the song's length.
@@ -469,28 +514,9 @@ export class NowPlaying {
 
   private async playRelative(direction: -1 | 1): Promise<void> {
     const items = this.queueItems();
-    if (!items.length) {
-      return;
-    }
-    const selected = this.selectedTrack();
-    const selectedKey = selected
-      ? selected.task_id
-      : this.selectedManifest()
-        ? `${this.selectedManifest()?.artist}/${this.selectedManifest()?.album}/${this.selectedManifest()?.title}`
-        : null;
-    const currentIndex = selectedKey
-      ? items.findIndex(
-          (item) =>
-            item.task_id === selectedKey ||
-            `${item.artist}/${item.album}/${item.title}` === selectedKey,
-        )
-      : -1;
-    const targetIndex =
-      currentIndex < 0 ? (direction > 0 ? 0 : items.length - 1) : currentIndex + direction;
-    const target = items[targetIndex];
-    if (target) {
-      await this.playQueueItem(target);
-    }
+    const index = this.currentQueueIndex();
+    const target = items[index < 0 ? (direction > 0 ? 0 : items.length - 1) : index + direction];
+    if (target) await this.playQueueItem(target);
   }
 
   private queueItems(): QueueItem[] {
@@ -572,7 +598,16 @@ export class NowPlaying {
         if (!vocals || !instrumental) {
           throw new Error('This processed song is missing playback stems.');
         }
-        await this.audioPlayer.loadStems({ vocals: vocals.url, instrumental: instrumental.url });
+        await this.audioPlayer.loadStems({
+          vocals: vocals.url,
+          instrumental: instrumental.url,
+          replayGain: {
+            trackGain: manifest.replaygain_track_gain,
+            trackPeak: manifest.replaygain_track_peak,
+            albumGain: manifest.replaygain_album_gain,
+            albumPeak: manifest.replaygain_album_peak,
+          },
+        });
         this.loadedSongKey = songKey;
       }
       this.playbackError.set('');

@@ -1,4 +1,7 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+import { LibraryService, songKey } from '../../../../shared/services/library.service';
+import { LyricsService } from '../../../../shared/services/lyrics';
+import { SongsService, LyricsLevel } from '../../../../shared/services/songs.service';
 import { QueueItem } from '../../interfaces/queue.models';
 
 @Component({
@@ -10,8 +13,27 @@ export class QueueTrackSummary {
   readonly item = input.required<QueueItem>();
   readonly variant = input<'karaoke' | 'processing'>('karaoke');
 
+  private readonly library = inject(LibraryService);
+  private readonly lyrics = inject(LyricsService);
+  private readonly songs = inject(SongsService);
+
+  private readonly libraryLevels = computed(
+    () => new Map(this.library.songs().map((song) => [songKey(song), song.lyrics_level])),
+  );
+
+  // Prefer the server value, then the library listing, then what the player actually loaded.
+  readonly lyricsLevel = computed<LyricsLevel>(() => {
+    const item = this.item();
+    const own = item.lyrics_level;
+    if (own && own !== 'none') return own;
+    const fromLibrary = this.libraryLevels().get(songKey(item));
+    if (fromLibrary && fromLibrary !== 'none') return fromLibrary;
+    if (item.task_id === this.songs.currentQueueTaskId()) return this.lyrics.lyricsLevel();
+    return 'none';
+  });
+
   readonly lyricsLevelLabel = computed(() => {
-    switch (this.item().lyrics_level) {
+    switch (this.lyricsLevel()) {
       case 'word':
         return 'Word';
       case 'line':

@@ -1,9 +1,11 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AppSettings, SettingsService } from '../../shared/services/settings.service';
+import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { Settings } from './settings';
 
 describe('Settings', () => {
@@ -23,6 +25,16 @@ describe('Settings', () => {
       providers: [
         provideRouter([]),
         {
+          provide: AudioPlayerService,
+          useValue: {
+            replayGainEnabled: signal(false),
+            replayGainMode: signal('track'),
+            setReplayGainEnabled: vi.fn(),
+            setReplayGainMode: vi.fn(),
+            setOutputDevice: vi.fn(),
+          },
+        },
+        {
           provide: SettingsService,
           useValue: {
             getSettings: () =>
@@ -37,6 +49,7 @@ describe('Settings', () => {
               }),
             updateSettings,
             getDevices: () => of([]),
+            getStorageDevices: () => of([]),
           },
         },
       ],

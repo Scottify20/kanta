@@ -1,52 +1,92 @@
 <main class="settings-page">
-  <header class="settings-header">
-    <a class="back-button" routerLink="/" appTooltip="Back to now playing" aria-label="Back to now playing">
-      <svg lucideChevronLeft [size]="20"></svg>
-    </a>
-    <h1>Settings</h1>
-    <span class="save-status" [class.error-status]="!!error()" role="status" aria-live="polite">
-      @if (saving()) { Saving… } @else if (saved()) { Saved } @else if (error()) { {{ error() }} }
-    </span>
-  </header>
+  <div class="settings-shell">
+    <header class="settings-header">
+      <a class="back-button" routerLink="/" appTooltip="Back to now playing" aria-label="Back to now playing">
+        <svg lucideChevronLeft [size]="20"></svg>
+      </a>
+      <h1>Settings</h1>
+      <span class="save-status" [class.error-status]="!!error()" role="status" aria-live="polite">
+        @if (saving()) { Saving… } @else if (saved()) { Saved } @else if (error()) { {{ error() }} }
+      </span>
+    </header>
 
-  <div class="settings-content">
-    <app-settings-section title="Playback and Microphone" description="Choose which audio devices Kanta uses for playback and input.">
-      <app-settings-audio-devices />
-    </app-settings-section>
+    <div class="settings-content">
+      <app-settings-section title="Playback and Microphone" description="Choose which audio devices Kanta uses for playback and input.">
+        <app-settings-audio-device-controls />
+        <div class="replaygain-controls">
+          <label class="replaygain-toggle">
+            <input type="checkbox" [checked]="replayGainEnabled()" (change)="setReplayGainEnabled($any($event.target).checked)" />
+            <span><strong>Apply ReplayGain</strong><small>Normalize playback loudness using embedded ReplayGain tags.</small></span>
+          </label>
+          <div class="replaygain-segment" role="group" aria-label="ReplayGain mode">
+            <button type="button" [disabled]="!replayGainEnabled()" [class.selected]="replayGainMode() === 'track'" [attr.aria-pressed]="replayGainMode() === 'track'" (click)="setReplayGainMode('track')">Track</button>
+            <button type="button" [disabled]="!replayGainEnabled()" [class.selected]="replayGainMode() === 'album'" [attr.aria-pressed]="replayGainMode() === 'album'" (click)="setReplayGainMode('album')">Album</button>
+          </div>
+          <p class="replaygain-hint">Track mode adjusts each song independently; album mode preserves relative loudness across an album.</p>
+        </div>
+      </app-settings-section>
 
-    <app-settings-section title="Output Folders" description="Choose where processed songs are saved. Select a default folder for new jobs.">
-      <app-settings-folders
-        [outputDirs]="outputDirs()"
-        [defaultOutputDir]="defaultOutputDir()"
-        [newOutputDir]="newOutputDir()"
-        (outputDirsChange)="setOutputDirs($event)"
-        (defaultOutputDirChange)="setDefaultOutputDir($event)"
-        (newOutputDirChange)="setNewOutputDir($event)"
-        (browseRequest)="openPicker($event)"
-      />
-    </app-settings-section>
+      <app-settings-section title="Output Folders" description="Choose where processed songs are saved. Select a default folder for new jobs.">
+        <app-settings-folders
+          [outputDirs]="outputDirs()"
+          [defaultOutputDir]="defaultOutputDir()"
+          [newOutputDir]="newOutputDir()"
+          (outputDirsChange)="setOutputDirs($event)"
+          (defaultOutputDirChange)="setDefaultOutputDir($event)"
+          (newOutputDirChange)="setNewOutputDir($event)"
+          (browseRequest)="openPicker($event)"
+        />
+        <app-settings-storage-devices
+          [configuredPaths]="outputDirs()"
+          [statuses]="outputDirsStatus()"
+          (addPath)="addOutputFolder($event)"
+        />
+      </app-settings-section>
 
-    <app-settings-section title="Output Mode" description="Choose how many vocal and instrumental stems each job creates.">
-      <app-settings-option-group label="Output mode" [options]="modeOptions" [selected]="outputMode()" (selectedChange)="setOutputMode($event)" />
-    </app-settings-section>
+      <app-settings-section title="Output Mode" description="Choose how vocals and instruments are separated.">
+        <app-settings-option-group
+          label="Output mode"
+          [options]="modeOptions"
+          [selected]="outputMode()"
+          (selectedChange)="setOutputMode($event)"
+        />
+      </app-settings-section>
 
-    <app-settings-section title="Output Quality" description="Balance file size with sound quality for processed audio.">
-      <app-settings-option-group label="Output quality" [columns]="3" [options]="qualityOptions" [selected]="outputQuality()" (selectedChange)="setOutputQuality($event)" />
-    </app-settings-section>
+      <app-settings-section title="Output Quality" description="Set the audio format for exported stems. Source quality is preserved without upsampling.">
+        <app-settings-option-group
+          label="Output quality"
+          [columns]="3"
+          [options]="qualityOptions"
+          [selected]="outputQuality()"
+          (selectedChange)="setOutputQuality($event)"
+        />
+      </app-settings-section>
 
-    <app-settings-section title="Models Folder" description="Choose where the audio separation models are stored.">
-      <div class="model-path">
-        <input type="text" aria-label="Models folder path" autocomplete="off" placeholder="Choose models folder" [ngModel]="modelDir()" (ngModelChange)="setModelDir($event)" />
-        <button class="browse-button" type="button" appTooltip="Browse folders" aria-label="Browse model folders" (click)="openPicker('model')"><svg lucideFolderOpen [size]="17"></svg><span>Browse</span></button>
-      </div>
-    </app-settings-section>
+      <app-settings-section title="Models Folder" description="Choose the folder containing the audio separation models used for audio separation.">
+        <div class="model-path">
+          <input type="text" aria-label="Models folder path" autocomplete="off" placeholder="Choose models folder" [ngModel]="modelDir()" (ngModelChange)="setModelDir($event)" />
+          <button class="browse-button" type="button" appTooltip="Browse folders" aria-label="Browse model folders" (click)="openPicker('model')">
+            <svg lucideFolderOpen [size]="17"></svg><span>Browse</span>
+          </button>
+        </div>
+      </app-settings-section>
 
-    <app-settings-section title="Inference Device" description="Select the processor used for audio separation. Some devices may be unavailable on this system.">
-      <app-settings-option-group label="Inference device" [options]="deviceOptions()" [selected]="inferenceDevice()" (selectedChange)="setInferenceDevice($event)" />
-    </app-settings-section>
+      <app-settings-section title="Inference Device" description="Select the processor used for audio separation. Some devices may be unavailable on this system.">
+        <app-settings-option-group
+          label="Inference device"
+          [options]="deviceOptions()"
+          [selected]="inferenceDevice()"
+          (selectedChange)="setInferenceDevice($event)"
+        />
+      </app-settings-section>
+    </div>
   </div>
 
   @if (pickerTarget()) {
-    <app-settings-folder-picker [initialPath]="pickerStartPath()" (selected)="acceptFolder($event)" (cancelled)="pickerTarget.set(null)" />
+    <app-settings-folder-picker
+      [initialPath]="pickerStartPath()"
+      (selected)="acceptFolder($event)"
+      (cancelled)="pickerTarget.set(null)"
+    />
   }
 </main>

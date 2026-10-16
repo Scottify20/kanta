@@ -65,11 +65,11 @@ describe('QueueSheet', () => {
     await fixture.whenStable();
   });
 
-  it('hides Processing Queue before opening for a processed-song drag', () => {
+  it('keeps the Processing Queue visible during a processed-song drag', () => {
     fixture.componentRef.setInput('processedItemDrag', true);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelectorAll('.queue-section').length).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('.queue-section').length).toBe(2);
   });
 
   it('shows an available album cover in both queue lists', () => {

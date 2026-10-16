@@ -1,0 +1,24 @@
+:host { display: grid; gap: .75rem; padding-top: .35rem; }
+.storage-heading { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
+.storage-heading strong, .configured-status > strong { color: rgba(255,255,255,.86); font-size: .82rem; }
+.storage-heading p { margin: .2rem 0 0; color: rgba(255,255,255,.46); font-size: .72rem; }
+.refresh-button { display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; color: rgba(255,255,255,.75); background: rgba(255,255,255,.04); cursor: pointer; }
+.refresh-button:disabled { opacity: .45; }
+.storage-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .6rem; }
+.storage-card { display: grid; gap: .65rem; padding: .75rem; border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; background: rgba(255,255,255,.035); }
+.device-line { display: flex; align-items: center; gap: .55rem; min-width: 0; color: #f4b297; }
+.device-name { display: grid; flex: 1; min-width: 0; gap: .18rem; color: rgba(255,255,255,.84); }
+.device-name strong { overflow: hidden; font-size: .77rem; text-overflow: ellipsis; white-space: nowrap; }
+.device-name span { overflow: hidden; color: rgba(255,255,255,.43); font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
+.badge { flex: 0 0 auto; padding: .2rem .4rem; border-radius: 999px; font-size: .63rem; }
+.badge.warning { color: #f2bc99; background: rgba(242,188,153,.12); }
+.usage-track { height: .36rem; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.09); }
+.usage-track span { display: block; height: 100%; border-radius: inherit; background: #9dc4a2; transition: width var(--motion-base,260ms) var(--ease-out,ease-out); }
+.device-footer { display: flex; align-items: center; justify-content: space-between; gap: .4rem; color: rgba(255,255,255,.47); font-size: .66rem; }
+.add-button { padding: .4rem .55rem; border: 1px solid rgba(255,255,255,.12); border-radius: .55rem; color: rgba(255,255,255,.85); background: rgba(255,255,255,.06); font: inherit; font-size: .68rem; cursor: pointer; }
+.add-button:disabled { opacity: .4; cursor: not-allowed; }
+.fallback { margin: 0; color: rgba(255,255,255,.45); font-size: .72rem; }
+.configured-status { display: grid; gap: .4rem; }
+.configured-status p { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: 0; padding: .4rem .55rem; border-radius: .5rem; background: rgba(255,255,255,.035); }
+.configured-status p > span { overflow: hidden; color: rgba(255,255,255,.57); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 540px) { .storage-list { grid-template-columns: 1fr; } }

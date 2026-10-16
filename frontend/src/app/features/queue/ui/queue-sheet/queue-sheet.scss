@@ -124,7 +124,7 @@
 }
 
 @keyframes queue-gap-open {
-  to { height: 3.9rem; }
+  to { height: min(7.8rem, 18dvh); }
 }
 
 @keyframes queue-row-in {
@@ -136,17 +136,32 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
 
-.queue-section + .queue-section {
+/* Karaoke takes the remaining space; processing sizes to its content (capped) and stays fully visible. */
+.queue-section.karaoke {
+  flex: 1 1 0;
+  min-height: 7rem;
+
+  &.collapsed {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+}
+
+.queue-section.processing {
+  flex: 0 0 auto;
+  max-height: 42%;
   padding-top: 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .track-list-wrapper {
   display: grid;
+  flex: 1 0 auto;
   grid-template-rows: 1fr;
   transition: grid-template-rows 0.3s cubic-bezier(0.2, 0, 0.2, 1);
 
@@ -164,6 +179,10 @@
   list-style: none;
   min-height: 0;
   overflow: hidden;
+
+  .drop-zone {
+    flex: 1 1 auto;
+  }
 }
 
 .track-list li.queue-row {
@@ -255,7 +274,8 @@
 .drop-zone {
   display: grid;
   place-items: center;
-  min-height: 6rem;
+  flex: 1 1 auto;
+  min-height: min(12rem, 24dvh);
   padding: 1rem;
   border: 2px dashed rgba(255, 255, 255, 0.2);
   border-radius: 0.75rem;

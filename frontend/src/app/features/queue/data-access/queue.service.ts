@@ -4,6 +4,7 @@ import {
   BehaviorSubject,
   EMPTY,
   Observable,
+  Subject,
   catchError,
   exhaustMap,
   filter,
@@ -33,6 +34,9 @@ const EMPTY_QUEUE_SNAPSHOT: QueueSnapshot = {
 export class QueueService {
   private readonly http = inject(HttpClient);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
+
+  // Emits the removed task id, or null when the whole karaoke queue was cleared.
+  readonly karaokeRemoved$ = new Subject<string | null>();
 
   // Live snapshot: SSE when the backend supports it, otherwise non-overlapping polling.
   // Failed or slow requests never replace the last known snapshot with an empty one.
@@ -108,14 +112,24 @@ export class QueueService {
   removeTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
       .delete<{ item: QueueItem }>(`${QUEUE_API_URL}/api/queue/${encodeURIComponent(taskId)}`)
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        tap(() => {
+          this.karaokeRemoved$.next(taskId);
+          this.refresh();
+        }),
+      );
   }
 
   clearQueue(priority: QueuePriority): Observable<{ message: string }> {
     const queueName = priority === 1 ? 'karaoke' : 'processing';
     return this.http
       .delete<{ message: string }>(`${QUEUE_API_URL}/api/queue/clear/${queueName}`)
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        tap(() => {
+          if (priority === 1) this.karaokeRemoved$.next(null);
+          this.refresh();
+        }),
+      );
   }
 
   removeKaraokeTrack(taskId: string): Observable<{ message: string }> {
@@ -123,7 +137,12 @@ export class QueueService {
       .delete<{ message: string }>(
         `${QUEUE_API_URL}/api/queue/karaoke/${encodeURIComponent(taskId)}`,
       )
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        tap(() => {
+          this.karaokeRemoved$.next(taskId);
+          this.refresh();
+        }),
+      );
   }
 
   clearAllQueue(): Observable<[{ message: string }, { message: string }]> {

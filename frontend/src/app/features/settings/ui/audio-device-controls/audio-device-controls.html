@@ -1,0 +1,46 @@
+<div class="devices-heading"><span>Audio devices</span><button class="refresh-audio" type="button" appTooltip="Refresh audio devices" aria-label="Refresh audio devices" (click)="refreshDevices()"><svg lucideRefreshCw [size]="15"></svg></button></div>
+<div class="devices-grid">
+  @if (outputRoutingAvailable()) {
+    <label class="device-field">
+      <span>Audio output</span>
+      <select [ngModel]="outputId()" (ngModelChange)="changeOutput($event)">
+        <option value="">System default</option>
+        @for (device of outputs(); track $index) { <option [value]="device.id">{{ device.label }}</option> }
+      </select>
+    </label>
+  }
+  <label class="device-field">
+    <span>Microphone input</span>
+    <select [ngModel]="inputId()" (ngModelChange)="changeInput($event)">
+      <option value="">System default</option>
+      @for (device of inputs(); track $index) { <option [value]="device.id">{{ device.label }}</option> }
+    </select>
+  </label>
+</div>
+@if (!outputRoutingAvailable()) { <p class="fallback">Output-device routing is not supported by this audio system; using the system default.</p> }
+<div class="mic-test">
+  <div class="test-heading">
+    <div><strong>Microphone test</strong><p>Speak to check the selected input level.</p></div>
+    <button class="test-button" type="button" [class.active]="mic.running()" [appTooltip]="mic.running() ? 'Stop microphone test' : 'Start microphone test'" [attr.aria-label]="mic.running() ? 'Stop microphone test' : 'Start microphone test'" (click)="toggleMicTest()">
+      @if (mic.running()) { <svg lucideMicOff [size]="17"></svg><span>Stop test</span> }
+      @else { <svg lucideMic [size]="17"></svg><span>Start test</span> }
+    </button>
+  </div>
+  <div class="meter" role="meter" aria-label="Microphone input level" [attr.aria-valuenow]="mic.level() * 100" aria-valuemin="0" aria-valuemax="100">
+    <span class="meter-fill" [style.width.%]="mic.level() * 100"></span>
+    <span class="meter-peak" [style.left.%]="mic.peak() * 100"></span>
+  </div>
+  <div class="meter-labels"><span>{{ mic.running() ? 'Live input level' : 'Test stopped' }}</span><span>Peak {{ peakPercent() }}%</span></div>
+  @if (mic.error()) {
+    <p class="device-error" role="alert">
+      @switch (mic.error()) {
+        @case ('permission-denied') { Microphone access was denied. Allow microphone access in system or app permissions and try again. }
+        @case ('no-device') { No microphone was found. Connect an input device and refresh the device list. }
+        @case ('device-unplugged') { The selected microphone was disconnected. Choose another device and restart the test. }
+        @default { Microphone testing is unavailable in this webview or the input could not be opened. }
+      }
+    </p>
+  }
+  <label class="monitor-toggle"><input type="checkbox" [checked]="monitor()" (change)="setMonitor($any($event.target).checked)" /><span>Monitor / loopback</span><svg lucideVolume2 [size]="16"></svg></label>
+  @if (monitor()) { <p class="feedback-warning" role="note">Feedback warning: microphone audio will play through your speakers. Use headphones or keep the level low.</p> }
+</div>

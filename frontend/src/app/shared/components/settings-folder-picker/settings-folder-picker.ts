@@ -32,7 +32,12 @@ export class SettingsFolderPicker implements OnInit {
 
   openDirectory(name: string): void {
     const path = this.current()?.path ?? '';
-    this.load(`${path.replace(/\/$/, '')}/${name}`);
+    if (!path && /^[A-Za-z]:[\\/]?$/.test(name)) {
+      this.load(name);
+      return;
+    }
+    const separator = /[\\]/.test(path) || /^[A-Za-z]:/.test(path) ? '\\' : '/';
+    this.load(`${path.replace(/[\\/]+$/, '')}${separator}${name}`);
   }
 
   goUp(): void {

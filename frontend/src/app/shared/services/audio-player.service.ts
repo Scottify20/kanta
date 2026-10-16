@@ -1,10 +1,58 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 
+export interface ReplayGainInfo {
+  trackGain?: string | null;
+  trackPeak?: string | null;
+  albumGain?: string | null;
+  albumPeak?: string | null;
+}
+
 export interface StemSources {
   vocals: string;
   instrumental: string;
+  replayGain?: ReplayGainInfo;
 }
+
+export type ReplayGainMode = 'track' | 'album';
+
+const RG_ENABLED_KEY = 'kanta.replayGain.enabled';
+const RG_MODE_KEY = 'kanta.replayGain.mode';
+
+const storage = {
+  get: (key: string): string | null => {
+    try {
+      return globalThis.localStorage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  },
+  set: (key: string, value: string): void => {
+    try {
+      globalThis.localStorage?.setItem(key, value);
+    } catch {
+      // storage unavailable
+    }
+  },
+};
+
+const parseNumber = (value: string | null | undefined): number | null => {
+  const parsed = value ? Number.parseFloat(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+// Gain in dB from the file tags -> linear factor, capped so the peak never exceeds full scale.
+export const replayGainFactor = (
+  info: ReplayGainInfo | undefined,
+  mode: ReplayGainMode,
+): number => {
+  if (!info) return 1;
+  const gain = parseNumber(mode === 'album' ? (info.albumGain ?? info.trackGain) : (info.trackGain ?? info.albumGain));
+  if (gain === null) return 1;
+  const peak = parseNumber(mode === 'album' ? (info.albumPeak ?? info.trackPeak) : (info.trackPeak ?? info.albumPeak));
+  const factor = 10 ** (gain / 20);
+  return peak && peak > 0 ? Math.min(factor, 1 / peak) : factor;
+};
 
 @Injectable({ providedIn: 'root' })
 export class AudioPlayerService {
@@ -14,6 +62,12 @@ export class AudioPlayerService {
   readonly vocalsVolume = signal(1);
   readonly instrumentalVolume = signal(1);
   readonly trackEnded = new Subject<void>();
+  readonly replayGainEnabled = signal(storage.get(RG_ENABLED_KEY) !== 'false');
+  readonly replayGainMode = signal<ReplayGainMode>(
+    storage.get(RG_MODE_KEY) === 'album' ? 'album' : 'track',
+  );
+  private masterGain: GainNode | null = null;
+  private replayGain: ReplayGainInfo | undefined;
 
   private context: AudioContext | null = null;
   private vocalsAudio: HTMLAudioElement | null = null;
@@ -39,8 +93,12 @@ export class AudioPlayerService {
 
     this.vocalsGain.gain.value = this.vocalsVolume();
     this.instrumentalGain.gain.value = this.instrumentalVolume();
-    this.vocalsSource.connect(this.vocalsGain).connect(context.destination);
-    this.instrumentalSource.connect(this.instrumentalGain).connect(context.destination);
+    this.masterGain = context.createGain();
+    this.replayGain = sources.replayGain;
+    this.applyReplayGain();
+    this.masterGain.connect(context.destination);
+    this.vocalsSource.connect(this.vocalsGain).connect(this.masterGain);
+    this.instrumentalSource.connect(this.instrumentalGain).connect(this.masterGain);
     this.instrumentalAudio.addEventListener('ended', () => {
       this.isPlaying.set(false);
       this.trackEnded.next();
@@ -97,6 +155,24 @@ export class AudioPlayerService {
     }
   }
 
+  setReplayGainEnabled(enabled: boolean): void {
+    this.replayGainEnabled.set(enabled);
+    storage.set(RG_ENABLED_KEY, String(enabled));
+    this.applyReplayGain();
+  }
+
+  setReplayGainMode(mode: ReplayGainMode): void {
+    this.replayGainMode.set(mode);
+    storage.set(RG_MODE_KEY, mode);
+    this.applyReplayGain();
+  }
+
+  private applyReplayGain(): void {
+    if (!this.masterGain) return;
+    const factor = this.replayGainEnabled() ? replayGainFactor(this.replayGain, this.replayGainMode()) : 1;
+    this.masterGain.gain.value = factor;
+  }
+
   setOutputDevice(id: string): void {
     this.outputDeviceId = id;
     this.applyOutputDevice();
@@ -112,6 +188,8 @@ export class AudioPlayerService {
     this.instrumentalSource = null;
     this.vocalsGain = null;
     this.instrumentalGain = null;
+    this.masterGain = null;
+    this.replayGain = undefined;
     this.currentTime.set(0);
     this.duration.set(0);
   }

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.services import library
+from app.services.paths import DATA_DIR
 from app.services.fsutil import atomic_write_json
 from app.services.settings import get_output_mode
 from app.services.separator import run_basic_pipeline, run_karaoke_pipeline
@@ -22,8 +23,7 @@ from app.tasks import (
 )
 
 logger = logging.getLogger(__name__)
-BACKEND_DIR = Path(__file__).resolve().parents[2]
-QUEUE_STATE_FILE = BACKEND_DIR / "queue_state.json"
+QUEUE_STATE_FILE = DATA_DIR / "queue_state.json"
 SAVE_DEBOUNCE_SECONDS = 0.5
 
 

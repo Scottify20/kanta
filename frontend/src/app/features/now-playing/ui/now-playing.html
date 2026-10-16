@@ -6,6 +6,7 @@
       class="circle-button"
       type="button"
       aria-label="Open menu"
+      appTooltip="Menu" tooltipPosition="below"
       title="Menu"
       [attr.aria-expanded]="layout.sidebarOpen()"
       (click)="layout.toggleSidebar()"
@@ -30,6 +31,7 @@
       class="circle-button queue-toggle"
       type="button"
       aria-label="Toggle queue"
+      appTooltip="Queue" tooltipPosition="below"
       title="Queue"
       [attr.aria-expanded]="layout.queueOpen()"
       (click)="layout.toggleQueue()"
@@ -129,6 +131,8 @@
             class="circle-button"
             type="button"
             aria-label="Previous track"
+            appTooltip="Previous"
+            [disabled]="!hasPrevious()"
             (click)="playPrevious()"
           >
             <svg lucideChevronLeft [size]="21"></svg>
@@ -165,14 +169,21 @@
               <svg lucidePlay [size]="28"></svg>
             }
           </button>
-          <button class="circle-button" type="button" aria-label="Next track" (click)="playNext()">
+          <button
+            class="circle-button"
+            type="button"
+            aria-label="Next track"
+            appTooltip="Next"
+            [disabled]="!hasNext()"
+            (click)="playNext()"
+          >
             <svg lucideChevronRight [size]="21"></svg>
           </button>
         </div>
 
         <!-- Action Buttons and Volume Control-->
         <div class="track-actions">
-          <button class="circle-button" type="button" aria-label="Favorite">
+          <button class="circle-button" type="button" aria-label="Favorite" appTooltip="Favorite">
             <svg lucideStar [size]="18"></svg>
           </button>
           @if (selectedManifest() && lyricsService.lyrics()) {
@@ -190,6 +201,7 @@
             class="circle-button"
             type="button"
             aria-label="Full screen"
+            [appTooltip]="isFullScreen() ? 'Exit full screen (F)' : 'Full screen (F)'"
             (click)="toggleFullScreen()"
           >
             @if (isFullScreen()) {

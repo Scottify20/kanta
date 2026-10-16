@@ -23,9 +23,9 @@
     <strong>{{ item().raw_title }}</strong>
     <span
       class="lyrics-chip"
-      [class.level-word]="item().lyrics_level === 'word'"
-      [class.level-line]="item().lyrics_level === 'line'"
-      [class.level-none]="!item().lyrics_level || item().lyrics_level === 'none'"
+      [class.level-word]="lyricsLevel() === 'word'"
+      [class.level-line]="lyricsLevel() === 'line'"
+      [class.level-none]="lyricsLevel() === 'none'"
     >
       {{ lyricsLevelLabel() }}
     </span>

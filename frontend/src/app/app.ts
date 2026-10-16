@@ -30,6 +30,18 @@ export class App {
     }
   }
 
+  // Clicking the content area dismisses open panels; overlays, toggles and drags are ignored.
+  @HostListener('document:pointerdown', ['$event'])
+  onOutsidePointer(event: PointerEvent): void {
+    if (!this.layout.sidebarOpen() && !this.layout.queueOpen()) return;
+    if (this.layout.dragActive() || event.button !== 0) return;
+    const target = event.target as Element | null;
+    if (!target?.isConnected) return;
+    if (target.closest('.panel, .cdk-overlay-container, [aria-expanded], [role="dialog"], dialog')) return;
+    this.layout.closeSidebar();
+    this.layout.closeQueue();
+  }
+
   @HostListener('document:dragend')
   @HostListener('document:drop')
   onDragFinished(): void {

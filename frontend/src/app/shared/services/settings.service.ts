@@ -12,6 +12,25 @@ export interface AppSettings {
   output_mode: 'basic' | 'full';
   output_quality: 'high' | 'standard' | 'low';
   inference_device: 'cuda' | 'vulkan' | 'cpu';
+  output_dirs_status?: OutputDirectoryStatus[];
+}
+
+export interface OutputDirectoryStatus {
+  path: string;
+  available: boolean;
+  writable: boolean;
+  free_bytes: number | null;
+}
+
+export interface StorageDevice {
+  id: string;
+  label: string;
+  path: string;
+  removable: boolean;
+  total_bytes: number | null;
+  free_bytes: number | null;
+  writable: boolean;
+  mounted: boolean;
 }
 
 export interface InferenceDevice {
@@ -39,6 +58,10 @@ export class SettingsService {
     'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
   >): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
+  }
+
+  getStorageDevices(): Observable<StorageDevice[]> {
+    return this.http.get<StorageDevice[]>(`${API_URL}/api/fs/devices`);
   }
 
   getDevices(): Observable<InferenceDevice[]> {

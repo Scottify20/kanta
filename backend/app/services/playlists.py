@@ -8,9 +8,9 @@ import json
 
 from app.services import library
 from app.services.fsutil import atomic_write_json
-from app.services.settings import BACKEND_DIR
+from app.services.paths import DATA_DIR
 
-PLAYLISTS_FILE = BACKEND_DIR / "playlists.json"
+PLAYLISTS_FILE = DATA_DIR / "playlists.json"
 _lock = threading.RLock()
 _cache: dict[str, Any] = {"sig": None, "data": None}
 

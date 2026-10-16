@@ -1,0 +1,28 @@
+<div class="storage-heading">
+  <div><strong>Storage devices</strong><p>Use a mounted writable drive as an output location.</p></div>
+  <button class="refresh-button" type="button" appTooltip="Refresh storage devices" aria-label="Refresh storage devices" [disabled]="loading()" (click)="refresh()"><svg lucideRefreshCw [size]="16"></svg></button>
+</div>
+@if (unavailable()) { <p class="fallback">Storage-device detection is currently unavailable.</p> }
+@else if (loading() && !devices().length) { <p class="fallback">Detecting storage devices…</p> }
+@else if (!devices().length) { <p class="fallback">No external storage devices detected.</p> }
+<div class="storage-list">
+  @for (device of devices(); track device.id) {
+    <article class="storage-card">
+      <div class="device-line"><svg lucideHardDrive [size]="17"></svg><div class="device-name"><strong>{{ device.label }}</strong><span>{{ device.path }}@if (device.removable) { · Removable }</span></div>
+      @if (!device.mounted) { <small class="badge warning">Not mounted</small> } @else if (!device.writable) { <small class="badge warning">Read only</small> }</div>
+      <div class="usage-track" role="meter" [attr.aria-label]="device.label + ' storage used'" [attr.aria-valuenow]="usage(device)" aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="usage(device)"></span></div>
+      <div class="device-footer"><span>{{ formatBytes(device.free_bytes) }}</span><button type="button" class="add-button" [disabled]="!device.mounted || !device.writable" (click)="add(device)">Add as output folder</button></div>
+    </article>
+  }
+</div>
+@if (configuredPaths().length) {
+  <div class="configured-status">
+    <strong>Configured folder status</strong>
+    @for (path of configuredPaths(); track path) {
+      @let pathStatus = status(path);
+      @if (pathStatus && (!pathStatus.available || !pathStatus.writable)) {
+        <p><span>{{ path }}</span><small class="badge warning">{{ !pathStatus.available ? 'Unavailable' : 'Not writable' }}</small></p>
+      }
+    }
+  </div>
+}

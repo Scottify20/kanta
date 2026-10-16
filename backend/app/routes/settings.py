@@ -1,9 +1,11 @@
+import sys
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.services import storage
 from app.services.settings import (
     device_availability,
     get_default_output_dir,
@@ -25,7 +27,7 @@ class SettingsUpdate(BaseModel):
     model_dir: Optional[str] = None
     output_mode: Optional[Literal["basic", "full"]] = None
     output_quality: Optional[Literal["high", "standard", "low"]] = None
-    inference_device: Optional[Literal["cuda", "vulkan", "cpu"]] = None
+    inference_device: Optional[Literal["cuda", "mps", "directml", "vulkan", "cpu"]] = None
 
 
 def _settings_payload(
@@ -39,6 +41,7 @@ def _settings_payload(
         "output_mode": get_output_mode(),
         "output_quality": get_output_quality(),
         "inference_device": get_inference_device(),
+        "output_dirs_status": storage.output_dirs_status(list(output_dirs)),
     }
 
 
@@ -53,6 +56,16 @@ def get_devices() -> list[dict[str, Any]]:
     return [
         {"id": "cuda", "label": "NVIDIA GPU (CUDA)", "available": availability["cuda"]},
         {"id": "vulkan", "label": "Vulkan GPU", "available": availability["vulkan"]},
+        *(
+            [{"id": "mps", "label": "Apple GPU (Metal)", "available": availability["mps"]}]
+            if sys.platform == "darwin"
+            else []
+        ),
+        *(
+            [{"id": "directml", "label": "DirectML GPU", "available": availability["directml"]}]
+            if sys.platform == "win32"
+            else []
+        ),
         {"id": "cpu", "label": "CPU", "available": True},
     ]
 
@@ -86,10 +99,21 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
 fs_router = APIRouter(prefix="/api/fs", tags=["Filesystem"])
 
 
+@fs_router.get("/devices")
+def list_storage_devices() -> list[dict[str, Any]]:
+    return storage.list_volumes(force=True)
+
+
 @fs_router.get("/browse")
 def browse_directories(path: Optional[str] = None) -> dict[str, Any]:
+    on_windows = sys.platform == "win32"
+    if on_windows and path is not None and not path.strip():
+        return {"path": "", "parent": None, "dirs": storage.windows_drive_roots()}
     try:
-        target = Path(path).expanduser() if path else Path.home()
+        raw = (path or "").strip()
+        if on_windows and len(raw) == 2 and raw[1] == ":":
+            raw += "\\"  # "C:" alone means the drive's cwd; treat it as the root
+        target = Path(raw).expanduser() if raw else Path.home()
         target = target.resolve()
         if not target.is_dir():
             raise HTTPException(status_code=404, detail="Directory not found")
@@ -97,16 +121,31 @@ def browse_directories(path: Optional[str] = None) -> dict[str, Any]:
             (
                 entry.name
                 for entry in target.iterdir()
-                if not entry.name.startswith(".") and _is_dir(entry)
+                if not _is_hidden(entry) and _is_dir(entry)
             ),
             key=str.casefold,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail="Permission denied") from exc
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    parent = str(target.parent) if target.parent != target else None
+    if target.parent != target:
+        parent: Optional[str] = str(target.parent)
+    else:
+        parent = "" if on_windows else None  # drive root -> list of drives
     return {"path": str(target), "parent": parent, "dirs": dirs}
+
+
+def _is_hidden(entry: Path) -> bool:
+    name = entry.name
+    if name.startswith((".", "$")) or name == "System Volume Information":
+        return True
+    if sys.platform == "win32":
+        try:
+            return bool(entry.stat().st_file_attributes & 0x2)  # FILE_ATTRIBUTE_HIDDEN
+        except (OSError, AttributeError):
+            return False
+    return False
 
 
 def _is_dir(entry: Path) -> bool:

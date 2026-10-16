@@ -6,6 +6,18 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/kanta-backend",
+          "sidecar": true
+        }
+      ]
+    },
+    "shell:allow-kill"
   ]
 }
