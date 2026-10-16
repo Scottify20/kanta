@@ -70,3 +70,13 @@ for other platforms (`aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`).
 - **Backslashes/drives:** the API always exchanges `/`-separated relative URLs; absolute paths only appear in
   settings and the folder picker, which lists drive letters on Windows.
 - **Auto-updates** are not configured (`tauri-plugin-updater` would be the next step).
+
+## Linux (Ubuntu) package
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+cd backend && python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt   # plus torch
+cd ../frontend && npm ci && npm run app:build:linux
+```
+
+Output: `frontend/src-tauri/target/release/bundle/{deb,appimage}/`. Build on the oldest Ubuntu you want to support.

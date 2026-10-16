@@ -14,7 +14,8 @@
     "assets:fetch": "node scripts/backend.mjs fetch",
     "assets:models": "node scripts/backend.mjs fetch models",
     "assets:ffmpeg": "node scripts/backend.mjs fetch ffmpeg",
-    "app:build": "npm run backend:build && tauri build --config src-tauri/tauri.bundle.conf.json"
+    "app:build": "npm run backend:build && tauri build --config src-tauri/tauri.bundle.conf.json",
+    "app:build:linux": "npm run backend:build && tauri build --config src-tauri/tauri.bundle.linux.conf.json"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
