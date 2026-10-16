@@ -1,0 +1,23 @@
+<div
+  class="cover-and-lyrics-container"
+  [class.fullscreen]="fullscreen()"
+  [class.collapsed]="collapsed()"
+>
+  <section>
+    @if (coverUrl(); as cover) {
+      <img class="album-art" [src]="cover" [alt]="coverAlt()" />
+    } @else {
+      <div class="album-art album-art-placeholder" aria-label="No album cover"></div>
+    }
+  </section>
+
+  <section class="lyrics-stage" aria-label="Lyrics">
+    <braccato-lyrics
+      [lyrics]="lyrics()"
+      [currentTime]="currentTime()"
+      [playing]="playing()"
+      (click)="lyricClick.emit($event)"
+    >
+    </braccato-lyrics>
+  </section>
+</div>

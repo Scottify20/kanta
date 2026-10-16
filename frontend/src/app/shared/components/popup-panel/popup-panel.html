@@ -1,0 +1,10 @@
+<div
+  class="popup-anchor"
+  [class.popup-open]="isOpen()"
+  [class.popup-below]="placement() === 'below'"
+>
+  <ng-content select="[popup-trigger]"></ng-content>
+  <div class="popup-content" [hidden]="!isOpen()" role="dialog" [attr.aria-label]="label()">
+    <ng-content select="[popup-content]"></ng-content>
+  </div>
+</div>

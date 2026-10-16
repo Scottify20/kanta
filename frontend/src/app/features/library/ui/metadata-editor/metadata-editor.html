@@ -1,0 +1,41 @@
+<div class="metadata-backdrop" (click)="close.emit()">
+  <form class="metadata-dialog" (click)="$event.stopPropagation()" (ngSubmit)="submit()">
+    <h2>Edit metadata</h2>
+    <label>
+      Artist
+      <input
+        name="metadataArtist"
+        type="text"
+        [ngModel]="metadata().artist"
+        (ngModelChange)="updateMetadata('artist', $event)"
+      />
+    </label>
+    <label>
+      Album
+      <input
+        name="metadataAlbum"
+        type="text"
+        [ngModel]="metadata().album"
+        (ngModelChange)="updateMetadata('album', $event)"
+      />
+    </label>
+    <label>
+      Title
+      <input
+        name="metadataTitle"
+        type="text"
+        [ngModel]="metadata().title"
+        (ngModelChange)="updateMetadata('title', $event)"
+      />
+    </label>
+    @if (error()) {
+      <p role="alert">{{ error() }}</p>
+    }
+    <footer>
+      <button type="button" (click)="close.emit()">Cancel</button>
+      <button type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : 'Save metadata' }}
+      </button>
+    </footer>
+  </form>
+</div>

@@ -1,0 +1,95 @@
+:host {
+  display: contents;
+}
+
+.cover-art-wrap {
+  position: relative;
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.cover-image,
+.cover-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.4rem;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.track-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.track-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.track-title-row strong {
+  flex: 1;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-info small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-chip {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+
+  &.level-word {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+  }
+
+  &.level-line {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+  }
+
+  &.level-none {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.cover-progress-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.4rem;
+  background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
+  pointer-events: none;
+}

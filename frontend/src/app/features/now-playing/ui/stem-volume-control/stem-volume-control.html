@@ -1,0 +1,37 @@
+<app-popup-panel popupId="stem-volume" label="Stem volumes">
+  <button
+    popup-trigger
+    class="volume-toggle"
+    type="button"
+    aria-label="Stem volumes"
+    [style.--vol-v]="audioPlayer.vocalsVolume()"
+    [style.--vol-i]="audioPlayer.instrumentalVolume()"
+  >
+    <svg lucideMicVocal [size]="18"></svg>
+    <svg lucideGuitar [size]="18"></svg>
+  </button>
+  <div popup-content class="volume-popover">
+    <label class="volume-slider">
+      <span>Vocals</span>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        [value]="audioPlayer.vocalsVolume()"
+        (input)="setVocalsVolume($event)"
+      />
+    </label>
+    <label class="volume-slider">
+      <span>Instrumental</span>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        [value]="audioPlayer.instrumentalVolume()"
+        (input)="setInstrumentalVolume($event)"
+      />
+    </label>
+  </div>
+</app-popup-panel>

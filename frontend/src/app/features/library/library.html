@@ -1,0 +1,99 @@
+<main
+  class="library-page"
+  [style.--page-artwork]="pageArtwork() ? 'url(' + pageArtwork() + ')' : 'none'"
+  (dragover)="handleDragOver($event)"
+>
+  <header class="library-header">
+    <a class="back-link" routerLink="/">Back to now playing</a>
+    <h1>Library</h1>
+    <button
+      class="clear-button"
+      type="button"
+      (click)="queueOpen.set(!queueOpen())"
+      style="
+        padding: 0.45rem 0.8rem;
+        border: 0;
+        border-radius: 0.4rem;
+        color: #f4f1ed;
+        background: rgba(255, 255, 255, 0.12);
+        cursor: pointer;
+      "
+    >
+      Queue
+    </button>
+  </header>
+
+  <section class="song-grid" aria-label="Processed songs">
+    <p class="empty-library" *ngIf="(songs$ | async)?.length === 0">No processed songs yet.</p>
+    <article
+      class="song-card"
+      *ngFor="let song of songs$ | async"
+      [draggable]="isPlayable(song)"
+      [class.is-unavailable]="!isPlayable(song)"
+      (dragstart)="startDrag($event, song)"
+      (dragend)="endDrag()"
+      (click)="playSong(song)"
+    >
+      <img *ngIf="song.covers[0]?.url" [src]="song.covers[0].url" [alt]="song.title" />
+      <div class="song-card-art" *ngIf="!song.covers[0]?.url" aria-hidden="true"></div>
+      <div class="song-card-copy">
+        <strong>{{ song.title }}</strong>
+        <span>{{ song.artist }}</span>
+        <small>{{ song.album }}</small>
+        <small class="lyrics-indicator">{{ lyricsLevelLabel(song.lyrics_level) }}</small>
+      </div>
+      <app-popup-panel
+        *ngIf="isPlayable(song)"
+        class="song-options-popup"
+        [popupId]="'library:' + song.artist + '/' + song.album + '/' + song.title"
+        [closeOnContentClick]="true"
+        label="Song options"
+      >
+        <button
+          popup-trigger
+          class="song-card-menu"
+          type="button"
+          aria-label="Song options"
+          aria-expanded="false"
+        >
+          <svg lucideMoreHorizontal [size]="18"></svg>
+        </button>
+        <div popup-content class="library-song-menu">
+          <button type="button" (click)="addToKaraokeQueue(song)">Add to Queue</button>
+          <button type="button" (click)="playNext(song)">Play Next</button>
+          <button type="button" (click)="editMetadata(song)">Edit metadata</button>
+        </div>
+      </app-popup-panel>
+    </article>
+  </section>
+
+  @if (actionError() && !editingSong()) {
+    <p class="library-action-error" role="alert">{{ actionError() }}</p>
+  }
+
+  @if (editingSong(); as song) {
+    <app-metadata-editor
+      [song]="song"
+      [saving]="savingMetadata()"
+      [error]="actionError()"
+      (save)="saveMetadata($event)"
+      (close)="closeMetadataEditor()"
+    />
+  }
+
+  @if (queueOpen()) {
+    <button
+      class="queue-backdrop"
+      type="button"
+      aria-label="Close queue"
+      (click)="closeQueue()"
+    ></button>
+    <app-queue-sheet
+      [hideProcessingQueue]="true"
+      [processedItemDrag]="processedItemDrag()"
+      [activeTaskId]="activeTaskId()"
+      (trackSelected)="selectQueueTrack($event)"
+      (close)="closeQueue()"
+    ></app-queue-sheet>
+  }
+</main>

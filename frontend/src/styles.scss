@@ -1,0 +1,44 @@
+@use './styles/reset';
+
+@import '@braccato/core/styles/variables.css';
+@import '@braccato/core/styles/lyrics.css';
+@import '@braccato/core/styles/instrumental.css';
+
+html {
+  scrollbar-gutter: stable;
+  font-family: Inter, sans-serif;
+  scrollbar-width: none;
+}
+
+body {
+  background-color: var(--body-bg-color);
+  &.scroll-disabled {
+    overflow: hidden;
+  }
+}
+
+#main {
+  max-width: var(--main-max-width);
+  margin: 0 auto;
+  opacity: 100%;
+  background-color: #1e1e1e;
+}
+
+html,
+body,
+app-root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+app-root {
+  display: block;
+  min-height: 100dvh;
+}
+
+#main {
+  width: 100%;
+  min-height: 100dvh;
+  background-color: #1e1e1e;
+}

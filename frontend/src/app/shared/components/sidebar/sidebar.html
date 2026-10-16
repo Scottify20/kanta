@@ -1,0 +1,33 @@
+<aside class="sidebar" aria-label="Main navigation">
+  <header class="sidebar-header">
+    <strong>Kanta</strong>
+    <button class="sidebar-close" type="button" aria-label="Close menu" (click)="closeSidebar()">
+      <svg lucideX [size]="18"></svg>
+    </button>
+  </header>
+
+  <nav class="sidebar-nav" aria-label="Primary">
+    <button
+      class="sidebar-link is-active"
+      type="button"
+      aria-current="page"
+      routerLink="/"
+      (click)="closeSidebar()"
+    >
+      <svg lucidePlay [size]="18"></svg>
+      <span>Now Playing</span>
+    </button>
+    <button class="sidebar-link" type="button" routerLink="/library" (click)="closeSidebar()">
+      <svg lucideSearch [size]="18"></svg>
+      <span>Library</span>
+    </button>
+    <button class="sidebar-link" type="button" (click)="openQueue()">
+      <svg lucideListMusic [size]="18"></svg>
+      <span>Queue</span>
+    </button>
+    <button class="sidebar-link" type="button" routerLink="/settings" (click)="closeSidebar()">
+      <svg lucideSettings2 [size]="18"></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+</aside>

@@ -1,0 +1,232 @@
+<div
+  class="container"
+  [class.has-artwork]="coverUrl() !== null"
+  [style.--album-artwork]="coverUrl() ? 'url(' + coverUrl() + ')' : 'none'"
+  (dragover)="handlePanelDragOver($event)"
+>
+  <header class="topbar">
+    <button
+      class="circle-button"
+      type="button"
+      aria-label="Open menu"
+      [attr.aria-expanded]="sidebarOpen()"
+      (click)="openSidebar()"
+    >
+      <svg lucideMenu [size]="20"></svg>
+    </button>
+    <!-- <button class="search-pill" type="button" aria-label="Search library">
+      <svg lucideSearch [size]="18"></svg>
+      <span>Search Sample</span>
+    </button> -->
+
+    <!-- Queue Preview/ Playing Next -->
+    <nav class="next-tracks" aria-label="Queue preview">
+      @for (item of queuePreview(); track item.task_id) {
+        <span
+          ><strong>{{ item.title }}</strong
+          ><small>{{ item.artist }}</small></span
+        >
+      }
+    </nav>
+
+    <button
+      class="circle-button queue-toggle"
+      type="button"
+      aria-label="Open queue"
+      [attr.aria-expanded]="queueOpen()"
+      (click)="openQueue()"
+    >
+      <svg lucideListMusic [size]="20"></svg>
+    </button>
+  </header>
+
+  <main
+    class="now-playing-content"
+    [class.fullscreen]="isFullScreen()"
+    [class.collapsed]="trackAreaCollapsed()"
+  >
+    <app-lyrics-stage
+      [coverUrl]="coverUrl()"
+      [coverAlt]="selectedTrack()?.title ?? selectedManifest()?.title ?? 'Current album cover'"
+      [lyrics]="lyricsService.lyrics()"
+      [currentTime]="lyricsTimeSeconds()"
+      [playing]="audioPlayer.isPlaying()"
+      [fullscreen]="isFullScreen()"
+      [collapsed]="trackAreaCollapsed()"
+      (lyricClick)="onLyricClick($event)"
+    />
+
+    <section
+      class="track-area"
+      [class.fullscreen]="isFullScreen()"
+      [class.collapsed]="trackAreaCollapsed()"
+      (mouseenter)="onTrackAreaMouseEnter()"
+      (mouseleave)="onTrackAreaMouseLeave()"
+      aria-label="Now playing"
+    >
+      <!-- Timeline -->
+      @if (selectedTrackProcessing()) {
+        <div class="player-processing" role="status" aria-live="polite">
+          <span class="player-loading-indicator" aria-hidden="true"></span>
+          <span class="processing-step">
+            @if (selectedTrackPaused()) {
+              Processing paused
+            } @else if (selectedTrack()?.status === 'pending') {
+              Waiting for processing
+            } @else if (selectedTrack()?.status === 'paused') {
+              Processing paused
+            } @else if (selectedTrack()?.status === 'cancelling') {
+              Cancelling
+            } @else {
+              {{ selectedTrack()?.step }}
+            }
+          </span>
+          <span class="processing-progress">{{ selectedTrack()?.progress }}%</span>
+        </div>
+      } @else {
+        <div class="timeline">
+          <span class="time-label">{{ formatTime(audioPlayer.currentTime()) }}</span>
+          <div
+            class="progress-track"
+            role="slider"
+            tabindex="0"
+            aria-label="Seek through track"
+            [attr.aria-valuemin]="0"
+            [attr.aria-valuemax]="audioPlayer.duration()"
+            [attr.aria-valuenow]="audioPlayer.currentTime()"
+            (pointerdown)="startSeek($event)"
+            (pointermove)="updateSeek($event)"
+            (pointerup)="finishSeek($event)"
+            (pointercancel)="finishSeek($event)"
+            (keydown)="seekByKeyboard($event)"
+          >
+            <span [style.width.%]="timelineProgressPercent()"></span>
+          </div>
+          <span class="time-label">{{ formatTime(audioPlayer.duration()) }}</span>
+        </div>
+      }
+
+      <div class="track-footer" [class.fullscreen]="isFullScreen()">
+        <!-- Track details -->
+        <div class="track-details">
+          <h1 class="track-title">
+            {{ selectedTrack()?.title ?? selectedManifest()?.title ?? 'No track selected' }}
+          </h1>
+          <p class="track-artist-album">
+            {{
+              selectedTrack()?.artist ??
+                selectedManifest()?.artist ??
+                'Drop an audio file into the queue'
+            }}
+            @if (selectedTrack()?.album ?? selectedManifest()?.album) {
+              <span>•</span> {{ selectedTrack()?.album ?? selectedManifest()?.album }}
+            }
+          </p>
+        </div>
+
+        <!-- Music Playback Controls -->
+        <div class="transport-controls">
+          <button
+            class="circle-button"
+            type="button"
+            aria-label="Previous track"
+            (click)="playPrevious()"
+          >
+            <svg lucideChevronLeft [size]="21"></svg>
+          </button>
+          <button
+            class="circle-button play-button"
+            type="button"
+            (click)="togglePlayback()"
+            [disabled]="selectedTrackProcessing()"
+            [attr.aria-label]="
+              selectedTrackProcessing()
+                ? selectedTrackPaused()
+                  ? 'Processing paused'
+                  : 'Processing ' + (selectedTrack()?.progress ?? 0) + ' percent'
+                : audioPlayer.isPlaying()
+                  ? 'Pause'
+                  : 'Play'
+            "
+          >
+            @if (selectedTrackProcessing()) {
+              <span
+                class="player-progress-ring"
+                [style.--progress]="(selectedTrack()?.progress ?? 0) + '%'"
+                aria-hidden="true"
+              ></span>
+              @if (selectedTrackPaused()) {
+                <svg lucidePause [size]="20"></svg>
+              } @else {
+                <span class="player-loading-indicator" aria-hidden="true"></span>
+              }
+            } @else if (audioPlayer.isPlaying()) {
+              <svg lucidePause [size]="28"></svg>
+            } @else {
+              <svg lucidePlay [size]="28"></svg>
+            }
+          </button>
+          <button class="circle-button" type="button" aria-label="Next track" (click)="playNext()">
+            <svg lucideChevronRight [size]="21"></svg>
+          </button>
+        </div>
+
+        <!-- Action Buttons and Volume Control-->
+        <div class="track-actions">
+          <button class="circle-button" type="button" aria-label="Favorite">
+            <svg lucideStar [size]="18"></svg>
+          </button>
+          @if (selectedManifest() && lyricsService.lyrics()) {
+            <app-lyrics-timing-control
+              [offsetMs]="lyricsOffsetMs()"
+              (adjust)="adjustLyricsOffset($event)"
+              (offsetChange)="updateLyricsOffset($event)"
+              (save)="saveLyricsOffset()"
+              (reset)="resetLyricsOffset()"
+            />
+          }
+          <app-stem-volume-control />
+          <button
+            class="circle-button"
+            type="button"
+            aria-label="Full screen"
+            (click)="toggleFullScreen()"
+          >
+            @if (isFullScreen()) {
+              <svg lucideMinimize [size]="18"></svg>
+            } @else {
+              <svg lucideMaximize [size]="18"></svg>
+            }
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  @if (sidebarOpen() || queueOpen()) {
+    <button
+      class="queue-backdrop"
+      type="button"
+      aria-label="Close panel"
+      (click)="closePanels()"
+    ></button>
+  }
+
+  @if (sidebarOpen()) {
+    <app-sidebar (close)="closeSidebar()" (queueSelected)="openQueue()"></app-sidebar>
+  }
+
+  @if (queueOpen()) {
+    <app-queue-sheet
+      [processedItemDrag]="processedItemDrag()"
+      [activeTaskId]="selectedTrack()?.task_id ?? null"
+      [playbackActive]="audioPlayer.isPlaying()"
+      (close)="closeQueue()"
+      (trackSelected)="selectTrack($event)"
+    ></app-queue-sheet>
+  }
+
+  @if (playbackError()) {
+    <p class="playback-error" role="alert">{{ playbackError() }}</p>
+  }
+</div>

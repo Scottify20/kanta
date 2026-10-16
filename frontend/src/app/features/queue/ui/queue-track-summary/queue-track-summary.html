@@ -1,0 +1,34 @@
+<span class="cover-art-wrap">
+  @if (item().cover_url) {
+    <img
+      class="cover-image"
+      [src]="item().cover_url"
+      [alt]="'Album cover for ' + item().raw_album"
+    />
+  } @else {
+    <span class="cover-placeholder" aria-hidden="true"></span>
+  }
+  @if (item().status === 'processing' || item().status === 'paused') {
+    <span
+      class="cover-progress-overlay"
+      [style.--progress]="item().progress + '%'"
+      role="progressbar"
+      [attr.aria-label]="'Processing ' + item().progress + ' percent'"
+    ></span>
+  }
+</span>
+
+<div class="track-info">
+  <div class="track-title-row">
+    <strong>{{ item().raw_title }}</strong>
+    <span
+      class="lyrics-chip"
+      [class.level-word]="item().lyrics_level === 'word'"
+      [class.level-line]="item().lyrics_level === 'line'"
+      [class.level-none]="!item().lyrics_level || item().lyrics_level === 'none'"
+    >
+      {{ lyricsLevelLabel() }}
+    </span>
+  </div>
+  <small>{{ subtitle() }}</small>
+</div>

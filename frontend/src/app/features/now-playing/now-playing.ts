@@ -1,0 +1,649 @@
+import { Component, computed, effect, inject, signal, DOCUMENT, HostListener } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { firstValueFrom } from 'rxjs';
+import {
+  LucideChevronLeft,
+  LucideChevronRight,
+  LucideListMusic,
+  LucideMaximize,
+  LucideMinimize,
+  LucideMenu,
+  LucidePause,
+  LucidePlay,
+  LucideStar,
+} from '@lucide/angular';
+import { QueueSheet } from '../queue/ui/queue-sheet/queue-sheet';
+import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
+import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
+import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
+import { AudioPlayerService } from '../../shared/services/audio-player.service';
+import { LyricsService } from '../../shared/services/lyrics';
+import { Sidebar } from '../../shared/components/sidebar/sidebar';
+import { QueueItem, QueueSnapshot } from '../queue/interfaces/queue.models';
+import { QueueService } from '../queue/data-access/queue.service';
+import { SongManifest, SongsService } from '../../shared/services/songs.service';
+
+@Component({
+  selector: 'app-now-playing',
+  imports: [
+    QueueSheet,
+    LyricsStage,
+    Sidebar,
+    LyricsTimingControl,
+    StemVolumeControl,
+    LucideChevronLeft,
+    LucideChevronRight,
+    LucideListMusic,
+    LucideMaximize,
+    LucideMinimize,
+    LucideMenu,
+    LucidePause,
+    LucidePlay,
+    LucideStar,
+  ],
+  templateUrl: './ui/now-playing.html',
+  styleUrl: './ui/now-playing.scss',
+})
+export class NowPlaying {
+  readonly lyricsService = inject(LyricsService);
+  readonly audioPlayer = inject(AudioPlayerService);
+  private readonly queueService = inject(QueueService);
+  private readonly songsService = inject(SongsService);
+  readonly sidebarOpen = signal(false);
+  private fullScreen = signal(false);
+  private readonly document = inject(DOCUMENT);
+  readonly queueOpen = signal(false);
+  readonly processedItemDrag = signal(false);
+  readonly lyricsOffsetMs = signal(0);
+  readonly selectedTrack = signal<QueueItem | null>(null);
+
+  // Controls the collapsed state of the track-area in fullscreen mode
+  readonly trackAreaCollapsed = signal(false);
+  private hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly selectedTrackProcessing = computed(() => {
+    const status = this.selectedTrack()?.status;
+    return (
+      status === 'pending' ||
+      status === 'processing' ||
+      status === 'paused' ||
+      status === 'cancelling'
+    );
+  });
+  readonly selectedTrackPaused = computed(
+    () =>
+      this.selectedTrack()?.status === 'paused' ||
+      (this.selectedTrackProcessing() && this.queueSnapshot().processing_paused === true),
+  );
+  readonly coverUrl = signal<string | null>(null);
+  readonly playbackError = signal('');
+  readonly selectedManifest = signal<SongManifest | null>(null);
+  readonly lyricsTimeSeconds = computed(() =>
+    Math.max(0, this.audioPlayer.currentTime() - this.lyricsOffsetMs() / 1000),
+  );
+  readonly isSeeking = signal(false);
+  readonly queueSnapshot = signal<QueueSnapshot>({
+    karaoke_queue: [],
+    processing_queue: [],
+    current_task: null,
+  });
+  readonly queuePreview = computed(() => {
+    const snapshot = this.queueSnapshot();
+    const items = snapshot.karaoke_queue;
+    const selectedTaskId = this.selectedTrack()?.task_id;
+    const selectedIndex = selectedTaskId
+      ? items.findIndex((item) => item.task_id === selectedTaskId)
+      : -1;
+    return items
+      .slice(selectedIndex + 1)
+      .filter((item) => !['failed', 'cancelled', 'cancelling'].includes(item.status))
+      .slice(0, 3);
+  });
+  private loadedTaskId: string | null = null;
+  private loadedSongKey: string | null = null;
+  private queuedAutoplayTaskId: string | null = null;
+  private resumeAfterSeek = false;
+  private seekPointerId: number | null = null;
+
+  constructor() {
+    const savedSong = this.songsService.currentSong();
+    if (savedSong) {
+      this.restoreCurrentSong(savedSong);
+    }
+
+    effect(() => {
+      const librarySong = this.songsService.selectedSong();
+      if (librarySong && this.songsService.playRequested()) {
+        this.selectLibrarySong(librarySong, this.songsService.selectedSongQueueTaskId());
+        this.songsService.consumePlayRequest();
+        void this.togglePlayback();
+      }
+    });
+
+    this.queueService.queue$.pipe(takeUntilDestroyed()).subscribe((snapshot) => {
+      this.queueSnapshot.set(snapshot);
+      const current = this.selectedTrack();
+      if (!current) {
+        const savedTaskId = this.songsService.currentQueueTaskId();
+        const savedTrack = savedTaskId
+          ? snapshot.karaoke_queue.find((item) => item.task_id === savedTaskId)
+          : null;
+        if (savedTrack) {
+          this.selectedTrack.set(savedTrack);
+          this.queuedAutoplayTaskId = savedTrack.status === 'completed' ? null : savedTrack.task_id;
+          if (savedTrack.status === 'completed') {
+            const song = this.songsService.currentSong();
+            if (song && this.sameSong(song, savedTrack)) {
+              this.selectedManifest.set(song);
+              this.coverUrl.set(song.covers[0]?.url ?? null);
+              this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
+            } else {
+              void this.loadManifest(savedTrack);
+            }
+          } else {
+            this.audioPlayer.pause();
+            this.selectedManifest.set(null);
+            this.coverUrl.set(null);
+            this.lyricsService.clearLyrics();
+          }
+        }
+        return;
+      }
+      const updated = snapshot.karaoke_queue.find((item) => item.task_id === current.task_id);
+      if (!updated) {
+        if (this.selectedTrackProcessing()) {
+          this.audioPlayer.pause();
+          this.lyricsService.clearLyrics();
+          this.selectedTrack.set(null);
+          this.selectedManifest.set(null);
+          this.coverUrl.set(null);
+          this.queuedAutoplayTaskId = null;
+          this.songsService.setNowPlaying(null);
+        }
+        return;
+      }
+      this.selectedTrack.set(updated);
+      if (updated.status !== 'completed') {
+        this.audioPlayer.pause();
+        if (this.selectedManifest()) {
+          this.lyricsService.clearLyrics();
+        }
+        this.selectedManifest.set(null);
+        this.coverUrl.set(null);
+        this.loadedSongKey = null;
+        if (['failed', 'cancelled', 'cancelling'].includes(updated.status)) {
+          this.queuedAutoplayTaskId = null;
+        }
+        return;
+      }
+      if (this.queuedAutoplayTaskId === updated.task_id) {
+        void this.playQueueItem(updated);
+      }
+    });
+
+    this.audioPlayer.trackEnded.pipe(takeUntilDestroyed()).subscribe(() => {
+      void this.playNext();
+    });
+  }
+
+  isFullScreen(): boolean {
+    return this.fullScreen();
+  }
+
+  @HostListener('document:fullscreenchange')
+  onFullScreenChange(): void {
+    const isFs = !!this.document.fullscreenElement;
+    this.fullScreen.set(isFs);
+
+    if (isFs) {
+      this.startHideTimer();
+    } else {
+      this.clearHideTimer();
+      this.trackAreaCollapsed.set(false);
+    }
+  }
+
+  async toggleFullScreen(): Promise<void> {
+    try {
+      if (!this.document.fullscreenElement) {
+        await this.document.documentElement.requestFullscreen();
+        this.fullScreen.set(true);
+        this.startHideTimer();
+      } else if (this.document.exitFullscreen) {
+        await this.document.exitFullscreen();
+        this.fullScreen.set(false);
+        this.clearHideTimer();
+        this.trackAreaCollapsed.set(false);
+      }
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error);
+    }
+  }
+
+  onTrackAreaMouseEnter(): void {
+    this.clearHideTimer();
+    this.trackAreaCollapsed.set(false);
+  }
+
+  onTrackAreaMouseLeave(): void {
+    if (!this.isFullScreen() || this.isSeeking()) return;
+    this.startHideTimer();
+  }
+
+  private startHideTimer(): void {
+    this.clearHideTimer();
+    this.hideTimer = setTimeout(() => {
+      if (this.isFullScreen() && !this.isSeeking()) {
+        this.trackAreaCollapsed.set(true);
+      }
+    }, 3000);
+  }
+
+  private clearHideTimer(): void {
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
+  }
+
+  openSidebar(): void {
+    this.sidebarOpen.set(true);
+    this.queueOpen.set(false);
+  }
+
+  closeSidebar(): void {
+    this.sidebarOpen.set(false);
+  }
+
+  openQueue(): void {
+    this.sidebarOpen.set(false);
+    this.queueOpen.set(true);
+  }
+
+  closeQueue(): void {
+    this.queueOpen.set(false);
+  }
+
+  closePanels(): void {
+    this.closeSidebar();
+    this.closeQueue();
+  }
+
+  startSeek(event: PointerEvent): void {
+    if (event.button !== 0 || !this.audioPlayer.duration()) return;
+    event.preventDefault();
+    this.clearHideTimer();
+    this.resumeAfterSeek = this.audioPlayer.isPlaying();
+    this.audioPlayer.pause();
+    this.isSeeking.set(true);
+    this.seekPointerId = event.pointerId;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    this.updateSeek(event);
+  }
+
+  updateSeek(event: PointerEvent): void {
+    if (!this.isSeeking() || this.seekPointerId !== event.pointerId) return;
+    this.audioPlayer.seek(this.timeAtPointer(event));
+  }
+
+  finishSeek(event: PointerEvent): void {
+    if (!this.isSeeking() || this.seekPointerId !== event.pointerId) return;
+    this.updateSeek(event);
+    const target = event.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
+    this.seekPointerId = null;
+    this.isSeeking.set(false);
+
+    if (this.isFullScreen()) {
+      this.startHideTimer();
+    }
+
+    if (this.resumeAfterSeek) {
+      this.resumeAfterSeek = false;
+      void this.audioPlayer.play().catch(() => {
+        this.playbackError.set('Could not resume playback after seeking.');
+      });
+    }
+  }
+
+  seekByKeyboard(event: KeyboardEvent): void {
+    const step = event.shiftKey ? 10 : 5;
+    let time: number | null = null;
+    if (event.key === 'ArrowLeft') time = this.audioPlayer.currentTime() - step;
+    if (event.key === 'ArrowRight') time = this.audioPlayer.currentTime() + step;
+    if (event.key === 'Home') time = 0;
+    if (event.key === 'End') time = this.audioPlayer.duration();
+    if (time === null) return;
+    event.preventDefault();
+    this.audioPlayer.seek(time);
+
+    if (this.isFullScreen()) {
+      this.startHideTimer();
+    }
+  }
+
+  timelineProgressPercent(): number {
+    const duration = this.audioPlayer.duration();
+    return duration ? (this.audioPlayer.currentTime() / duration) * 100 : 0;
+  }
+
+  private timeAtPointer(event: PointerEvent): number {
+    const track = event.currentTarget as HTMLElement;
+    const bounds = track.getBoundingClientRect();
+    const progress = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+    return progress * this.audioPlayer.duration();
+  }
+
+  onLyricClick(event: any): void {
+    let rawTime: number | null = null;
+
+    // 1. Handle direct number emission
+    if (typeof event === 'number') {
+      rawTime = event;
+    }
+    // 2. Handle standard DOM Events (Mouse Clicks)
+    else if (event instanceof Event) {
+      // Only read event.detail if it's a true CustomEvent, avoiding the MouseEvent.detail click-count bug
+      if (event instanceof CustomEvent && event.detail !== undefined) {
+        if (typeof event.detail === 'number') {
+          rawTime = event.detail;
+        } else if (event.detail.time !== undefined) {
+          rawTime = parseFloat(event.detail.time);
+        }
+      }
+
+      // If no custom event payload, traverse the DOM to find the time attribute
+      if (rawTime === null) {
+        const path = (event.composedPath && event.composedPath()) || [];
+
+        if (path.length > 0) {
+          for (const el of path) {
+            if (el instanceof HTMLElement) {
+              const timeAttr =
+                el.getAttribute('time') ??
+                el.getAttribute('data-time') ??
+                el.getAttribute('data-timestamp') ??
+                el.getAttribute('data-start');
+
+              if (timeAttr !== null) {
+                rawTime = parseFloat(timeAttr);
+                break;
+              }
+            }
+          }
+        }
+        // Absolute fallback for older Light DOM without composedPath
+        else if (event.target instanceof HTMLElement) {
+          const lineEl = event.target.closest(
+            '[time], [data-time], [data-timestamp], [data-start]',
+          );
+          if (lineEl) {
+            const timeAttr =
+              lineEl.getAttribute('time') ??
+              lineEl.getAttribute('data-time') ??
+              lineEl.getAttribute('data-timestamp') ??
+              lineEl.getAttribute('data-start');
+
+            if (timeAttr !== null) rawTime = parseFloat(timeAttr);
+          }
+        }
+      }
+    }
+    // 3. Handle raw object payload emissions
+    else if (event && event.time !== undefined) {
+      rawTime = typeof event.time === 'number' ? event.time : parseFloat(event.time);
+    }
+
+    // Abort if we failed to find a valid time
+    if (rawTime === null || isNaN(rawTime)) return;
+
+    this.audioPlayer.seek(rawTime + this.lyricsOffsetMs() / 1000);
+    this.audioPlayer.play().catch(() => {
+      this.playbackError.set('An error occurred.');
+    });
+  }
+
+  async playPrevious(): Promise<void> {
+    await this.playRelative(-1);
+  }
+
+  async playNext(): Promise<void> {
+    await this.playRelative(1);
+  }
+
+  updateLyricsOffset(seconds: number): void {
+    if (Number.isFinite(seconds)) {
+      this.lyricsOffsetMs.set(Math.max(-10_000, Math.min(10_000, Math.round(seconds * 1000))));
+    }
+  }
+
+  adjustLyricsOffset(seconds: number): void {
+    const nextOffset = this.lyricsOffsetMs() + seconds * 1000;
+    this.lyricsOffsetMs.set(Math.max(-10_000, Math.min(10_000, nextOffset)));
+    this.saveLyricsOffset();
+  }
+
+  saveLyricsOffset(): void {
+    const song = this.selectedManifest();
+    if (!song) return;
+    this.songsService.saveLyricsTiming(song, this.lyricsOffsetMs()).subscribe({
+      next: ({ offset_ms }) => {
+        this.lyricsOffsetMs.set(offset_ms);
+        this.selectedManifest.update((manifest) =>
+          manifest ? { ...manifest, lyrics_offset_ms: offset_ms } : null,
+        );
+      },
+      error: () => this.playbackError.set('Could not save lyrics timing.'),
+    });
+  }
+
+  resetLyricsOffset(): void {
+    this.lyricsOffsetMs.set(0);
+    this.saveLyricsOffset();
+  }
+
+  handlePanelDragOver(event: DragEvent): void {
+    const types = event.dataTransfer?.types ?? [];
+    this.processedItemDrag.set(types.includes('application/x-kanta-processed'));
+    if (types.includes('Files') || types.includes('application/x-kanta-processed')) {
+      event.preventDefault();
+      this.openQueue();
+    }
+  }
+
+  @HostListener('document:dragend')
+  onDocumentDragEnd(): void {
+    this.processedItemDrag.set(false);
+  }
+
+  selectTrack(track: QueueItem): void {
+    if (track.priority !== 1 || ['failed', 'cancelled', 'cancelling'].includes(track.status)) {
+      return;
+    }
+    this.playbackError.set('');
+    void this.playQueueItem(track);
+  }
+
+  private async playRelative(direction: -1 | 1): Promise<void> {
+    const items = this.queueItems();
+    if (!items.length) {
+      return;
+    }
+    const selected = this.selectedTrack();
+    const selectedKey = selected
+      ? selected.task_id
+      : this.selectedManifest()
+        ? `${this.selectedManifest()?.artist}/${this.selectedManifest()?.album}/${this.selectedManifest()?.title}`
+        : null;
+    const currentIndex = selectedKey
+      ? items.findIndex(
+          (item) =>
+            item.task_id === selectedKey ||
+            `${item.artist}/${item.album}/${item.title}` === selectedKey,
+        )
+      : -1;
+    const targetIndex =
+      currentIndex < 0 ? (direction > 0 ? 0 : items.length - 1) : currentIndex + direction;
+    const target = items[targetIndex];
+    if (target) {
+      await this.playQueueItem(target);
+    }
+  }
+
+  private queueItems(): QueueItem[] {
+    const snapshot = this.queueSnapshot();
+    const items = snapshot.karaoke_queue.filter(
+      (item) => !['failed', 'cancelled', 'cancelling'].includes(item.status),
+    );
+    return items.filter(
+      (item, index, all) =>
+        all.findIndex((candidate) => candidate.task_id === item.task_id) === index,
+    );
+  }
+
+  private async playQueueItem(track: QueueItem): Promise<void> {
+    this.audioPlayer.pause();
+    this.selectedTrack.set(track);
+    this.songsService.setNowPlaying(null, track.task_id);
+    this.selectedManifest.set(null);
+    this.coverUrl.set(null);
+    this.loadedSongKey = null;
+    if (track.status !== 'completed') {
+      this.queuedAutoplayTaskId = track.task_id;
+      this.lyricsService.clearLyrics();
+      return;
+    }
+    this.queuedAutoplayTaskId = null;
+    const manifest = await this.loadManifest(track);
+    if (manifest) {
+      await this.togglePlayback();
+    }
+  }
+
+  playLibrarySong(song: SongManifest): void {
+    this.selectLibrarySong(song);
+    this.closeQueue();
+    void this.togglePlayback();
+  }
+
+  private selectLibrarySong(song: SongManifest, queueTaskId: string | null = null): void {
+    this.audioPlayer.pause();
+    this.selectedTrack.set(
+      queueTaskId
+        ? (this.queueSnapshot().karaoke_queue.find((item) => item.task_id === queueTaskId) ?? null)
+        : null,
+    );
+    this.selectedManifest.set(song);
+    this.songsService.setNowPlaying(song, queueTaskId);
+    this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
+    this.coverUrl.set(song.covers[0]?.url ?? null);
+    this.loadedTaskId = null;
+    this.loadedSongKey = null;
+    this.queuedAutoplayTaskId = null;
+    this.playbackError.set('');
+    void this.loadLyrics(song);
+  }
+
+  async togglePlayback(): Promise<void> {
+    if (this.audioPlayer.isPlaying()) {
+      this.audioPlayer.pause();
+      return;
+    }
+
+    const manifest = this.selectedManifest();
+    if (this.selectedTrackProcessing()) {
+      this.audioPlayer.pause();
+      return;
+    }
+    if (!manifest) {
+      this.playbackError.set('Add a song to the queue before starting playback.');
+      return;
+    }
+
+    try {
+      const songKey = `${manifest.artist}/${manifest.album}/${manifest.title}`;
+      if (this.loadedSongKey !== songKey) {
+        const vocals = manifest.stems.find((file) => file.name.toLowerCase().includes('vocals'));
+        const instrumental = manifest.stems.find((file) =>
+          file.name.toLowerCase().includes('instrumental'),
+        );
+        if (!vocals || !instrumental) {
+          throw new Error('This processed song is missing playback stems.');
+        }
+        await this.audioPlayer.loadStems({ vocals: vocals.url, instrumental: instrumental.url });
+        this.loadedSongKey = songKey;
+      }
+      this.playbackError.set('');
+      await this.audioPlayer.play();
+    } catch (error) {
+      this.playbackError.set(error instanceof Error ? error.message : 'Could not load this song.');
+    }
+  }
+
+  private async loadManifest(track: QueueItem): Promise<SongManifest | null> {
+    try {
+      const manifest = await firstValueFrom(
+        this.songsService.getManifest(track.artist, track.album, track.title),
+      );
+      this.selectedManifest.set(manifest);
+      this.songsService.setNowPlaying(manifest, track.task_id);
+      this.coverUrl.set(manifest.covers[0]?.url ?? null);
+      this.lyricsOffsetMs.set(manifest.lyrics_offset_ms ?? 0);
+      this.loadedTaskId = null;
+      this.loadedSongKey = null;
+      await this.loadLyrics(manifest);
+      return manifest;
+    } catch (error) {
+      this.playbackError.set(error instanceof Error ? error.message : 'Could not load this song.');
+      return null;
+    }
+  }
+
+  private async loadLyrics(song: SongManifest): Promise<void> {
+    const wordLyrics = song.lyrics.find(
+      (file) => file.level === 'word' || (!file.level && file.name.toLowerCase().endsWith('.ttml')),
+    );
+    if (wordLyrics) {
+      await this.lyricsService.loadStoredLyrics(wordLyrics.url, 'word');
+      return;
+    }
+
+    const lineLyrics = song.lyrics.find(
+      (file) => file.level === 'line' || file.name.toLowerCase().endsWith('.lrc'),
+    );
+    const loadedLineLyrics = lineLyrics
+      ? await this.lyricsService.loadStoredLyrics(lineLyrics.url, 'line')
+      : false;
+    await this.lyricsService.fetchLyrics(
+      {
+        artistName: song.artist,
+        albumName: song.album,
+        trackName: song.title,
+      },
+      loadedLineLyrics,
+    );
+  }
+
+  private restoreCurrentSong(song: SongManifest): void {
+    this.selectedTrack.set(null);
+    this.selectedManifest.set(song);
+    this.coverUrl.set(song.covers[0]?.url ?? null);
+    this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
+  }
+
+  private sameSong(song: SongManifest, track: QueueItem): boolean {
+    return song.artist === track.artist && song.album === track.album && song.title === track.title;
+  }
+
+  formatTime(seconds: number): string {
+    const minutes = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const remainingSeconds = Math.floor(seconds % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${minutes}:${remainingSeconds}`;
+  }
+}

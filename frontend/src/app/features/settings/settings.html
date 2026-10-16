@@ -1,0 +1,83 @@
+<main
+  class="settings-page"
+  [style.--page-artwork]="pageArtwork() ? 'url(' + pageArtwork() + ')' : 'none'"
+>
+  <header class="settings-header">
+    <a class="back-link" routerLink="/">Back to now playing</a>
+    <h1>Settings</h1>
+  </header>
+
+  <form class="settings-form" (ngSubmit)="save()">
+    <section class="settings-group" aria-labelledby="output-folders-heading">
+      <h2 id="output-folders-heading">Processed files folders</h2>
+      <p>
+        Select the default folder for future processed songs. Existing folders remain available in
+        the library.
+      </p>
+      <div class="output-folder-list">
+        @for (folder of outputDirs(); track folder) {
+          <div class="output-folder-row">
+            <label class="default-folder-choice">
+              <input
+                type="radio"
+                name="defaultOutputDir"
+                [value]="folder"
+                [checked]="defaultOutputDir() === folder"
+                (change)="defaultOutputDir.set(folder)"
+              />
+              <span class="folder-path-label">{{ folder }}</span>
+              @if (defaultOutputDir() === folder) {
+                <small>Default</small>
+              }
+            </label>
+            <button
+              class="icon-button"
+              type="button"
+              [disabled]="outputDirs().length <= 1"
+              [attr.aria-label]="'Remove ' + folder"
+              (click)="removeOutputDir(folder)"
+            >
+              ×
+            </button>
+          </div>
+        }
+      </div>
+      <div class="add-folder-row">
+        <input
+          id="new-output-dir"
+          name="newOutputDir"
+          type="text"
+          autocomplete="off"
+          [ngModel]="newOutputDir()"
+          (ngModelChange)="newOutputDir.set($event)"
+          placeholder="/home/scott/Music/Kanta archive"
+        />
+        <button type="button" (click)="addOutputDir()">Add folder</button>
+      </div>
+    </section>
+
+    <section class="settings-group" aria-labelledby="model-folder-heading">
+      <h2 id="model-folder-heading">Models folder</h2>
+      <p>Choose the folder containing the audio separation models used for future jobs.</p>
+      <input
+        id="model-dir"
+        name="modelDir"
+        type="text"
+        autocomplete="off"
+        [ngModel]="modelDir()"
+        (ngModelChange)="modelDir.set($event)"
+        placeholder="/home/scott/projects/kanta/backend/models"
+      />
+    </section>
+
+    <button type="submit" [disabled]="saving()">
+      {{ saving() ? 'Saving...' : 'Save settings' }}
+    </button>
+    @if (saved()) {
+      <p class="status success" role="status">Folder saved.</p>
+    }
+    @if (error()) {
+      <p class="status error" role="alert">{{ error() }}</p>
+    }
+  </form>
+</main>

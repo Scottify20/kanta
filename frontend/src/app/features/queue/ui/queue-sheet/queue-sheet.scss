@@ -1,0 +1,372 @@
+:host {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  display: block;
+  width: min(26rem, 100vw);
+  pointer-events: none;
+}
+
+.queue-section,
+.track-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+
+  &::-webkit-scrollbar {
+    width: 0.375rem;
+    height: 0.375rem;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 0.5rem;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
+}
+
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: auto;
+
+  border-radius: 1.5rem 0 0 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(80px);
+  padding: 1.5rem;
+  gap: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title h2 {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 1);
+  text-transform: uppercase;
+  letter-spacing: 0px;
+}
+
+.collapse-icon {
+  color: rgba(255, 255, 255, 1);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &.is-collapsed {
+    transform: rotate(-90deg);
+  }
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clear-button {
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.queue-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.queue-section + .queue-section {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.track-list-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.2, 0, 0.2, 1);
+
+  &.is-collapsed {
+    grid-template-rows: 0fr;
+  }
+}
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.track-list li:not(.drop-zone) {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  border-radius: 0.75rem;
+  cursor: grab;
+  background: transparent;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &.is-current {
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  &.is-active {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &.is-paused {
+    opacity: 0.65;
+  }
+}
+
+/* --- ANGULAR CDK DRAG AND DROP STYLES --- */
+
+/* 1. The item being actively dragged */
+.cdk-drag-preview {
+  box-sizing: border-box;
+  display: grid !important;
+  grid-template-columns: 2.75rem minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border-radius: 0.75rem;
+  z-index: 1000 !important;
+
+  background-color: rgba(30, 34, 38, 0.95) !important;
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  list-style: none;
+  cursor: grabbing !important;
+}
+
+/* 2. The empty space left behind in the list */
+.cdk-drag-placeholder {
+  opacity: 0 !important; /* Forces the auto-cloned node to be invisible, preventing jumpy resizes */
+}
+
+/* 3. CRITICAL FIX: High-specificity classes to ensure the transform animation is NEVER overridden */
+.track-list li.cdk-drag-animating {
+  transition:
+    transform 250ms cubic-bezier(0, 0, 0.2, 1),
+    background-color 0.2s ease !important;
+}
+
+.track-list.cdk-drop-list-dragging li:not(.cdk-drag-preview) {
+  transition:
+    transform 250ms cubic-bezier(0, 0, 0.2, 1),
+    background-color 0.2s ease !important;
+}
+/* ---------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+}
+
+.actions app-popup-panel {
+  display: contents;
+}
+
+.actions button,
+.queue-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 0;
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+}
+
+.queue-menu-trigger {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .queue-menu-trigger {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .track-list li:hover .queue-menu-trigger,
+  .track-list li:focus-within .queue-menu-trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.cover-progress-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.4rem;
+  background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
+  pointer-events: none;
+}
+
+.now-playing-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.9);
+
+  i {
+    display: block;
+    width: 2px;
+    height: 4px;
+    border-radius: 1px;
+    background: currentColor;
+  }
+
+  &.is-playing i {
+    animation: now-playing-wave 0.72s ease-in-out infinite alternate;
+  }
+
+  &.is-playing i:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  &.is-playing i:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+}
+
+@keyframes now-playing-wave {
+  from {
+    height: 4px;
+  }
+  to {
+    height: 14px;
+  }
+}
+
+.queue-item-menu-content {
+  display: grid;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  background: rgba(27, 31, 34, 0.98);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.queue-item-menu-content button {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  text-align: left;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.drop-zone {
+  display: grid;
+  place-items: center;
+  min-height: 6rem;
+  padding: 1rem;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 700px) {
+  :host {
+    inset: auto 0 0;
+    width: 100%;
+    height: min(85dvh, 45rem);
+  }
+
+  .queue-panel {
+    border-radius: 1.5rem 1.5rem 0 0;
+    padding: 1.25rem 1rem;
+  }
+}
