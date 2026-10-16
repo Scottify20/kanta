@@ -1,0 +1,188 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.item {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border-radius: var(--radius-md);
+  outline: 0;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--motion-fast),
+    transform var(--motion-fast),
+    box-shadow var(--motion-fast);
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+  &:focus-visible {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+  }
+  &:active {
+    transform: scale(0.985);
+  }
+}
+
+:host(.selected) .item {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55);
+}
+:host(.current) .text strong {
+  color: #f5ac93;
+}
+
+.art {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.1);
+
+  &.round {
+    border-radius: 50%;
+  }
+  img,
+  .placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  &:has(.tile) {
+    grid-template: 1fr 1fr / 1fr 1fr;
+  }
+  .tile {
+    background: rgba(255, 255, 255, 0.1) center / cover;
+  }
+}
+
+.check {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231e1e1e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E")
+    center / 70% no-repeat;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--motion-fast),
+    transform var(--motion-spring);
+}
+:host(.selected) .check {
+  opacity: 1;
+  transform: none;
+}
+
+.text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  strong {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  small {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8rem;
+  }
+}
+
+:host(.grid) .text {
+  text-align: left;
+}
+:host(.grid) .art {
+  grid-column: 1;
+}
+:host(.grid) .item {
+  grid-template-columns: minmax(0, 1fr);
+}
+:host(.grid) .menu {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+}
+:host(.grid) .menu-trigger {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+:host(.list) .item {
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+}
+:host(.list) .art {
+  width: 3.25rem;
+}
+
+.menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    opacity var(--motion-fast),
+    background var(--motion-fast);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+@media (hover: hover) {
+  .menu-trigger {
+    opacity: 0;
+  }
+  .item:hover .menu-trigger,
+  .item:focus-within .menu-trigger {
+    opacity: 1;
+  }
+}
+
+.menu-list {
+  display: grid;
+  min-width: 11rem;
+  padding: 0.35rem;
+
+  button {
+    padding: 0.6rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    transition: background var(--motion-fast);
+
+    &:hover {
+      background: var(--surface-hover);
+    }
+    &.danger {
+      color: #ff8a80;
+    }
+  }
+}

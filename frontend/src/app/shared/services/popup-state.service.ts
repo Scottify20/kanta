@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 
 interface ActivePopup {
   group: string;
@@ -8,6 +8,7 @@ interface ActivePopup {
 @Injectable({ providedIn: 'root' })
 export class PopupStateService {
   private readonly active = signal<ActivePopup[]>([]);
+  readonly anyOpen = computed(() => this.active().length > 0);
 
   isOpen(group: string, id: string): boolean {
     return this.active().some((active) => active.group === group && active.id === id);

@@ -22,6 +22,7 @@ export class AudioPlayerService {
   private instrumentalGain: GainNode | null = null;
   private vocalsSource: MediaElementAudioSourceNode | null = null;
   private instrumentalSource: MediaElementAudioSourceNode | null = null;
+  private outputDeviceId = '';
 
   async loadStems(sources: StemSources): Promise<void> {
     this.release();
@@ -96,6 +97,11 @@ export class AudioPlayerService {
     }
   }
 
+  setOutputDevice(id: string): void {
+    this.outputDeviceId = id;
+    this.applyOutputDevice();
+  }
+
   release(): void {
     this.pause();
     this.vocalsAudio?.remove();
@@ -112,6 +118,8 @@ export class AudioPlayerService {
 
   private getContext(): AudioContext {
     this.context ??= new AudioContext();
+    const context = this.context as AudioContext & { setSinkId?: (deviceId: string) => Promise<void> };
+    if (this.outputDeviceId && context.setSinkId) void context.setSinkId(this.outputDeviceId).catch(() => undefined);
     return this.context;
   }
 
@@ -119,7 +127,18 @@ export class AudioPlayerService {
     const audio = new Audio(source);
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
+    const mediaElement = audio as HTMLAudioElement & { setSinkId?: (deviceId: string) => Promise<void> };
+    if (this.outputDeviceId && mediaElement.setSinkId) void mediaElement.setSinkId(this.outputDeviceId).catch(() => undefined);
     return audio;
+  }
+
+  private applyOutputDevice(): void {
+    for (const audio of [this.vocalsAudio, this.instrumentalAudio]) {
+      const mediaElement = audio as (HTMLAudioElement & { setSinkId?: (deviceId: string) => Promise<void> }) | null;
+      if (mediaElement?.setSinkId) void mediaElement.setSinkId(this.outputDeviceId).catch(() => undefined);
+    }
+    const context = this.context as (AudioContext & { setSinkId?: (deviceId: string) => Promise<void> }) | null;
+    if (context?.setSinkId) void context.setSinkId(this.outputDeviceId).catch(() => undefined);
   }
 
   private waitForMetadata(audio: HTMLAudioElement): Promise<void> {

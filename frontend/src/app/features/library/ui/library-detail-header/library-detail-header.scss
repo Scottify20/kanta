@@ -1,0 +1,75 @@
+:host {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.75rem;
+  animation: kanta-popup-in var(--dur-base) var(--ease-out) both;
+}
+
+.cover {
+  display: grid;
+  flex: 0 0 auto;
+  width: 11rem;
+  height: 11rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-popup);
+
+  &.round {
+    border-radius: 50%;
+  }
+  &.mosaic {
+    grid-template: 1fr 1fr / 1fr 1fr;
+  }
+  img,
+  span {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: center / cover;
+  }
+}
+
+h2 {
+  margin: 0;
+  font-size: 2rem;
+}
+p {
+  margin: 0.3rem 0 1.1rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.15rem;
+    border: 0;
+    border-radius: 99rem;
+    color: #fff;
+    background: var(--surface-hover);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition:
+      background var(--motion-fast),
+      transform var(--motion-fast);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    &:active {
+      transform: scale(0.97);
+    }
+    &.primary {
+      color: #1e1e1e;
+      background: #fff;
+    }
+  }
+}

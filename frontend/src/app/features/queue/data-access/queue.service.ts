@@ -2,21 +2,26 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
+  EMPTY,
   Observable,
   catchError,
+  exhaustMap,
+  filter,
   forkJoin,
-  interval,
   merge,
-  of,
   shareReplay,
   startWith,
-  switchMap,
   tap,
+  timeout,
+  timer,
 } from 'rxjs';
 
 import { QueueItem, QueuePriority, QueueSnapshot } from '../interfaces/queue.models';
 
 export const QUEUE_API_URL = 'http://127.0.0.1:8000';
+
+const POLL_INTERVAL_MS = 1500;
+const REQUEST_TIMEOUT_MS = 20000;
 
 const EMPTY_QUEUE_SNAPSHOT: QueueSnapshot = {
   karaoke_queue: [],
@@ -29,12 +34,37 @@ export class QueueService {
   private readonly http = inject(HttpClient);
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
 
-  readonly queue$: Observable<QueueSnapshot> = merge(interval(1500), this.refresh$).pipe(
-    switchMap(() =>
-      this.http
-        .get<QueueSnapshot>(`${QUEUE_API_URL}/api/queue`)
-        .pipe(catchError(() => of(EMPTY_QUEUE_SNAPSHOT))),
-    ),
+  // Live snapshot: SSE when the backend supports it, otherwise non-overlapping polling.
+  // Failed or slow requests never replace the last known snapshot with an empty one.
+  readonly queue$: Observable<QueueSnapshot> = new Observable<QueueSnapshot>((subscriber) => {
+    let streaming = false;
+    const source = typeof EventSource === 'undefined' ? null : new EventSource(`${QUEUE_API_URL}/api/queue/stream`);
+    if (source) {
+      source.onopen = () => (streaming = true);
+      source.onmessage = (event) => {
+        try {
+          subscriber.next(JSON.parse(event.data) as QueueSnapshot);
+        } catch {
+          // ignore malformed frames
+        }
+      };
+      source.onerror = () => (streaming = false);
+    }
+    const polling = merge(timer(0, POLL_INTERVAL_MS).pipe(filter(() => !streaming)), this.refresh$)
+      .pipe(
+        exhaustMap(() =>
+          this.http.get<QueueSnapshot>(`${QUEUE_API_URL}/api/queue`).pipe(
+            timeout(REQUEST_TIMEOUT_MS),
+            catchError(() => EMPTY),
+          ),
+        ),
+      )
+      .subscribe((snapshot) => subscriber.next(snapshot));
+    return () => {
+      source?.close();
+      polling.unsubscribe();
+    };
+  }).pipe(
     startWith(EMPTY_QUEUE_SNAPSHOT),
     shareReplay({ bufferSize: 1, refCount: true }),
   );

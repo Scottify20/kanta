@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, DOCUMENT, HostListener } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked, DOCUMENT, HostListener } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -12,23 +12,23 @@ import {
   LucidePlay,
   LucideStar,
 } from '@lucide/angular';
-import { QueueSheet } from '../queue/ui/queue-sheet/queue-sheet';
+import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
 import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { LyricsService } from '../../shared/services/lyrics';
-import { Sidebar } from '../../shared/components/sidebar/sidebar';
 import { QueueItem, QueueSnapshot } from '../queue/interfaces/queue.models';
 import { QueueService } from '../queue/data-access/queue.service';
 import { SongManifest, SongsService } from '../../shared/services/songs.service';
+import { LayoutService } from '../../shared/services/layout.service';
+import { PopupStateService } from '../../shared/services/popup-state.service';
 
 @Component({
   selector: 'app-now-playing',
   imports: [
-    QueueSheet,
     LyricsStage,
-    Sidebar,
+    SearchBar,
     LyricsTimingControl,
     StemVolumeControl,
     LucideChevronLeft,
@@ -49,11 +49,11 @@ export class NowPlaying {
   readonly audioPlayer = inject(AudioPlayerService);
   private readonly queueService = inject(QueueService);
   private readonly songsService = inject(SongsService);
-  readonly sidebarOpen = signal(false);
+  private readonly popupState = inject(PopupStateService);
+  private pointerInsideTrackArea = false;
   private fullScreen = signal(false);
   private readonly document = inject(DOCUMENT);
-  readonly queueOpen = signal(false);
-  readonly processedItemDrag = signal(false);
+  readonly layout = inject(LayoutService);
   readonly lyricsOffsetMs = signal(0);
   readonly selectedTrack = signal<QueueItem | null>(null);
 
@@ -110,6 +110,21 @@ export class NowPlaying {
     if (savedSong) {
       this.restoreCurrentSong(savedSong);
     }
+
+    effect(() => {
+      // Popups are portaled out of the track area, so resume idle hiding once they close.
+      if (!this.popupState.anyOpen() && untracked(() => this.isFullScreen())) {
+        untracked(() => this.startHideTimer());
+      }
+    });
+
+    effect(() => {
+      const request = this.songsService.queueTrackRequest();
+      if (request) {
+        this.songsService.consumeQueueTrackRequest();
+        this.selectTrack(request);
+      }
+    });
 
     effect(() => {
       const librarySong = this.songsService.selectedSong();
@@ -220,12 +235,24 @@ export class NowPlaying {
     }
   }
 
+  @HostListener('document:mousemove')
+  @HostListener('document:keydown')
+  onUserActivity(): void {
+    if (!this.isFullScreen()) return;
+    this.trackAreaCollapsed.set(false);
+    if (!this.pointerInsideTrackArea) {
+      this.startHideTimer();
+    }
+  }
+
   onTrackAreaMouseEnter(): void {
+    this.pointerInsideTrackArea = true;
     this.clearHideTimer();
     this.trackAreaCollapsed.set(false);
   }
 
   onTrackAreaMouseLeave(): void {
+    this.pointerInsideTrackArea = false;
     if (!this.isFullScreen() || this.isSeeking()) return;
     this.startHideTimer();
   }
@@ -233,7 +260,7 @@ export class NowPlaying {
   private startHideTimer(): void {
     this.clearHideTimer();
     this.hideTimer = setTimeout(() => {
-      if (this.isFullScreen() && !this.isSeeking()) {
+      if (this.isFullScreen() && !this.isSeeking() && !this.popupState.anyOpen()) {
         this.trackAreaCollapsed.set(true);
       }
     }, 3000);
@@ -244,29 +271,6 @@ export class NowPlaying {
       clearTimeout(this.hideTimer);
       this.hideTimer = null;
     }
-  }
-
-  openSidebar(): void {
-    this.sidebarOpen.set(true);
-    this.queueOpen.set(false);
-  }
-
-  closeSidebar(): void {
-    this.sidebarOpen.set(false);
-  }
-
-  openQueue(): void {
-    this.sidebarOpen.set(false);
-    this.queueOpen.set(true);
-  }
-
-  closeQueue(): void {
-    this.queueOpen.set(false);
-  }
-
-  closePanels(): void {
-    this.closeSidebar();
-    this.closeQueue();
   }
 
   startSeek(event: PointerEvent): void {
@@ -413,15 +417,26 @@ export class NowPlaying {
     await this.playRelative(1);
   }
 
+  // Offsets may shift lyrics by up to half of the song's length.
+  readonly maxOffsetMs = computed(() => {
+    const duration = this.audioPlayer.duration();
+    return duration > 0 ? Math.round(duration * 500) : 10_000;
+  });
+
+  private clampOffset(ms: number): number {
+    const max = this.maxOffsetMs();
+    return Math.max(-max, Math.min(max, ms));
+  }
+
   updateLyricsOffset(seconds: number): void {
     if (Number.isFinite(seconds)) {
-      this.lyricsOffsetMs.set(Math.max(-10_000, Math.min(10_000, Math.round(seconds * 1000))));
+      this.lyricsOffsetMs.set(this.clampOffset(Math.round(seconds * 1000)));
     }
   }
 
   adjustLyricsOffset(seconds: number): void {
     const nextOffset = this.lyricsOffsetMs() + seconds * 1000;
-    this.lyricsOffsetMs.set(Math.max(-10_000, Math.min(10_000, nextOffset)));
+    this.lyricsOffsetMs.set(this.clampOffset(nextOffset));
     this.saveLyricsOffset();
   }
 
@@ -442,20 +457,6 @@ export class NowPlaying {
   resetLyricsOffset(): void {
     this.lyricsOffsetMs.set(0);
     this.saveLyricsOffset();
-  }
-
-  handlePanelDragOver(event: DragEvent): void {
-    const types = event.dataTransfer?.types ?? [];
-    this.processedItemDrag.set(types.includes('application/x-kanta-processed'));
-    if (types.includes('Files') || types.includes('application/x-kanta-processed')) {
-      event.preventDefault();
-      this.openQueue();
-    }
-  }
-
-  @HostListener('document:dragend')
-  onDocumentDragEnd(): void {
-    this.processedItemDrag.set(false);
   }
 
   selectTrack(track: QueueItem): void {
@@ -524,7 +525,6 @@ export class NowPlaying {
 
   playLibrarySong(song: SongManifest): void {
     this.selectLibrarySong(song);
-    this.closeQueue();
     void this.togglePlayback();
   }
 

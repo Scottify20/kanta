@@ -1,41 +1,53 @@
-<div class="metadata-backdrop" (click)="close.emit()">
-  <form class="metadata-dialog" (click)="$event.stopPropagation()" (ngSubmit)="submit()">
-    <h2>Edit metadata</h2>
-    <label>
-      Artist
-      <input
-        name="metadataArtist"
-        type="text"
-        [ngModel]="metadata().artist"
-        (ngModelChange)="updateMetadata('artist', $event)"
-      />
-    </label>
-    <label>
-      Album
-      <input
-        name="metadataAlbum"
-        type="text"
-        [ngModel]="metadata().album"
-        (ngModelChange)="updateMetadata('album', $event)"
-      />
-    </label>
-    <label>
-      Title
-      <input
-        name="metadataTitle"
-        type="text"
-        [ngModel]="metadata().title"
-        (ngModelChange)="updateMetadata('title', $event)"
-      />
-    </label>
-    @if (error()) {
-      <p role="alert">{{ error() }}</p>
-    }
-    <footer>
-      <button type="button" (click)="close.emit()">Cancel</button>
-      <button type="submit" [disabled]="saving()">
-        {{ saving() ? 'Saving...' : 'Save metadata' }}
+<div class="editor-backdrop" [class.leaving]="leaving()" (click)="requestClose()">
+  <section class="editor-sheet" [class.leaving]="leaving()" (click)="$event.stopPropagation()" aria-label="Edit song metadata" role="dialog" aria-modal="true">
+    <header class="editor-header">
+      <div><p class="eyebrow">LIBRARY / SONG DETAILS</p><h2>Edit metadata</h2><p class="song-caption">{{ manifest()?.title }} · {{ manifest()?.artist }}</p></div>
+      <button class="icon-button" type="button" appTooltip="Close editor" aria-label="Close editor" (click)="requestClose()"><svg lucideX [size]="18"></svg></button>
+    </header>
+    <nav class="tabs" aria-label="Metadata sections">
+      <button [class.active]="activeTab() === 'general'" (click)="activeTab.set('general')"><span>General</span></button>
+      <button [class.active]="activeTab() === 'cover'" (click)="activeTab.set('cover')"><svg lucideImage [size]="16"></svg><span>Cover</span></button>
+      <button [class.active]="activeTab() === 'lyrics'" (click)="activeTab.set('lyrics')"><svg lucideFileText [size]="16"></svg><span>Lyrics</span></button>
+      <button [class.active]="activeTab() === 'replaygain'" (click)="activeTab.set('replaygain')"><svg lucideSlidersHorizontal [size]="16"></svg><span>ReplayGain</span></button>
+    </nav>
+    <main class="editor-content">
+      @if (activeTab() === 'general') {
+        <form class="field-grid" (ngSubmit)="saveMetadata()">
+          <label class="wide">Title<input name="title" [ngModel]="draft().title" (ngModelChange)="setText('title', $event)" required /></label>
+          <label>Artist<input name="artist" [ngModel]="draft().artist" (ngModelChange)="setText('artist', $event)" required /></label>
+          <label>Album<input name="album" [ngModel]="draft().album" (ngModelChange)="setText('album', $event)" required /></label>
+          <label>Album artist<input name="albumArtist" [ngModel]="draft().album_artist" (ngModelChange)="setText('album_artist', $event)" /></label>
+          <label>Year<input name="year" [ngModel]="draft().year" (ngModelChange)="setText('year', $event)" /></label>
+          <label>Genre<input name="genre" [ngModel]="draft().genre" (ngModelChange)="setText('genre', $event)" /></label>
+          <label>Track number<input name="track" type="number" min="1" [ngModel]="draft().track_number" (ngModelChange)="setNumber('track_number', $event)" /></label>
+          <label>Disc number<input name="disc" type="number" min="1" [ngModel]="draft().disc_number" (ngModelChange)="setNumber('disc_number', $event)" /></label>
+          <label>Composer<input name="composer" [ngModel]="draft().composer" (ngModelChange)="setText('composer', $event)" /></label>
+          <label>BPM<input name="bpm" type="number" min="1" [ngModel]="draft().bpm" (ngModelChange)="setNumber('bpm', $event)" /></label>
+          <label class="wide">Comment<textarea name="comment" rows="3" [ngModel]="draft().comment" (ngModelChange)="setText('comment', $event)"></textarea></label>
+        </form>
+      } @else if (activeTab() === 'cover') {
+        <app-cover-drop-zone [song]="manifest()!" (changed)="onPanelChanged()" />
+      } @else if (activeTab() === 'lyrics') {
+        <app-lyrics-files-panel [song]="manifest()!" (changed)="onPanelChanged()" />
+      } @else {
+        <app-replaygain-panel [song]="manifest()!" [values]="draft()" (valueChange)="updateReplaygain($event)" (changed)="onPanelChanged()" />
+      }
+      @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
+    </main>
+    <footer class="editor-footer">
+      <span class="save-hint">{{ dirty() ? 'Unsaved changes' : 'Changes save to your library' }} · Ctrl/⌘ S</span>
+      <button class="secondary-button" type="button" (click)="requestClose()">Cancel</button>
+      <button class="primary-button" type="button" [disabled]="saving() || !dirty()" (click)="saveMetadata()">
+        <svg lucideCheck [size]="17"></svg>{{ saving() ? 'Saving…' : 'Save changes' }}
       </button>
     </footer>
-  </form>
+  </section>
+  @if (confirmClose()) {
+    <div class="confirm-backdrop" (click)="$event.stopPropagation()">
+      <section class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="discard-title">
+        <h3 id="discard-title">Discard unsaved changes?</h3><p>Your metadata edits haven't been saved.</p>
+        <div><button class="secondary-button" (click)="confirmClose.set(false)">Keep editing</button><button class="danger-button" (click)="confirmClose.set(false); close()">Discard</button></div>
+      </section>
+    </div>
+  }
 </div>

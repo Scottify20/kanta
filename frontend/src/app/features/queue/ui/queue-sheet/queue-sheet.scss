@@ -1,10 +1,6 @@
 :host {
-  position: fixed;
-  inset: 0 0 0 auto;
-  z-index: 20;
   display: block;
-  width: min(26rem, 100vw);
-  pointer-events: none;
+  height: 100%;
 }
 
 .queue-section,
@@ -34,11 +30,10 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  pointer-events: auto;
-
+  box-sizing: border-box;
   border-radius: 1.5rem 0 0 1.5rem;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(80px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: var(--glass-blur);
   padding: 1.5rem;
   gap: 1rem;
   color: rgba(255, 255, 255, 0.9);
@@ -91,20 +86,50 @@
   gap: 0.5rem;
 }
 
-.clear-button {
-  padding: 0.35rem 0.6rem;
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   border: 0;
-  border-radius: 0.4rem;
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
-  transition: background-color 0.2s ease;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
   }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.insert-gap {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  animation: queue-gap-open var(--dur-base) var(--ease-out) forwards;
+}
+
+@keyframes queue-gap-open {
+  to { height: 3.9rem; }
+}
+
+@keyframes queue-row-in {
+  from { opacity: 0; transform: translateY(-0.75rem) scale(0.94); }
+  to { opacity: 1; transform: none; }
 }
 
 .queue-section {
@@ -141,7 +166,7 @@
   overflow: hidden;
 }
 
-.track-list li:not(.drop-zone) {
+.track-list li.queue-row {
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr) max-content;
   align-items: center;
@@ -151,10 +176,14 @@
   border-radius: 0.75rem;
   cursor: grab;
   background: transparent;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--dur-fast) var(--ease-out);
 
   &:hover {
     background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  &.is-entering {
+    animation: queue-row-in var(--dur-base) var(--ease-spring) both;
   }
 
   &:active {
@@ -204,69 +233,16 @@
 /* 3. CRITICAL FIX: High-specificity classes to ensure the transform animation is NEVER overridden */
 .track-list li.cdk-drag-animating {
   transition:
-    transform 250ms cubic-bezier(0, 0, 0.2, 1),
-    background-color 0.2s ease !important;
+    transform var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out) !important;
 }
 
 .track-list.cdk-drop-list-dragging li:not(.cdk-drag-preview) {
   transition:
-    transform 250ms cubic-bezier(0, 0, 0.2, 1),
-    background-color 0.2s ease !important;
+    transform var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out) !important;
 }
 /* ---------------------------------------- */
-
-.actions {
-  display: flex;
-  flex-direction: row !important;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: nowrap;
-  gap: 0.25rem;
-}
-
-.actions app-popup-panel {
-  display: contents;
-}
-
-.actions button,
-.queue-menu-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  border: 0;
-  color: rgba(255, 255, 255, 0.9);
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-  }
-}
-
-.queue-menu-trigger {
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .queue-menu-trigger {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .track-list li:hover .queue-menu-trigger,
-  .track-list li:focus-within .queue-menu-trigger {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
 
 .cover-progress-overlay {
   position: absolute;
@@ -274,74 +250,6 @@
   border-radius: 0.4rem;
   background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
   pointer-events: none;
-}
-
-.now-playing-wave {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.9);
-
-  i {
-    display: block;
-    width: 2px;
-    height: 4px;
-    border-radius: 1px;
-    background: currentColor;
-  }
-
-  &.is-playing i {
-    animation: now-playing-wave 0.72s ease-in-out infinite alternate;
-  }
-
-  &.is-playing i:nth-child(2) {
-    animation-delay: 0.18s;
-  }
-
-  &.is-playing i:nth-child(3) {
-    animation-delay: 0.36s;
-  }
-}
-
-@keyframes now-playing-wave {
-  from {
-    height: 4px;
-  }
-  to {
-    height: 14px;
-  }
-}
-
-.queue-item-menu-content {
-  display: grid;
-  min-width: 12rem;
-  padding: 0.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
-  background: rgba(27, 31, 34, 0.98);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
-.queue-item-menu-content button {
-  width: 100%;
-  padding: 0.6rem 0.8rem;
-  border: 0;
-  border-radius: 0.4rem;
-  color: rgba(255, 255, 255, 0.9);
-  background: transparent;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
-  text-align: left;
-  transition: background-color 0.2s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
 }
 
 .drop-zone {
@@ -359,14 +267,8 @@
 }
 
 @media (max-width: 700px) {
-  :host {
-    inset: auto 0 0;
-    width: 100%;
-    height: min(85dvh, 45rem);
-  }
-
   .queue-panel {
-    border-radius: 1.5rem 1.5rem 0 0;
+    border-radius: 1.5rem 0 0 1.5rem;
     padding: 1.25rem 1rem;
   }
 }

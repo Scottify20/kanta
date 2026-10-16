@@ -1,99 +1,63 @@
-<main
-  class="library-page"
-  [style.--page-artwork]="pageArtwork() ? 'url(' + pageArtwork() + ')' : 'none'"
-  (dragover)="handleDragOver($event)"
->
+<div class="library-page">
   <header class="library-header">
-    <a class="back-link" routerLink="/">Back to now playing</a>
-    <h1>Library</h1>
-    <button
-      class="clear-button"
-      type="button"
-      (click)="queueOpen.set(!queueOpen())"
-      style="
-        padding: 0.45rem 0.8rem;
-        border: 0;
-        border-radius: 0.4rem;
-        color: #f4f1ed;
-        background: rgba(255, 255, 255, 0.12);
-        cursor: pointer;
-      "
-    >
-      Queue
+    <button class="back" type="button" [appTooltip]="detail() ? 'Back to library' : 'Back to player'" aria-label="Back" (click)="back()">
+      <svg lucideChevronLeft [size]="20"></svg>
     </button>
+    <h1>{{ detail() ? detail()!.title : 'Library' }}</h1>
+    <app-search-bar class="header-search" />
   </header>
 
-  <section class="song-grid" aria-label="Processed songs">
-    <p class="empty-library" *ngIf="(songs$ | async)?.length === 0">No processed songs yet.</p>
-    <article
-      class="song-card"
-      *ngFor="let song of songs$ | async"
-      [draggable]="isPlayable(song)"
-      [class.is-unavailable]="!isPlayable(song)"
-      (dragstart)="startDrag($event, song)"
-      (dragend)="endDrag()"
-      (click)="playSong(song)"
-    >
-      <img *ngIf="song.covers[0]?.url" [src]="song.covers[0].url" [alt]="song.title" />
-      <div class="song-card-art" *ngIf="!song.covers[0]?.url" aria-hidden="true"></div>
-      <div class="song-card-copy">
-        <strong>{{ song.title }}</strong>
-        <span>{{ song.artist }}</span>
-        <small>{{ song.album }}</small>
-        <small class="lyrics-indicator">{{ lyricsLevelLabel(song.lyrics_level) }}</small>
-      </div>
-      <app-popup-panel
-        *ngIf="isPlayable(song)"
-        class="song-options-popup"
-        [popupId]="'library:' + song.artist + '/' + song.album + '/' + song.title"
-        [closeOnContentClick]="true"
-        label="Song options"
-      >
-        <button
-          popup-trigger
-          class="song-card-menu"
-          type="button"
-          aria-label="Song options"
-          aria-expanded="false"
-        >
-          <svg lucideMoreHorizontal [size]="18"></svg>
-        </button>
-        <div popup-content class="library-song-menu">
-          <button type="button" (click)="addToKaraokeQueue(song)">Add to Queue</button>
-          <button type="button" (click)="playNext(song)">Play Next</button>
-          <button type="button" (click)="editMetadata(song)">Edit metadata</button>
-        </div>
-      </app-popup-panel>
-    </article>
-  </section>
-
-  @if (actionError() && !editingSong()) {
-    <p class="library-action-error" role="alert">{{ actionError() }}</p>
-  }
-
-  @if (editingSong(); as song) {
-    <app-metadata-editor
-      [song]="song"
-      [saving]="savingMetadata()"
-      [error]="actionError()"
-      (save)="saveMetadata($event)"
-      (close)="closeMetadataEditor()"
+  @if (detail(); as current) {
+    <app-library-detail-header
+      [entry]="current"
+      (playAll)="detailAction('play')"
+      (shuffle)="detailAction('shuffle')"
+      (addToQueue)="detailAction('queue')"
+    />
+  } @else {
+    <app-library-toolbar
+      [(tab)]="tab"
+      [(sort)]="sort"
+      [(layout)]="layout"
+      (createPlaylist)="playlistDraft.set({ id: null, name: '' })"
     />
   }
 
-  @if (queueOpen()) {
-    <button
-      class="queue-backdrop"
-      type="button"
-      aria-label="Close queue"
-      (click)="closeQueue()"
-    ></button>
-    <app-queue-sheet
-      [hideProcessingQueue]="true"
-      [processedItemDrag]="processedItemDrag()"
-      [activeTaskId]="activeTaskId()"
-      (trackSelected)="selectQueueTrack($event)"
-      (close)="closeQueue()"
-    ></app-queue-sheet>
+  @if (playlistDraft(); as draft) {
+    <form class="playlist-form" (submit)="$event.preventDefault(); savePlaylist(nameField.value)">
+      <input #nameField autofocus placeholder="Playlist name" [value]="draft.name" (keydown.escape)="playlistDraft.set(null)" />
+      <button type="submit">{{ draft.id ? 'Rename' : 'Create' }}</button>
+      <button type="button" (click)="playlistDraft.set(null)">Cancel</button>
+    </form>
   }
-</main>
+
+  @if (selection().size > 1) {
+    <p class="selection-bar">{{ selection().size }} selected · drag to the queue, Enter to play, Esc to clear</p>
+  }
+  @if (actionError()) {
+    <p class="error" role="alert">{{ actionError() }}</p>
+  }
+
+  <div class="entries" [class.grid]="effectiveLayout() === 'grid'" [class.list]="effectiveLayout() === 'list'" role="listbox" aria-multiselectable="true">
+    @for (entry of entries(); track entry.key; let i = $index) {
+      <app-library-item
+        [entry]="entry"
+        [layout]="effectiveLayout()"
+        [selected]="isSelected(entry)"
+        [current]="isCurrent(entry)"
+        [playlists]="playlists()"
+        [inPlaylist]="!!detail()?.playlistId"
+        (activate)="activate(entry, i, $event)"
+        (action)="onAction(entry, $event)"
+        (dragStarted)="onDragStart($event, entry)"
+        (dragEnded)="onDragEnd()"
+      />
+    } @empty {
+      <p class="empty">Nothing here yet.</p>
+    }
+  </div>
+</div>
+
+@if (editingSong(); as song) {
+  <app-metadata-editor [song]="song" (closed)="editingSong.set(null)" (saved)="onSongSaved()" />
+}

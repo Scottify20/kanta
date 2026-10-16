@@ -26,36 +26,6 @@
   overflow-y: auto;
   isolation: isolate;
   color: var(--color-text-main);
-  background: #2a3033;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-  }
-
-  /* Blurred Album Art Background */
-  &::before {
-    inset: -8%;
-    z-index: -2;
-    background: none center / cover no-repeat;
-    filter: blur(7rem) brightness(0.65) saturate(0.85);
-    opacity: 0;
-    transform: scale(1.16);
-    transition: opacity 0.6s ease;
-  }
-
-  &.has-artwork::before {
-    background-image: var(--album-artwork);
-    opacity: 1;
-  }
-
-  /* Dark Overlay */
-  &::after {
-    z-index: -1;
-    background: rgba(20, 24, 27, 0.45);
-  }
 }
 
 /* =========================================
@@ -68,6 +38,12 @@
   align-items: center;
   gap: 1.35rem;
   padding: 1.5rem var(--page-padding);
+}
+
+.topbar-search {
+  flex: 0 1 22rem;
+  width: 22rem;
+  min-width: 0;
 }
 
 .next-tracks {
@@ -191,17 +167,15 @@
       rgba(20, 24, 27, 0.11) 75%,
       transparent 100%
     );
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(12px);
     transition:
-      padding var(--transition-smooth),
-      background 0.4s ease,
-      backdrop-filter 0.4s ease;
+      padding var(--motion-slow),
+      background var(--motion-slow);
 
     &.collapsed {
       padding-top: 0.65rem;
       padding-bottom: 0.65rem;
       background: linear-gradient(to top, rgba(20, 24, 27, 0.15) 0%, transparent 100%);
-      backdrop-filter: blur(6px);
 
       .timeline {
         gap: 0;
@@ -219,13 +193,14 @@
           height: 0.5rem;
         }
       }
+      .track-footer-wrap {
+        grid-template-rows: 0fr;
+        margin-top: 0;
+        pointer-events: none;
+      }
       .track-footer {
         opacity: 0;
-        max-height: 0;
-        margin-top: 0;
-        transform: translateY(3rem);
-        pointer-events: none;
-        overflow: hidden;
+        transform: translateY(1.5rem);
       }
     }
   }
@@ -309,13 +284,20 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 1.5rem;
-  margin-top: 1.2rem;
-  max-height: 12rem;
+  min-height: 0;
+  overflow: hidden;
   transition:
-    transform var(--transition-smooth),
-    opacity 0.25s ease,
-    max-height var(--transition-smooth),
-    margin-top 0.35s ease;
+    transform var(--motion-slow),
+    opacity var(--motion-base);
+}
+
+.track-footer-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-top: 1.2rem;
+  transition:
+    grid-template-rows var(--motion-slow),
+    margin-top var(--motion-slow);
 }
 
 .track-details {
@@ -373,15 +355,6 @@
 /* =========================================
    7. POPUPS, OVERLAYS & PROGRESS RINGS
    ========================================= */
-.queue-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  border: 0;
-  background: rgba(0, 0, 0, 0.5);
-  // backdrop-filter: blur(4px);
-  cursor: pointer;
-}
 
 .playback-error {
   position: fixed;

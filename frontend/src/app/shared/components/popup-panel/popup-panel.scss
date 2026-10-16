@@ -8,29 +8,3 @@
   position: relative;
   display: inline-flex;
 }
-
-.popup-content {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.65rem);
-  z-index: 30;
-  width: max-content;
-  max-width: min(22rem, calc(100vw - 2rem));
-  // color: #f4f1ed;
-
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 1rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  overflow: clip;
-}
-
-.popup-below .popup-content {
-  top: calc(100% + 0.5rem);
-  bottom: auto;
-}
-
-.popup-content[hidden] {
-  display: none;
-}

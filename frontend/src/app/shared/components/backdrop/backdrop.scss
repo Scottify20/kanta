@@ -1,0 +1,28 @@
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #2a3033;
+  pointer-events: none;
+}
+
+.layer {
+  position: absolute;
+  inset: -8%;
+  background: center / cover no-repeat;
+  filter: blur(7rem) brightness(0.65) saturate(0.85);
+  transform: scale(1.16);
+  animation: backdrop-in var(--dur-slow, 420ms) ease both;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 24, 27, 0.45);
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -1,0 +1,45 @@
+<div class="tabs" role="tablist" aria-label="Library sections">
+  @for (item of tabs; track item.id) {
+    <button
+      type="button"
+      role="tab"
+      [class.active]="tab() === item.id"
+      [attr.aria-selected]="tab() === item.id"
+      (click)="tab.set(item.id)"
+    >
+      {{ item.label }}
+    </button>
+  }
+</div>
+
+<div class="controls">
+  @if (tab() === 'playlists') {
+    <button class="icon" type="button" appTooltip="New playlist" aria-label="New playlist" (click)="createPlaylist.emit()">
+      <svg lucidePlus [size]="18"></svg>
+    </button>
+  }
+  <app-popup-panel popupId="library-sort" group="library-toolbar" placement="below" [closeOnContentClick]="true" label="Sort">
+    <button popup-trigger class="sort" type="button">
+      <span>Sort by: {{ sortLabel() }}</span>
+      <svg lucideChevronDown [size]="16"></svg>
+    </button>
+    <div popup-content class="sort-list" role="menu">
+      @for (mode of sortModes; track mode) {
+        <button type="button" role="menuitemradio" [class.active]="sort() === mode" (click)="sort.set(mode)">
+          {{ labelOf(mode) }}
+        </button>
+      }
+    </div>
+  </app-popup-panel>
+
+  @if (showLayoutToggle()) {
+    <div class="layout-toggle">
+      <button type="button" class="icon" [class.active]="layout() === 'grid'" appTooltip="Grid view" aria-label="Grid view" (click)="layout.set('grid')">
+        <svg lucideLayoutGrid [size]="18"></svg>
+      </button>
+      <button type="button" class="icon" [class.active]="layout() === 'list'" appTooltip="List view" aria-label="List view" (click)="layout.set('list')">
+        <svg lucideList [size]="18"></svg>
+      </button>
+    </div>
+  }
+</div>

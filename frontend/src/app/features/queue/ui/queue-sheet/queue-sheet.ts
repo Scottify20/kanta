@@ -1,29 +1,32 @@
-import { NgFor, NgIf } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject, input, output, signal } from '@angular/core';
+import { ApplicationRef, Component, DestroyRef, OnInit, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LucideChevronDown, LucideMoreHorizontal, LucidePause, LucidePlay } from '@lucide/angular';
+import { LucideChevronDown, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 
-import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
+import { Tooltip } from '../../../../shared/directives/tooltip';
+import { LibraryService, SongRef, songCover, songKey } from '../../../../shared/services/library.service';
+import { PlaybackActions } from '../../../../shared/services/playback-actions.service';
+import { KANTA_DRAG_TYPE } from '../../../../shared/services/layout.service';
+import { readDragPayload } from '../../../../shared/util/drag-payload';
+import { QueueItemActions } from '../queue-item-actions/queue-item-actions';
 import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
-import { LyricsLevel, QueueItem } from '../../interfaces/queue.models';
+import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
-import { SongManifest } from '../../../../shared/services/songs.service';
 
 type QueueName = 'karaoke_queue' | 'processing_queue';
 
+const SERVER_TRUST_DELAY_MS = 1200;
+
 @Component({
   selector: 'app-queue-sheet',
-  standalone: true,
   imports: [
-    NgFor,
-    NgIf,
-    PopupPanel,
+    QueueItemActions,
     QueueTrackSummary,
+    Tooltip,
     LucideChevronDown,
-    LucideMoreHorizontal,
     LucidePause,
     LucidePlay,
+    LucideTrash2,
     DragDropModule,
   ],
   templateUrl: './queue-sheet.html',
@@ -31,11 +34,17 @@ type QueueName = 'karaoke_queue' | 'processing_queue';
 })
 export class QueueSheet implements OnInit {
   private readonly queueService = inject(QueueService);
+  private readonly actions = inject(PlaybackActions);
+  private readonly library = inject(LibraryService);
+  private readonly appRef = inject(ApplicationRef);
   private readonly destroyRef = inject(DestroyRef);
 
-  // Absolute locks to ignore incoming delayed server orders
+  // While true, polled server orders are ignored so optimistic local order is not overwritten.
   private isDragging = false;
   private isReordering = false;
+  private reorderTimer: ReturnType<typeof setTimeout> | null = null;
+  private tempCounter = 0;
+  private readonly entering = new Map<string, number>();
 
   readonly processedDrag = signal(false);
   readonly processedItemDrag = input(false);
@@ -46,10 +55,11 @@ export class QueueSheet implements OnInit {
   readonly karaokeCollapsed = signal(false);
   readonly processingCollapsed = signal(false);
 
-  // Standalone properties decoupled from the async pipe
   readonly karaokeItems = signal<QueueItem[]>([]);
   readonly processingItems = signal<QueueItem[]>([]);
   readonly processingPaused = signal(false);
+  // Index at which an externally dragged item would be inserted; renders a gap that shifts rows.
+  readonly dropIndex = signal<number | null>(null);
 
   readonly close = output<void>();
   readonly trackSelected = output<QueueItem>();
@@ -60,8 +70,6 @@ export class QueueSheet implements OnInit {
       this.processingPaused.set(snapshot.processing_paused ?? false);
 
       if (this.isDragging || this.isReordering) {
-        // DOM IS LOCKED: Ignore all array changes from the server.
-        // Only surgically update progress bars for existing items.
         this.karaokeItems.update((items) =>
           items.map((localItem) => {
             const serverMatch = snapshot.karaoke_queue.find(
@@ -72,35 +80,25 @@ export class QueueSheet implements OnInit {
               : localItem;
           }),
         );
-      } else {
-        // DOM IS UNLOCKED: Safe to sync array order with the server.
-        const currentItems = this.karaokeItems();
-        const currentIds = currentItems.map((item) => item.task_id).join(',');
-        const serverIds = snapshot.karaoke_queue.map((i) => i.task_id).join(',');
-
-        if (currentIds !== serverIds) {
-          this.karaokeItems.set([...snapshot.karaoke_queue]);
-        } else {
-          // If order matches exactly, just copy properties so Angular doesn't rebuild DOM
-          this.karaokeItems.set(
-            currentItems.map((item, index) => ({ ...item, ...snapshot.karaoke_queue[index] })),
-          );
-        }
+        return;
       }
-    });
-  }
 
-  closeSheet(): void {
-    this.close.emit();
+      const currentItems = this.karaokeItems();
+      const sameOrder =
+        currentItems.length === snapshot.karaoke_queue.length &&
+        currentItems.every((item, index) => item.task_id === snapshot.karaoke_queue[index].task_id);
+      this.karaokeItems.set(
+        sameOrder
+          ? currentItems.map((item, index) => ({ ...item, ...snapshot.karaoke_queue[index] }))
+          : [...snapshot.karaoke_queue],
+      );
+    });
   }
 
   clearQueue(priority: 1 | 2): void {
     if (priority === 1) {
       this.karaokeItems.set([]);
-      this.isReordering = true;
-      setTimeout(() => {
-        this.isReordering = false;
-      }, 2000);
+      this.lockServerOrder();
     }
     this.queueService.clearQueue(priority).subscribe();
   }
@@ -111,12 +109,8 @@ export class QueueSheet implements OnInit {
 
   handleDragOver(event: DragEvent): void {
     const types = event.dataTransfer?.types ?? [];
-    this.processedDrag.set(types.includes('application/x-kanta-processed'));
+    this.processedDrag.set(types.includes(KANTA_DRAG_TYPE));
     event.preventDefault();
-  }
-
-  trackByTaskId(_index: number, item: QueueItem): string {
-    return item.task_id;
   }
 
   onDragStarted(): void {
@@ -124,50 +118,62 @@ export class QueueSheet implements OnInit {
   }
 
   onDragEnded(): void {
-    // Leave drag state active briefly to allow CDK drop animation to complete smoothly
-    setTimeout(() => {
-      this.isDragging = false;
-    }, 200);
+    this.isDragging = false;
   }
 
   onListDrop(event: CdkDragDrop<QueueItem[]>): void {
     if (event.previousIndex === event.currentIndex) return;
 
-    // 1. HARD LOCK ENGAGED: Ignore all incoming server lists
-    this.isReordering = true;
-
-    // 2. Fixes Angular `trackBy` bug: Clone the array, mutate it, and reassign it
+    this.lockServerOrder(true);
     const newArray = [...this.karaokeItems()];
     moveItemInArray(newArray, event.previousIndex, event.currentIndex);
     this.karaokeItems.set(newArray);
+    // Render the new order before CDK resets its transforms, otherwise the old order flashes.
+    this.appRef.tick();
 
-    // 3. Send to Server
-    const taskIds = this.karaokeItems().map((item) => item.task_id);
+    const taskIds = newArray.map((item) => item.task_id);
     this.queueService.reorderKaraokeTracks(taskIds).subscribe({
-      next: () => {
-        // Wait 2 full seconds AFTER the backend succeeds before trusting server updates again.
-        // This stops the backend's async DB from temporarily feeding us the old order.
-        setTimeout(() => {
-          this.isReordering = false;
-          this.queueService.refresh();
-        }, 2000);
-      },
+      next: () => this.lockServerOrder(),
       error: () => {
-        this.isReordering = false;
+        this.releaseServerOrder();
         this.queueService.refresh();
       },
     });
+  }
+
+  onExternalDragOver(event: DragEvent): void {
+    const types = event.dataTransfer?.types ?? [];
+    if (!types.includes(KANTA_DRAG_TYPE) && !types.includes('Files')) return;
+    event.preventDefault();
+    const list = event.currentTarget as HTMLElement;
+    const rows = Array.from(list.querySelectorAll<HTMLElement>(':scope > li.queue-row'));
+    let index = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      const rect = rows[i].getBoundingClientRect();
+      if (event.clientY < rect.top + rect.height / 2) {
+        index = i;
+        break;
+      }
+    }
+    if (this.dropIndex() !== index) this.dropIndex.set(index);
+  }
+
+  onExternalDragLeave(event: DragEvent): void {
+    const list = event.currentTarget as HTMLElement;
+    if (!list.contains(event.relatedTarget as Node | null)) this.dropIndex.set(null);
   }
 
   dropExternal(event: DragEvent, targetQueue: QueueName): void {
     event.preventDefault();
     event.stopPropagation();
     this.processedDrag.set(false);
+    const index = this.dropIndex();
+    this.dropIndex.set(null);
 
-    const processedSong = event.dataTransfer?.getData('application/x-kanta-processed');
-    if (processedSong) {
+    const songs = readDragPayload(event);
+    if (songs.length) {
       if (targetQueue === 'karaoke_queue') {
-        this.selectProcessedSong(processedSong);
+        this.insertSongs(songs, index ?? this.karaokeItems().length);
       }
       return;
     }
@@ -175,6 +181,14 @@ export class QueueSheet implements OnInit {
     if (event.dataTransfer?.files.length) {
       this.addFiles(event.dataTransfer.files, targetQueue);
     }
+  }
+
+  isEntering(item: QueueItem): boolean {
+    return this.entering.has(item.task_id);
+  }
+
+  enteringDelay(item: QueueItem): number | null {
+    return this.entering.get(item.task_id) ?? null;
   }
 
   selectTrack(item: QueueItem): void {
@@ -196,13 +210,64 @@ export class QueueSheet implements OnInit {
       this.karaokeItems.update((items) =>
         items.filter((queued) => queued.task_id !== item.task_id),
       );
-      this.isReordering = true;
-      setTimeout(() => {
-        this.isReordering = false;
-      }, 2000);
+      this.lockServerOrder();
       this.queueService.removeKaraokeTrack(item.task_id).subscribe();
     } else {
       this.queueService.removeTrack(item.task_id).subscribe();
+    }
+  }
+
+  private insertSongs(songs: SongRef[], index: number): void {
+    const items = this.karaokeItems();
+    const afterTaskId = index > 0 ? (items[index - 1]?.task_id ?? null) : null;
+    const known = new Map(this.library.songs().map((song) => [songKey(song), song]));
+    const temps = songs.map((song, offset): QueueItem => {
+      const taskId = `pending-drop:${++this.tempCounter}`;
+      this.entering.set(taskId, offset * 60);
+      return {
+        task_id: taskId,
+        file_path: '',
+        raw_title: song.title,
+        raw_artist: song.artist,
+        raw_album: song.album,
+        ...song,
+        priority: 1,
+        status: 'completed',
+        progress: 100,
+        step: '',
+        position: 0,
+        cover_url: known.has(songKey(song)) ? songCover(known.get(songKey(song))!) : null,
+      };
+    });
+    const next = [...items];
+    next.splice(index, 0, ...temps);
+    this.karaokeItems.set(next);
+    this.lockServerOrder(true);
+
+    this.actions
+      .enqueue(songs, afterTaskId, index === 0)
+      .catch(() => undefined)
+      .finally(() => {
+        temps.forEach((temp) => this.entering.delete(temp.task_id));
+        this.lockServerOrder();
+        this.queueService.refresh();
+      });
+  }
+
+  // Holds optimistic state; `hold` keeps it until released, otherwise releases shortly after.
+  private lockServerOrder(hold = false): void {
+    this.isReordering = true;
+    if (this.reorderTimer) clearTimeout(this.reorderTimer);
+    this.reorderTimer = hold
+      ? setTimeout(() => this.releaseServerOrder(), 8000)
+      : setTimeout(() => this.releaseServerOrder(), SERVER_TRUST_DELAY_MS);
+  }
+
+  private releaseServerOrder(): void {
+    this.isReordering = false;
+    if (this.reorderTimer) {
+      clearTimeout(this.reorderTimer);
+      this.reorderTimer = null;
     }
   }
 
@@ -211,16 +276,5 @@ export class QueueSheet implements OnInit {
     Array.from(files).forEach((file) => {
       this.queueService.addTrack(file, priority).subscribe();
     });
-  }
-
-  private selectProcessedSong(value: string): void {
-    try {
-      const song = JSON.parse(value) as SongManifest;
-      if (song.artist && song.album && song.title && Array.isArray(song.stems)) {
-        this.queueService.addProcessedTrack(song).subscribe();
-      }
-    } catch {
-      return;
-    }
   }
 }

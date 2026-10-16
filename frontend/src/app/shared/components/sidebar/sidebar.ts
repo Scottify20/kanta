@@ -1,16 +1,27 @@
 import { Component, output } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import {
+  LucideLibrary,
   LucideListMusic,
   LucidePlay,
-  LucideSearch,
   LucideSettings2,
   LucideX,
 } from '@lucide/angular';
 
+import { SearchBar } from '../search-bar/search-bar';
+
 @Component({
   selector: 'app-sidebar',
-  imports: [LucideListMusic, LucidePlay, LucideSearch, LucideSettings2, LucideX, RouterLink],
+  imports: [
+    LucideLibrary,
+    LucideListMusic,
+    LucidePlay,
+    LucideSettings2,
+    LucideX,
+    RouterLink,
+    RouterLinkActive,
+    SearchBar,
+  ],
   templateUrl: './sidebar.html',
   styleUrl: './sidebar.scss',
 })

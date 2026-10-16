@@ -1,0 +1,19 @@
+<div class="folder-list">
+  @for (folder of outputDirs(); track folder) {
+    <div class="folder-row">
+      <label class="folder-choice">
+        <input type="radio" name="default-output-folder" [value]="folder" [checked]="defaultOutputDir() === folder" (change)="defaultOutputDirChange.emit(folder)" />
+        <span class="folder-path">{{ folder }}</span>
+        @if (defaultOutputDir() === folder) { <small>Default</small> }
+      </label>
+      @if (outputDirs().length > 1) {
+        <button class="icon-button" type="button" [appTooltip]="'Remove folder'" [attr.aria-label]="'Remove ' + folder" (click)="removeOutputDir(folder)"><svg lucideTrash2 [size]="16"></svg></button>
+      }
+    </div>
+  }
+</div>
+<div class="path-entry">
+  <input type="text" autocomplete="off" aria-label="New output folder path" placeholder="/home/scott/Music/Kanta" [ngModel]="newOutputDir()" (ngModelChange)="newOutputDirChange.emit($event)" (keyup.enter)="addOutputDir()" />
+  <button class="browse-button" type="button" [appTooltip]="'Browse folders'" aria-label="Browse output folders" (click)="browseRequest.emit('output')"><svg lucideFolderOpen [size]="17"></svg><span>Browse</span></button>
+  <button class="add-button" type="button" (click)="addOutputDir()"><svg lucidePlus [size]="17"></svg><span>Add</span></button>
+</div>

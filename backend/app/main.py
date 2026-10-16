@@ -12,11 +12,14 @@ from fastapi.staticfiles import StaticFiles
 import httpx
 
 from app.tasks import tasks_db, TaskCancelledException
-from app.routes.queue import router as queue_router, songs_router
-from app.routes.settings import router as settings_router
+from app.routes.playlists import router as playlists_router
+from app.routes.queue import router as queue_router, search_router, songs_router
+from app.routes.settings import fs_router, router as settings_router
+from app.services import library
 from app.services.metadata import sanitize_filename
 from app.services.lyrics import (
     classify_lyrics_file,
+    lyrics_locked,
     save_lyrics_result,
     saved_lyrics_files,
 )
@@ -51,6 +54,9 @@ app.mount("/separated", StaticFiles(directory=get_output_dir()), name="separated
 app.include_router(queue_router)
 app.include_router(songs_router)
 app.include_router(settings_router)
+app.include_router(fs_router)
+app.include_router(playlists_router)
+app.include_router(search_router)
 
 
 @app.get("/media/{file_path:path}")
@@ -126,6 +132,15 @@ async def get_better_lyrics(
     )
     if word_ttml:
         return {"ttml": word_ttml.read_text(encoding="utf-8"), "lrc": None}
+    if local_lyrics_dir is not None and lyrics_locked(local_lyrics_dir):
+        local_line = next(iter(local_files), None)
+        if local_line is None:
+            raise HTTPException(status_code=404, detail="No lyrics available")
+        payload = {"ttml": None, "lrc": None}
+        payload["ttml" if local_line.suffix.lower() == ".ttml" else "lrc"] = (
+            local_line.read_text(encoding="utf-8")
+        )
+        return payload
     saved_line = next(
         (path for path in local_files if classify_lyrics_file(path) == "line"),
         None,
@@ -153,6 +168,7 @@ async def get_better_lyrics(
                 data.get("lrc"),
             )
         if saved_result:
+            library.invalidate(song_dir)
             return JSONResponse(content=saved_result, status_code=response.status_code)
         if saved_line:
             payload = {"ttml": None, "lrc": None}
@@ -198,6 +214,7 @@ async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: 
         output_song_dir = await queue_manager.run_exclusive(
             run_basic_pipeline, input_path, active_task_id
         )
+        library.invalidate(output_song_dir)
         relative_dir = output_song_dir.relative_to(get_output_dir())
         result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
@@ -221,6 +238,7 @@ async def separate_full_endpoint(file: Optional[UploadFile] = File(None), url: O
         output_song_dir = await queue_manager.run_exclusive(
             run_karaoke_pipeline, input_path, active_task_id
         )
+        library.invalidate(output_song_dir)
         relative_dir = output_song_dir.relative_to(get_output_dir())
         result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})

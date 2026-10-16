@@ -1,0 +1,27 @@
+<div class="picker-backdrop" role="presentation" (click)="cancelled.emit()">
+  <section class="picker-panel" role="dialog" aria-modal="true" aria-labelledby="picker-title" (click)="$event.stopPropagation()">
+    <header>
+      <div class="title-row">
+        <h2 id="picker-title">Choose a folder</h2>
+        <button class="icon-button" type="button" appTooltip="Close folder picker" aria-label="Close folder picker" (click)="cancelled.emit()"><svg lucideX [size]="18"></svg></button>
+      </div>
+      <div class="path-row">
+        <button class="icon-button" type="button" appTooltip="Go to parent folder" aria-label="Go to parent folder" [disabled]="!current()?.parent" (click)="goUp()"><svg lucideArrowUp [size]="17"></svg></button>
+        <span>{{ current()?.path || 'Loading folders…' }}</span>
+      </div>
+    </header>
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    <div class="directory-list">
+      @if (loading()) { <p class="empty">Loading folders…</p> }
+      @else if (current()?.dirs?.length) {
+        @for (directory of current()?.dirs; track directory) {
+          <button class="directory" type="button" (click)="openDirectory(directory)"><svg class="folder-icon" lucideFolder [size]="17" aria-hidden="true"></svg>{{ directory }}</button>
+        }
+      } @else { <p class="empty">No folders in this location.</p> }
+    </div>
+    <footer>
+      <button class="secondary" type="button" (click)="cancelled.emit()">Cancel</button>
+      <button class="primary" type="button" [disabled]="!current() || loading()" (click)="selected.emit(current()!.path)"><svg lucideCheck [size]="16"></svg>Select this folder</button>
+    </footer>
+  </section>
+</div>

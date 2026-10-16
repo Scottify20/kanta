@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services import library
+from app.services.fsutil import atomic_write_json
+from app.services.settings import get_output_mode
 from app.services.separator import run_basic_pipeline, run_karaoke_pipeline
 from app.tasks import (
     TaskCancelledException,
@@ -21,6 +24,7 @@ from app.tasks import (
 logger = logging.getLogger(__name__)
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 QUEUE_STATE_FILE = BACKEND_DIR / "queue_state.json"
+SAVE_DEBOUNCE_SECONDS = 0.5
 
 
 class QueuePriority(IntEnum):
@@ -63,6 +67,22 @@ class QueueManager:
         self._pipeline_lock = asyncio.Lock()
         self._worker_task: Optional[asyncio.Task[None]] = None
         self._stopping = False
+        self._subscribers: set[asyncio.Event] = set()
+        self._save_handle: Optional[asyncio.TimerHandle] = None
+        self._save_dirty = False
+
+    def subscribe(self) -> asyncio.Event:
+        """Event set whenever queue state changes (progress changes are polled by readers)."""
+        event = asyncio.Event()
+        self._subscribers.add(event)
+        return event
+
+    def unsubscribe(self, event: asyncio.Event) -> None:
+        self._subscribers.discard(event)
+
+    def _notify(self) -> None:
+        for event in self._subscribers:
+            event.set()
 
     async def start(self) -> None:
         async with self._lock:
@@ -83,6 +103,7 @@ class QueueManager:
         if worker_task:
             await worker_task
         self._worker_task = None
+        self._flush_state()
 
     async def add_item(self, item: QueueItem) -> None:
         async with self._lock:
@@ -381,6 +402,7 @@ class QueueManager:
 
                 async with self._lock:
                     self.current_task = None
+                    self._notify()
 
     async def _run_item(self, item: QueueItem) -> None:
         try:
@@ -388,7 +410,7 @@ class QueueManager:
                 return
             pipeline = (
                 run_karaoke_pipeline
-                if item.priority == QueuePriority.KARAOKE
+                if item.priority == QueuePriority.KARAOKE and get_output_mode() == "full"
                 else run_basic_pipeline
             )
             self._save_state()
@@ -396,6 +418,7 @@ class QueueManager:
                 pipeline, Path(item.file_path), item.task_id
             )
             item.output_dir = str(output_dir.resolve())
+            library.invalidate(output_dir)
             item.status = "completed"
             item.progress = 100
             item.step = "Completed."
@@ -582,23 +605,38 @@ class QueueManager:
         return item
 
     def _save_state(self) -> None:
+        """Debounced persistence; also wakes stream subscribers."""
+        self._notify()
+        self._save_dirty = True
         try:
-            QUEUE_STATE_FILE.write_text(
-                json.dumps(
-                    {
-                        "processing_paused": self.processing_paused,
-                        "processing_queue": [
-                            item.model_dump(mode="json")
-                            for item in self.queue
-                            if item.status in {"pending", "processing", "paused", "cancelling"}
-                        ],
-                        "karaoke_queue": [
-                            item.model_dump(mode="json") for item in self.karaoke_queue
-                        ],
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._flush_state()
+            return
+        if self._save_handle is None:
+            self._save_handle = loop.call_later(SAVE_DEBOUNCE_SECONDS, self._flush_state)
+
+    def _flush_state(self) -> None:
+        if self._save_handle is not None:
+            self._save_handle.cancel()
+            self._save_handle = None
+        if not self._save_dirty:
+            return
+        self._save_dirty = False
+        try:
+            atomic_write_json(
+                QUEUE_STATE_FILE,
+                {
+                    "processing_paused": self.processing_paused,
+                    "processing_queue": [
+                        item.model_dump(mode="json")
+                        for item in self.queue
+                        if item.status in {"pending", "processing", "paused", "cancelling"}
+                    ],
+                    "karaoke_queue": [
+                        item.model_dump(mode="json") for item in self.karaoke_queue
+                    ],
+                },
             )
         except OSError:
             logger.exception("Could not persist queue state")

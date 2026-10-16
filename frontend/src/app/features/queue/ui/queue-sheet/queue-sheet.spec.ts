@@ -48,6 +48,7 @@ describe('QueueSheet', () => {
         {
           provide: QueueService,
           useValue: {
+            refresh: () => undefined,
             queue$: of(queueSnapshot),
             addProcessedTrack: (song: Pick<QueueItem, 'artist' | 'album' | 'title'>) => {
               addedSongs.push(song);

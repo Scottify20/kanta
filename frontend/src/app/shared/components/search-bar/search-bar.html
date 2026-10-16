@@ -1,0 +1,60 @@
+<label class="search" cdkOverlayOrigin #origin="cdkOverlayOrigin" [class.focused]="focused()">
+  <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+  <input
+    #field
+    type="search"
+    role="combobox"
+    autocomplete="off"
+    spellcheck="false"
+    [placeholder]="placeholder()"
+    [value]="query()"
+    [attr.aria-expanded]="open()"
+    aria-label="Search library"
+    (focus)="onFocus()"
+    (input)="onInput($event)"
+    (keydown)="onKeydown($event)"
+  />
+  @if (query()) {
+    <button type="button" class="clear" aria-label="Clear search" (click)="clear(field)">
+      <svg lucideX [size]="14"></svg>
+    </button>
+  }
+</label>
+
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="open()"
+  [cdkConnectedOverlayPanelClass]="'kanta-search-pane'"
+  [cdkConnectedOverlayPositions]="[
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 8 },
+    { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 }
+  ]"
+  [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayViewportMargin]="12"
+  [cdkConnectedOverlayWidth]="360"
+>
+  <ul class="results" role="listbox">
+    @for (hit of hits(); track hit.key; let i = $index) {
+      <li
+        role="option"
+        draggable="true"
+        [class.active]="i === activeIndex()"
+        [attr.aria-selected]="i === activeIndex()"
+        (mouseenter)="activeIndex.set(i)"
+        (click)="play(hit)"
+        (dragstart)="dragStart($event, hit)"
+        (dragend)="dragEnd()"
+      >
+        <span class="cover" [class.round]="hit.kind === 'artist'" [style.background-image]="hit.coverUrl ? 'url(' + hit.coverUrl + ')' : null"></span>
+        <span class="text">
+          <strong>{{ hit.title }}</strong>
+          <small>{{ hit.subtitle }}</small>
+        </span>
+        <button type="button" class="add" aria-label="Add to queue" title="Add to queue" (click)="addToQueue(hit, $event)">+</button>
+      </li>
+    } @empty {
+      <li class="empty">No matches</li>
+    }
+  </ul>
+</ng-template>

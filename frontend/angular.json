@@ -35,6 +35,7 @@
               }
             ],
             "styles": [
+              "@angular/cdk/overlay-prebuilt.css",
               "src/styles.scss"
             ]
           },

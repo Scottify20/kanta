@@ -1,9 +1,5 @@
 <section class="queue-panel" (dragover)="handleDragOver($event)">
-  <article
-    class="queue-section"
-    (dragover)="$event.preventDefault()"
-    (drop)="dropExternal($event, 'karaoke_queue')"
-  >
+  <article class="queue-section">
     <header
       class="section-header"
       (click)="karaokeCollapsed.set(!karaokeCollapsed())"
@@ -20,7 +16,16 @@
         <h2>Karaoke Queue</h2>
       </div>
       <div class="section-actions" (click)="$event.stopPropagation()">
-        <button class="clear-button" type="button" (click)="clearQueue(1)">Clear</button>
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Clear queue"
+          aria-label="Clear karaoke queue"
+          [disabled]="karaokeItems().length === 0"
+          (click)="clearQueue(1)"
+        >
+          <svg lucideTrash2 [size]="16"></svg>
+        </button>
       </div>
     </header>
 
@@ -30,75 +35,52 @@
         cdkDropList
         [cdkDropListData]="karaokeItems()"
         (cdkDropListDropped)="onListDrop($event)"
+        (dragover)="onExternalDragOver($event)"
+        (dragleave)="onExternalDragLeave($event)"
+        (drop)="dropExternal($event, 'karaoke_queue')"
       >
-        <li class="drop-zone" *ngIf="karaokeItems().length === 0">
-          <span>Drop songs here to add them to the Karaoke Queue</span>
-        </li>
+        @if (karaokeItems().length === 0 && dropIndex() === null) {
+          <li class="drop-zone">
+            <span>Drop songs here to add them to the Karaoke Queue</span>
+          </li>
+        }
 
-        <li
-          *ngFor="let item of karaokeItems(); trackBy: trackByTaskId"
-          cdkDrag
-          cdkDragLockAxis="y"
-          cdkDragPreviewContainer="parent"
-          [cdkDragDisabled]="item.status === 'cancelled'"
-          (cdkDragStarted)="onDragStarted()"
-          (cdkDragEnded)="onDragEnded()"
-          [class.is-active]="item.status === 'processing'"
-          [class.is-current]="activeTaskId() === item.task_id"
-          [class.is-paused]="item.status === 'paused'"
-          tabindex="0"
-          (click)="selectTrack(item)"
-          (keydown.enter)="selectTrack(item)"
-        >
-          <app-queue-track-summary [item]="item" />
-
-          <div class="actions" (click)="$event.stopPropagation()">
-            <span
-              *ngIf="activeTaskId() === item.task_id"
-              class="now-playing-wave"
-              [class.is-playing]="playbackActive()"
-              role="img"
-              [attr.aria-label]="playbackActive() ? 'Currently playing' : 'Current track paused'"
-            >
-              <i></i><i></i><i></i>
-            </span>
-            <button
-              *ngIf="item.status === 'pending' || item.status === 'processing'"
-              type="button"
-              (click)="pause(item)"
-              [attr.aria-label]="'Pause processing for ' + item.raw_title"
-            >
-              <svg lucidePause [size]="16"></svg>
-            </button>
-            <button
-              *ngIf="item.status === 'paused'"
-              type="button"
-              (click)="resume(item)"
-              [attr.aria-label]="'Resume processing for ' + item.raw_title"
-            >
-              <svg lucidePlay [size]="16"></svg>
-            </button>
-            <app-popup-panel
-              [popupId]="'karaoke:' + item.task_id"
-              [closeOnContentClick]="true"
-              label="Karaoke item options"
-            >
-              <button
-                popup-trigger
-                class="queue-menu-trigger"
-                type="button"
-                aria-label="Karaoke item options"
-              >
-                <svg lucideMoreHorizontal [size]="16"></svg>
-              </button>
-              <div popup-content class="queue-item-menu-content" role="menu">
-                <button type="button" role="menuitem" (click)="remove(item, 'karaoke_queue')">
-                  Remove from Karaoke Queue
-                </button>
-              </div>
-            </app-popup-panel>
-          </div>
-        </li>
+        @for (item of karaokeItems(); track item.task_id; let i = $index) {
+          @if (dropIndex() === i) {
+            <li class="insert-gap" aria-hidden="true"><span>Drop to add here</span></li>
+          }
+          <li
+            cdkDrag
+            cdkDragLockAxis="y"
+            cdkDragPreviewContainer="parent"
+            [cdkDragDisabled]="item.status === 'cancelled'"
+            (cdkDragStarted)="onDragStarted()"
+            (cdkDragEnded)="onDragEnded()"
+            class="queue-row"
+            [class.is-active]="item.status === 'processing'"
+            [class.is-current]="activeTaskId() === item.task_id"
+            [class.is-paused]="item.status === 'paused'"
+            [class.is-entering]="isEntering(item)"
+            [style.animation-delay.ms]="enteringDelay(item)"
+            tabindex="0"
+            (click)="selectTrack(item)"
+            (keydown.enter)="selectTrack(item)"
+          >
+            <app-queue-track-summary [item]="item" />
+            <app-queue-item-actions
+              [item]="item"
+              queue="karaoke_queue"
+              [current]="activeTaskId() === item.task_id"
+              [playbackActive]="playbackActive()"
+              (pause)="pause(item)"
+              (resume)="resume(item)"
+              (remove)="remove(item, 'karaoke_queue')"
+            />
+          </li>
+        }
+        @if (dropIndex() !== null && dropIndex() === karaokeItems().length) {
+          <li class="insert-gap" aria-hidden="true"><span>Drop to add here</span></li>
+        }
       </ol>
     </div>
   </article>
@@ -126,70 +108,54 @@
         </div>
         <div class="section-actions" (click)="$event.stopPropagation()">
           <button
-            class="clear-button"
+            class="icon-button"
             type="button"
+            [appTooltip]="processingPaused() ? 'Resume all' : 'Pause all'"
+            [attr.aria-label]="processingPaused() ? 'Resume all processing' : 'Pause all processing'"
             (click)="toggleProcessingPause(processingPaused())"
           >
-            {{ processingPaused() ? 'Resume all' : 'Pause all' }}
+            @if (processingPaused()) {
+              <svg lucidePlay [size]="16"></svg>
+            } @else {
+              <svg lucidePause [size]="16"></svg>
+            }
           </button>
-          <button class="clear-button" type="button" (click)="clearQueue(2)">Clear</button>
+          <button
+            class="icon-button"
+            type="button"
+            appTooltip="Clear queue"
+            aria-label="Clear processing queue"
+            [disabled]="processingItems().length === 0"
+            (click)="clearQueue(2)"
+          >
+            <svg lucideTrash2 [size]="16"></svg>
+          </button>
         </div>
       </header>
 
       <div class="track-list-wrapper" [class.is-collapsed]="processingCollapsed()">
         <ol class="track-list">
-          <li class="drop-zone" *ngIf="processingItems.length === 0">
-            <span>Drop audio files here to process</span>
-          </li>
-          <li
-            *ngFor="let item of processingItems(); trackBy: trackByTaskId"
-            [class.is-active]="item.status === 'processing'"
-            [class.is-paused]="item.status === 'paused'"
-          >
-            <app-queue-track-summary [item]="item" variant="processing" />
-            <div class="actions" (click)="$event.stopPropagation()">
-              <button
-                *ngIf="item.status === 'pending' || item.status === 'processing'"
-                type="button"
-                (click)="pause(item)"
-                [attr.aria-label]="'Pause processing for ' + item.raw_title"
-              >
-                <svg lucidePause [size]="16"></svg>
-              </button>
-              <button
-                *ngIf="item.status === 'paused'"
-                type="button"
-                (click)="resume(item)"
-                [attr.aria-label]="'Resume processing for ' + item.raw_title"
-              >
-                <svg lucidePlay [size]="16"></svg>
-              </button>
-              <app-popup-panel
-                [popupId]="'processing:' + item.task_id"
-                [closeOnContentClick]="true"
-                label="Processing item options"
-              >
-                <button
-                  popup-trigger
-                  class="queue-menu-trigger"
-                  type="button"
-                  aria-label="Processing item options"
-                >
-                  <svg lucideMoreHorizontal [size]="16"></svg>
-                </button>
-                <div popup-content class="queue-item-menu-content" role="menu">
-                  <button
-                    *ngIf="item.status !== 'cancelled'"
-                    type="button"
-                    role="menuitem"
-                    (click)="remove(item, 'processing_queue')"
-                  >
-                    Cancel processing
-                  </button>
-                </div>
-              </app-popup-panel>
-            </div>
-          </li>
+          @if (processingItems().length === 0) {
+            <li class="drop-zone">
+              <span>Drop audio files here to process</span>
+            </li>
+          }
+          @for (item of processingItems(); track item.task_id) {
+            <li
+              class="queue-row"
+              [class.is-active]="item.status === 'processing'"
+              [class.is-paused]="item.status === 'paused'"
+            >
+              <app-queue-track-summary [item]="item" variant="processing" />
+              <app-queue-item-actions
+                [item]="item"
+                queue="processing_queue"
+                (pause)="pause(item)"
+                (resume)="resume(item)"
+                (remove)="remove(item, 'processing_queue')"
+              />
+            </li>
+          }
         </ol>
       </div>
     </article>

@@ -1,0 +1,74 @@
+:host {
+  display: block;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.content {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.panel {
+  flex: 0 0 auto;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    width var(--motion-slow),
+    opacity var(--motion-base);
+
+  > * {
+    height: 100%;
+  }
+}
+
+.panel-left > * {
+  width: var(--panel-width-sidebar);
+}
+
+.panel-right > * {
+  width: var(--panel-width-queue);
+}
+
+.sidebar-open .panel-left {
+  width: var(--panel-width-sidebar);
+  opacity: 1;
+}
+
+.queue-open .panel-right {
+  width: var(--panel-width-queue);
+  opacity: 1;
+}
+
+// On narrow windows there is no room to split, so panels float above the content.
+@media (max-width: 900px) {
+  .panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 5;
+  }
+  .panel-left {
+    left: 0;
+  }
+  .panel-right {
+    right: 0;
+  }
+}

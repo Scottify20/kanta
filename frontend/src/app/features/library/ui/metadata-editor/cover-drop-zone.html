@@ -1,0 +1,18 @@
+<section class="cover-layout">
+  <div class="cover-preview" [class.empty]="!coverUrl">
+    @if (coverUrl) { <img [src]="coverUrl" alt="Current song cover" /> }
+    @else { <svg lucideImage [size]="42"></svg><span>No cover art</span> }
+    @if (busy()) { <div class="loading-cover">Updating cover…</div> }
+  </div>
+  <div class="cover-actions">
+    <div class="drop-zone" [class.is-over]="over()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)" (click)="filePicker.click()" role="button" tabindex="0" (keydown.enter)="filePicker.click()">
+      <svg lucideUpload [size]="22"></svg><strong>Drop an image here</strong><span>or browse files · up to 20 MB</span>
+    </div>
+    <input #filePicker class="file-picker" type="file" accept="image/*" (change)="onPicked($event)" />
+    <div class="action-row">
+      <button type="button" class="soft-button" (click)="filePicker.click()" [disabled]="busy()"><svg lucideUpload [size]="16"></svg>Choose image</button>
+      <button type="button" class="icon-button" appTooltip="Remove cover" aria-label="Remove cover" (click)="remove()" [disabled]="busy() || !song().covers?.length"><svg lucideTrash2 [size]="17"></svg></button>
+    </div>
+    @if (error()) { <p class="panel-error" role="alert">{{ error() }}</p> }
+  </div>
+</section>

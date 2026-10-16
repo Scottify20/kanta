@@ -15,20 +15,64 @@ def get_lyrics_offset_ms(lyrics_dir: Path) -> int:
     timing_file = lyrics_dir / "timing.json"
     try:
         timing = json.loads(timing_file.read_text(encoding="utf-8"))
-        offset_ms = int(timing.get("offset_ms", 0))
+        return int(timing.get("offset_ms", 0))
     except (OSError, json.JSONDecodeError, AttributeError, TypeError, ValueError):
         return 0
-    return max(-MAX_LYRICS_OFFSET_MS, min(MAX_LYRICS_OFFSET_MS, offset_ms))
+
+
+def max_offset_ms_for_duration(duration_seconds: Optional[float]) -> int:
+    """Largest allowed lyrics offset (either direction): half the song duration."""
+    if not duration_seconds or duration_seconds <= 0:
+        return MAX_LYRICS_OFFSET_MS
+    return round(duration_seconds * 1000 / 2)
 
 
 def save_lyrics_offset_ms(lyrics_dir: Path, offset_ms: int) -> int:
-    bounded_offset = max(-MAX_LYRICS_OFFSET_MS, min(MAX_LYRICS_OFFSET_MS, offset_ms))
     lyrics_dir.mkdir(parents=True, exist_ok=True)
     (lyrics_dir / "timing.json").write_text(
-        json.dumps({"offset_ms": bounded_offset}, indent=2) + "\n",
+        json.dumps({"offset_ms": offset_ms}, indent=2) + "\n",
         encoding="utf-8",
     )
-    return bounded_offset
+    return offset_ms
+
+
+LOCK_FILE = ".custom"
+
+
+def lyrics_locked(lyrics_dir: Path) -> bool:
+    """True when the user manually uploaded/removed lyrics; remote fetches must not override."""
+    return (lyrics_dir / LOCK_FILE).exists()
+
+
+def _srt_time_to_seconds(value: str) -> float:
+    hours, minutes, rest = value.replace(",", ".").split(":")
+    return int(hours) * 3600 + int(minutes) * 60 + float(rest)
+
+
+def convert_subtitles_to_lrc(content: str) -> Optional[str]:
+    """Convert SRT/WebVTT cue text to line-timed LRC."""
+    lines = []
+    for block in re.split(r"\r?\n\s*\r?\n", content.replace("\ufeff", "")):
+        rows = [row for row in block.splitlines() if row.strip()]
+        for index, row in enumerate(rows):
+            match = re.match(
+                r"\s*(?:(\d+):)?(\d{1,2}:\d{2}[.,]\d{1,3})\s*-->", row
+            )
+            if not match:
+                continue
+            stamp = row.split("-->")[0].strip()
+            if stamp.count(":") == 1:
+                stamp = "00:" + stamp
+            try:
+                seconds = _srt_time_to_seconds(stamp)
+            except ValueError:
+                break
+            text = " ".join(re.sub(r"<[^>]+>", "", r).strip() for r in rows[index + 1:])
+            if text.strip():
+                minutes = int(seconds // 60)
+                lines.append(f"[{minutes:02d}:{seconds - minutes * 60:05.2f}]{text.strip()}")
+            break
+    return "\n".join(lines) if lines else None
 
 
 def classify_ttml_content(content: str) -> str:
@@ -188,6 +232,9 @@ def fetch_and_save_lyrics(
     query_title = remove_title_annotations(raw_title)
     lyrics_dir = song_dir / "lyrics"
     lyrics_dir.mkdir(parents=True, exist_ok=True)
+    if lyrics_locked(lyrics_dir):
+        existing = saved_lyrics_files(lyrics_dir)
+        return ("ttml" if existing[0].suffix.lower() == ".ttml" else "lrc") if existing else False
 
     existing_files = saved_lyrics_files(lyrics_dir)
     word_ttml = next(

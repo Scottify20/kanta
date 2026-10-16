@@ -1,4 +1,5 @@
 @use './styles/reset';
+@use './styles/tokens';
 
 @import '@braccato/core/styles/variables.css';
 @import '@braccato/core/styles/lyrics.css';
@@ -41,4 +42,168 @@ app-root {
   width: 100%;
   min-height: 100dvh;
   background-color: #1e1e1e;
+}
+
+.cdk-overlay-container {
+  z-index: 2000;
+}
+
+.kanta-popup-pane .popup-content {
+  @include tokens.glass-surface;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2rem));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popup);
+  overflow: clip;
+  color: #fff;
+  @include tokens.popup-enter;
+
+  &.leaving {
+    @include tokens.popup-leave;
+  }
+}
+
+.kanta-drag-stack {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  width: 22rem;
+  height: 5rem;
+  pointer-events: none;
+
+  .kanta-drag-card {
+    position: absolute;
+    inset: 0 0 auto 0;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    height: 4rem;
+    padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
+    border-radius: var(--radius-md);
+    color: #fff;
+    background: rgba(40, 44, 48, 0.92);
+    box-shadow: var(--shadow-popup);
+    font-family: Inter, sans-serif;
+  }
+  .kanta-drag-cover {
+    flex: 0 0 auto;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.5rem;
+    background: #555 center / cover;
+  }
+  .kanta-drag-text {
+    display: grid;
+    min-width: 0;
+    strong, small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    small { color: rgba(255, 255, 255, 0.6); }
+  }
+  .kanta-drag-badge {
+    position: absolute;
+    top: -0.4rem;
+    right: -0.4rem;
+    z-index: 20;
+    min-width: 1.5rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 99rem;
+    text-align: center;
+    font: 700 0.8rem Inter, sans-serif;
+    color: #1e1e1e;
+    background: #fff;
+  }
+}
+
+.kanta-search-pane {
+  .results {
+    @include tokens.glass-surface(var(--surface-glass-strong));
+    @include tokens.popup-enter;
+    margin: 0;
+    padding: 0.4rem;
+    max-height: min(26rem, 60vh);
+    overflow-y: auto;
+    list-style: none;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-popup);
+    color: #fff;
+    scrollbar-width: thin;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.45rem 0.6rem;
+      border-radius: var(--radius-md);
+      cursor: grab;
+      transition: background var(--motion-fast);
+
+      &.active,
+      &:hover {
+        background: var(--surface-hover);
+      }
+      &.empty {
+        cursor: default;
+        color: rgba(255, 255, 255, 0.55);
+      }
+    }
+    .cover {
+      flex: 0 0 auto;
+      width: 2.6rem;
+      height: 2.6rem;
+      border-radius: 0.5rem;
+      background: rgba(255, 255, 255, 0.12) center / cover;
+      &.round { border-radius: 50%; }
+    }
+    .text {
+      display: grid;
+      flex: 1;
+      min-width: 0;
+      strong, small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      small { color: rgba(255, 255, 255, 0.6); }
+    }
+    .add {
+      width: 1.8rem;
+      height: 1.8rem;
+      border: 0;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--surface-hover);
+      font-size: 1.1rem;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity var(--motion-fast);
+    }
+    li:hover .add,
+    li.active .add {
+      opacity: 1;
+    }
+  }
+}
+
+.kanta-tooltip-pane {
+  pointer-events: none;
+
+  .kanta-tooltip {
+    display: block;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.5rem;
+    color: #fff;
+    background: rgba(20, 22, 24, 0.92);
+    font: 500 0.75rem Inter, sans-serif;
+    white-space: nowrap;
+    box-shadow: var(--shadow-popup);
+    animation: kanta-popup-in var(--dur-fast) var(--ease-out) both;
+
+    &.leaving {
+      animation: kanta-popup-out var(--dur-fast) var(--ease-in-out) both;
+    }
+  }
 }

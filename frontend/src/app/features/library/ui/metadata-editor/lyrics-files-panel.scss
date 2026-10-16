@@ -1,0 +1,23 @@
+:host { display:block; }
+.lyrics-panel { display:grid; gap:1rem; }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.eyebrow { margin:0 0 .25rem; color:rgba(255,255,255,.48); font-size:.64rem; letter-spacing:.13em; }
+h3 { margin:0; font-size:1rem; font-weight:600; }
+.level-badge { padding:.35rem .55rem; border:1px solid rgba(255,255,255,.12); border-radius:999px; color:#efb399; background:rgba(239,179,153,.08); font-size:.68rem; }
+.lyrics-list { display:grid; gap:.45rem; margin:0; padding:0; list-style:none; }
+.lyrics-list li { display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.65rem .7rem; border:1px solid rgba(255,255,255,.08); border-radius:var(--radius-md); background:rgba(255,255,255,.035); }
+.file-info { display:flex; align-items:center; min-width:0; gap:.65rem; color:rgba(255,255,255,.67); }
+.filename { overflow:hidden; color:rgba(255,255,255,.9); font-size:.78rem; text-overflow:ellipsis; white-space:nowrap; }
+.file-level { flex:none; padding:.2rem .4rem; border-radius:.4rem; color:rgba(255,255,255,.56); background:rgba(255,255,255,.07); font-size:.62rem; }
+.icon-button { display:grid; place-items:center; flex:none; width:2rem; height:2rem; border:0; border-radius:50%; color:rgba(255,255,255,.66); background:transparent; cursor:pointer; }
+.icon-button:hover:not(:disabled) { color:#ffc4ad; background:rgba(255,255,255,.1); }
+.icon-button:disabled { opacity:.4; }
+.helper-note,.status-note { margin:0; color:rgba(255,255,255,.46); font-size:.68rem; }
+.empty-state { display:grid; justify-items:center; gap:.45rem; padding:1.3rem; color:rgba(255,255,255,.42); font-size:.75rem; }
+.drop-zone { display:grid; justify-items:center; gap:.55rem; padding:1.25rem; border:1.5px dashed rgba(255,255,255,.2); border-radius:var(--radius-lg); color:rgba(255,255,255,.7); background:rgba(255,255,255,.025); text-align:center; transition:background var(--motion-fast),border-color var(--motion-fast); }
+.drop-zone.is-over { border-color:#f1b096; background:rgba(241,176,150,.12); }
+.drop-zone strong { color:rgba(255,255,255,.9); font-size:.8rem; }
+.drop-zone span { color:rgba(255,255,255,.48); font-size:.68rem; }
+.choose-button { padding:.5rem .75rem; border:1px solid rgba(255,255,255,.13); border-radius:var(--radius-md); color:#fff; background:var(--surface-hover); font-size:.72rem; cursor:pointer; }
+.choose-button input { display:none; }
+.panel-error { margin:0; color:#ffb8a5; font-size:.75rem; }

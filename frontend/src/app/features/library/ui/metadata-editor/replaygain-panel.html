@@ -1,0 +1,12 @@
+<section class="gain-panel">
+  <header class="panel-heading"><div><p class="eyebrow">LOUDNESS NORMALIZATION</p><h3>ReplayGain</h3></div>
+    <button type="button" class="analyze-button" (click)="analyze()" [disabled]="analyzing()"><svg lucideWandSparkles [size]="16"></svg>{{ analyzing() ? 'Analyzing…' : 'Analyze' }}</button>
+  </header>
+  <p class="description">Set loudness and peak tags for track or album playback. Analyze measures this track; album values can be entered manually.</p>
+  <div class="gain-grid">
+    <fieldset><legend>Track</legend><label>Gain<input name="trackGain" [ngModel]="values().replaygain_track_gain" (ngModelChange)="set('replaygain_track_gain', $event)" placeholder="e.g. -6.00 dB" /></label><label>Peak<input name="trackPeak" [ngModel]="values().replaygain_track_peak" (ngModelChange)="set('replaygain_track_peak', $event)" placeholder="e.g. 0.891251" /></label></fieldset>
+    <fieldset><legend>Album</legend><label>Gain<input name="albumGain" [ngModel]="values().replaygain_album_gain" (ngModelChange)="set('replaygain_album_gain', $event)" placeholder="e.g. -5.00 dB" /></label><label>Peak<input name="albumPeak" [ngModel]="values().replaygain_album_peak" (ngModelChange)="set('replaygain_album_peak', $event)" placeholder="e.g. 0.934172" /></label></fieldset>
+  </div>
+  @if (analyzing()) { <p class="status-note">Analyzing audio… this may take a moment.</p> }
+  @if (error()) { <p class="panel-error" role="alert">{{ error() }}</p> }
+</section>

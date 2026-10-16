@@ -1,0 +1,19 @@
+:host { display:block; }
+.cover-layout { display:grid; grid-template-columns:minmax(12rem, 1fr) minmax(14rem, 1.15fr); align-items:center; gap:1.4rem; }
+.cover-preview { position:relative; display:grid; place-items:center; aspect-ratio:1; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:var(--radius-lg); background:rgba(255,255,255,.035); box-shadow:var(--shadow-popup); }
+.cover-preview img { width:100%; height:100%; object-fit:cover; }
+.cover-preview.empty { gap:.75rem; align-content:center; color:rgba(255,255,255,.38); }
+.cover-preview.empty span { font-size:.78rem; }
+.loading-cover { position:absolute; inset:0; display:grid; place-items:center; color:#fff; background:rgba(0,0,0,.52); font-size:.8rem; }
+.cover-actions { display:grid; gap:.7rem; }
+.drop-zone { display:grid; justify-items:center; gap:.55rem; padding:1.5rem .9rem; border:1.5px dashed rgba(255,255,255,.2); border-radius:var(--radius-lg); color:rgba(255,255,255,.72); background:rgba(255,255,255,.025); cursor:pointer; text-align:center; transition:border-color var(--motion-fast),background var(--motion-fast),transform var(--motion-fast); }
+.drop-zone strong { color:rgba(255,255,255,.9); font-size:.82rem; }
+.drop-zone span { color:rgba(255,255,255,.48); font-size:.7rem; }
+.drop-zone.is-over { transform:scale(1.015); border-color:#f1b096; color:#ffd4c1; background:rgba(241,176,150,.12); }
+.file-picker { display:none; }
+.action-row { display:flex; justify-content:space-between; gap:.6rem; }
+.soft-button,.icon-button { display:inline-flex; align-items:center; justify-content:center; gap:.45rem; padding:.6rem .75rem; border:1px solid rgba(255,255,255,.13); border-radius:var(--radius-md); color:rgba(255,255,255,.84); background:var(--surface-hover); font:inherit; font-size:.75rem; cursor:pointer; }
+.icon-button { width:2.2rem; height:2.2rem; padding:0; }
+button:disabled { opacity:.4; cursor:default; }
+.panel-error { margin:0; color:#ffb8a5; font-size:.75rem; }
+@media(max-width:580px) { .cover-layout { grid-template-columns:1fr; } .cover-preview { width:min(100%,20rem); justify-self:center; } }

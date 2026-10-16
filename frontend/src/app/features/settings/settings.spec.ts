@@ -13,6 +13,9 @@ describe('Settings', () => {
       output_dirs: ['/library/main', '/library/archive'],
       default_output_dir: '/library/archive',
       model_dir: '/models/custom',
+      output_mode: 'full',
+      output_quality: 'standard',
+      inference_device: 'cpu',
     };
     const updateSettings = vi.fn(() => of(savedSettings));
     TestBed.configureTestingModule({
@@ -28,8 +31,12 @@ describe('Settings', () => {
                 output_dirs: ['/library/main'],
                 default_output_dir: '/library/main',
                 model_dir: '/models/default',
+                output_mode: 'full',
+                output_quality: 'standard',
+                inference_device: 'cpu',
               }),
             updateSettings,
+            getDevices: () => of([]),
           },
         },
       ],
@@ -37,18 +44,24 @@ describe('Settings', () => {
     const fixture = TestBed.createComponent(Settings);
     const component = fixture.componentInstance;
     fixture.detectChanges();
+    vi.useFakeTimers();
     component.newOutputDir.set('/library/archive');
     component.addOutputDir();
     component.defaultOutputDir.set('/library/archive');
     component.modelDir.set('/models/custom');
 
     component.save();
+    vi.advanceTimersByTime(500);
 
     expect(updateSettings).toHaveBeenCalledWith({
       output_dirs: ['/library/main', '/library/archive'],
       default_output_dir: '/library/archive',
       model_dir: '/models/custom',
+      output_mode: 'full',
+      output_quality: 'standard',
+      inference_device: 'cpu',
     });
     expect(component.saved()).toBe(true);
+    vi.useRealTimers();
   });
 });

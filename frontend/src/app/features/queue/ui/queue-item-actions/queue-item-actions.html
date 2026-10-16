@@ -1,0 +1,50 @@
+<div class="actions" (click)="$event.stopPropagation()">
+  @if (current()) {
+    <span
+      class="now-playing-wave"
+      [class.is-playing]="playbackActive()"
+      role="img"
+      [attr.aria-label]="playbackActive() ? 'Currently playing' : 'Current track paused'"
+    >
+      <i></i><i></i><i></i>
+    </span>
+  }
+  @if (item().status === 'pending' || item().status === 'processing') {
+    <button
+      type="button"
+      appTooltip="Pause processing"
+      (click)="pause.emit()"
+      [attr.aria-label]="'Pause processing for ' + item().raw_title"
+    >
+      <svg lucidePause [size]="16"></svg>
+    </button>
+  }
+  @if (item().status === 'paused') {
+    <button
+      type="button"
+      appTooltip="Resume processing"
+      (click)="resume.emit()"
+      [attr.aria-label]="'Resume processing for ' + item().raw_title"
+    >
+      <svg lucidePlay [size]="16"></svg>
+    </button>
+  }
+  <app-popup-panel
+    [popupId]="queue() + ':' + item().task_id"
+    [closeOnContentClick]="true"
+    label="Item options"
+  >
+    <button popup-trigger class="queue-menu-trigger" type="button" aria-label="Item options">
+      <svg lucideMoreHorizontal [size]="16"></svg>
+    </button>
+    <div popup-content class="queue-item-menu-content" role="menu">
+      @if (queue() === 'karaoke_queue') {
+        <button type="button" role="menuitem" (click)="remove.emit()">
+          Remove from Karaoke Queue
+        </button>
+      } @else if (item().status !== 'cancelled') {
+        <button type="button" role="menuitem" (click)="remove.emit()">Cancel processing</button>
+      }
+    </div>
+  </app-popup-panel>
+</div>

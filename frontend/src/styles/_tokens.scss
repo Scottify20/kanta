@@ -1,0 +1,56 @@
+// Shared motion + surface tokens. Use the CSS variables in component styles.
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  --dur-instant: 90ms;
+  --dur-fast: 160ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+
+  --motion-fast: var(--dur-fast) var(--ease-out);
+  --motion-base: var(--dur-base) var(--ease-out);
+  --motion-slow: var(--dur-slow) var(--ease-out);
+  --motion-spring: var(--dur-base) var(--ease-spring);
+
+  --panel-width-sidebar: 18rem;
+  --panel-width-queue: 26rem;
+
+  --surface-glass: rgba(0, 0, 0, 0.5);
+  --surface-glass-strong: rgba(0, 0, 0, 0.65);
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-border: rgba(255, 255, 255, 0.12);
+  --glass-blur: blur(24px);
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow-popup: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+@mixin glass-surface($bg: var(--surface-glass)) {
+  background: $bg;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+@mixin popup-enter {
+  animation: kanta-popup-in var(--dur-fast) var(--ease-out) both;
+}
+
+@mixin popup-leave {
+  animation: kanta-popup-out var(--dur-fast) var(--ease-in-out) both;
+}
+
+@keyframes kanta-popup-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes kanta-popup-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; }
+}

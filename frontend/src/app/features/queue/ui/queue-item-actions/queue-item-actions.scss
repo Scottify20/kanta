@@ -1,0 +1,125 @@
+:host {
+  display: block;
+}
+
+.actions {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+}
+
+.actions app-popup-panel {
+  display: contents;
+}
+
+.actions button,
+.queue-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 0;
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+}
+
+.queue-menu-trigger {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .queue-menu-trigger {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :host-context(li:hover) .queue-menu-trigger,
+  :host-context(li:focus-within) .queue-menu-trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.now-playing-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.9);
+
+  i {
+    display: block;
+    width: 2px;
+    height: 4px;
+    border-radius: 1px;
+    background: currentColor;
+  }
+
+  &.is-playing i {
+    animation: now-playing-wave 0.72s ease-in-out infinite alternate;
+  }
+
+  &.is-playing i:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  &.is-playing i:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+}
+
+@keyframes now-playing-wave {
+  from {
+    height: 4px;
+  }
+  to {
+    height: 14px;
+  }
+}
+
+.queue-item-menu-content {
+  display: grid;
+  min-width: 12rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  background: rgba(27, 31, 34, 0.98);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.queue-item-menu-content button {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  text-align: left;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+

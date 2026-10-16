@@ -1,23 +1,20 @@
 <div
   class="container"
-  [class.has-artwork]="coverUrl() !== null"
-  [style.--album-artwork]="coverUrl() ? 'url(' + coverUrl() + ')' : 'none'"
-  (dragover)="handlePanelDragOver($event)"
 >
   <header class="topbar">
     <button
       class="circle-button"
       type="button"
       aria-label="Open menu"
-      [attr.aria-expanded]="sidebarOpen()"
-      (click)="openSidebar()"
+      title="Menu"
+      [attr.aria-expanded]="layout.sidebarOpen()"
+      (click)="layout.toggleSidebar()"
     >
       <svg lucideMenu [size]="20"></svg>
     </button>
-    <!-- <button class="search-pill" type="button" aria-label="Search library">
-      <svg lucideSearch [size]="18"></svg>
-      <span>Search Sample</span>
-    </button> -->
+    @if (!layout.sidebarOpen()) {
+      <app-search-bar class="topbar-search" />
+    }
 
     <!-- Queue Preview/ Playing Next -->
     <nav class="next-tracks" aria-label="Queue preview">
@@ -32,9 +29,10 @@
     <button
       class="circle-button queue-toggle"
       type="button"
-      aria-label="Open queue"
-      [attr.aria-expanded]="queueOpen()"
-      (click)="openQueue()"
+      aria-label="Toggle queue"
+      title="Queue"
+      [attr.aria-expanded]="layout.queueOpen()"
+      (click)="layout.toggleQueue()"
     >
       <svg lucideListMusic [size]="20"></svg>
     </button>
@@ -106,6 +104,7 @@
         </div>
       }
 
+      <div class="track-footer-wrap">
       <div class="track-footer" [class.fullscreen]="isFullScreen()">
         <!-- Track details -->
         <div class="track-details">
@@ -179,6 +178,7 @@
           @if (selectedManifest() && lyricsService.lyrics()) {
             <app-lyrics-timing-control
               [offsetMs]="lyricsOffsetMs()"
+              [maxOffsetMs]="maxOffsetMs()"
               (adjust)="adjustLyricsOffset($event)"
               (offsetChange)="updateLyricsOffset($event)"
               (save)="saveLyricsOffset()"
@@ -200,31 +200,9 @@
           </button>
         </div>
       </div>
+      </div>
     </section>
   </main>
-
-  @if (sidebarOpen() || queueOpen()) {
-    <button
-      class="queue-backdrop"
-      type="button"
-      aria-label="Close panel"
-      (click)="closePanels()"
-    ></button>
-  }
-
-  @if (sidebarOpen()) {
-    <app-sidebar (close)="closeSidebar()" (queueSelected)="openQueue()"></app-sidebar>
-  }
-
-  @if (queueOpen()) {
-    <app-queue-sheet
-      [processedItemDrag]="processedItemDrag()"
-      [activeTaskId]="selectedTrack()?.task_id ?? null"
-      [playbackActive]="audioPlayer.isPlaying()"
-      (close)="closeQueue()"
-      (trackSelected)="selectTrack($event)"
-    ></app-queue-sheet>
-  }
 
   @if (playbackError()) {
     <p class="playback-error" role="alert">{{ playbackError() }}</p>

@@ -1,0 +1,116 @@
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: inline-flex;
+  padding: 0.25rem;
+  border-radius: 99rem;
+  background: var(--surface-hover);
+
+  button {
+    padding: 0.5rem 1.25rem;
+    border: 0;
+    border-radius: 99rem;
+    color: rgba(255, 255, 255, 0.75);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition:
+      background var(--motion-base),
+      color var(--motion-base);
+
+    &:hover {
+      color: #fff;
+    }
+    &.active {
+      color: #1e1e1e;
+      background: #fff;
+    }
+  }
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 99rem;
+  color: #fff;
+  background: var(--surface-hover);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  transition: background var(--motion-fast);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.sort-list {
+  display: grid;
+  min-width: 11rem;
+  padding: 0.35rem;
+
+  button {
+    padding: 0.6rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: #fff;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    transition: background var(--motion-fast);
+
+    &:hover,
+    &.active {
+      background: var(--surface-hover);
+    }
+  }
+}
+
+.layout-toggle {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 99rem;
+  background: var(--surface-hover);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
+
+  &:hover {
+    color: #fff;
+  }
+  &.active {
+    color: #1e1e1e;
+    background: #fff;
+  }
+}

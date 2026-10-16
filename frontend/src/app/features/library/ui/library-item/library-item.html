@@ -1,0 +1,62 @@
+<div
+  class="item"
+  role="option"
+  tabindex="0"
+  draggable="true"
+  [attr.aria-selected]="selected()"
+  (click)="activate.emit($event)"
+  (keydown.enter)="activate.emit($any($event))"
+  (dragstart)="dragStarted.emit($event)"
+  (dragend)="dragEnded.emit()"
+>
+  <div class="art" [class.round]="round()">
+    @if (mosaic()) {
+      @for (url of mosaicCovers(); track $index) {
+        <span class="tile" [style.background-image]="url ? 'url(' + url + ')' : null"></span>
+      }
+    } @else if (entry().covers[0]) {
+      <img [src]="entry().covers[0]" [alt]="entry().title + ' cover'" loading="lazy" draggable="false" />
+    } @else {
+      <span class="placeholder"></span>
+    }
+    <span class="check" aria-hidden="true"></span>
+  </div>
+  <div class="text">
+    <strong>{{ entry().title }}</strong>
+    <small>{{ entry().subtitle }}</small>
+  </div>
+  <app-popup-panel
+    class="menu"
+    [popupId]="'lib:' + entry().key"
+    group="library"
+    placement="below"
+    [closeOnContentClick]="true"
+    label="Options"
+  >
+    <button popup-trigger class="menu-trigger" type="button" aria-label="More options">
+      <svg lucideMoreHorizontal [size]="18"></svg>
+    </button>
+    <div popup-content class="menu-list" role="menu">
+      <button type="button" role="menuitem" (click)="action.emit('play')">Play</button>
+      <button type="button" role="menuitem" (click)="action.emit('play-next')">Play next</button>
+      <button type="button" role="menuitem" (click)="action.emit('queue')">Add to queue</button>
+      @if (entry().kind !== 'playlist') {
+        @for (playlist of playlists(); track playlist.id) {
+          <button type="button" role="menuitem" (click)="action.emit($any('playlist:' + playlist.id))">
+            Add to “{{ playlist.name }}”
+          </button>
+        }
+      }
+      @if (entry().kind === 'song') {
+        <button type="button" role="menuitem" (click)="action.emit('edit')">Edit metadata</button>
+      }
+      @if (inPlaylist()) {
+        <button type="button" role="menuitem" (click)="action.emit('remove-from-playlist')">Remove from playlist</button>
+      }
+      @if (entry().kind === 'playlist') {
+        <button type="button" role="menuitem" (click)="action.emit('rename-playlist')">Rename</button>
+        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete-playlist')">Delete playlist</button>
+      }
+    </div>
+  </app-popup-panel>
+</div>

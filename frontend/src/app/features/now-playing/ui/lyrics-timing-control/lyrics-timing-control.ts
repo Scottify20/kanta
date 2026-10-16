@@ -10,6 +10,7 @@ import { PopupPanel } from '../../../../shared/components/popup-panel/popup-pane
 })
 export class LyricsTimingControl {
   readonly offsetMs = input.required<number>();
+  readonly maxOffsetMs = input(10_000);
   readonly adjust = output<number>();
   readonly offsetChange = output<number>();
   readonly save = output<void>();

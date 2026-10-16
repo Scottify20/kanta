@@ -1,3 +1,25 @@
-<div id="main">
-  <router-outlet></router-outlet>
+<app-backdrop />
+<div
+  id="main"
+  class="shell"
+  [class.sidebar-open]="layout.sidebarOpen()"
+  [class.queue-open]="layout.queueOpen()"
+>
+  <aside class="panel panel-left" [attr.inert]="layout.sidebarOpen() ? null : ''">
+    <app-sidebar (close)="layout.closeSidebar()" (queueSelected)="layout.openQueue()" />
+  </aside>
+
+  <div class="content">
+    <router-outlet></router-outlet>
+  </div>
+
+  <aside class="panel panel-right" [attr.inert]="layout.queueOpen() ? null : ''">
+    <app-queue-sheet
+      [processedItemDrag]="layout.dragActive()"
+      [activeTaskId]="songs.currentQueueTaskId()"
+      [playbackActive]="audioPlayer.isPlaying()"
+      (close)="layout.closeQueue()"
+      (trackSelected)="selectQueueTrack($event)"
+    />
+  </aside>
 </div>

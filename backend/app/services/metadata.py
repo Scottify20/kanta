@@ -1,9 +1,14 @@
+import copy
 import re
 import subprocess
 from pathlib import Path
 import mutagen
 from mutagen.easyid3 import EasyID3
+from mutagen.flac import FLAC
 from mutagen.id3 import APIC, ID3
+
+from app.services.settings import get_output_quality
+from app.services.tagging import embed_cover
 
 
 def sanitize_filename(name: str) -> str:
@@ -138,34 +143,112 @@ def convert_and_tag_stem(
     artist: str,
     album: str,
     title: str,
+    metadata_source: Path,
+    cover_path: Path,
 ):
-    """Converts a WAV stem to 320k MP3 via FFmpeg and applies metadata."""
+    """Converts a WAV stem to MP3, preserving source metadata and cover art."""
     cmd = [
         "ffmpeg",
+        "-v",
+        "error",
         "-y",
         "-i",
         str(wav_path),
-        "-b:a",
-        "320k",
+        "-i",
+        str(metadata_source),
+        "-map",
+        "0:a:0",
         "-map_metadata",
-        "-1",
+        "1",
+        "-map_chapters",
+        "1",
+        *_encoding_args(output_mp3_path),
         str(output_mp3_path),
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, check=True)
+    _preserve_id3_metadata(metadata_source, output_mp3_path)
+    _set_basic_tags(output_mp3_path, artist, album, title)
 
+    _embed_cover_art(output_mp3_path, cover_path)
+
+    if wav_path.exists():
+        wav_path.unlink()
+
+
+def _encoding_args(output_path: Path) -> list[str]:
+    """ffmpeg codec arguments for the output file type and configured quality."""
+    if output_path.suffix.lower() == ".flac":
+        return ["-vn", "-c:a", "flac", "-sample_fmt", "s16", "-ar", "44100"]
+    return ["-b:a", "128k" if get_output_quality() == "low" else "320k"]
+
+
+def _set_basic_tags(path: Path, artist: str, album: str, title: str) -> None:
+    if path.suffix.lower() == ".flac":
+        flac = FLAC(path)
+        flac["artist"], flac["album"], flac["title"] = [artist], [album], [title]
+        flac.save()
+        return
     try:
-        tags = EasyID3(output_mp3_path)
-    except Exception:
-        tags = mutagen.File(output_mp3_path, easy=True)
+        tags = EasyID3(path)
+    except mutagen.MutagenError:
+        tags = mutagen.File(path, easy=True)
+        if tags is None:
+            raise ValueError(f"Could not read converted audio file: {path}")
         tags.add_tags()
-
     tags["artist"] = artist
     tags["album"] = album
     tags["title"] = title
     tags.save()
 
-    if wav_path.exists():
-        wav_path.unlink()
+
+def _embed_cover_art(output_mp3_path: Path, cover_path: Path) -> None:
+    if not cover_path.exists():
+        return
+
+    if output_mp3_path.suffix.lower() == ".flac":
+        flac = FLAC(output_mp3_path)
+        if not flac.pictures:
+            embed_cover(output_mp3_path, cover_path.read_bytes())
+        return
+
+    audio = ID3(output_mp3_path)
+    if any(isinstance(frame, APIC) for frame in audio.values()):
+        return
+
+    image_data = cover_path.read_bytes()
+    mime = "image/jpeg"
+    if image_data.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime = "image/png"
+    elif image_data.startswith((b"GIF87a", b"GIF89a")):
+        mime = "image/gif"
+    elif image_data.startswith(b"RIFF") and image_data[8:12] == b"WEBP":
+        mime = "image/webp"
+
+    audio.add(
+        APIC(
+            encoding=3,
+            mime=mime,
+            type=3,
+            desc="Cover",
+            data=image_data,
+        )
+    )
+    audio.save()
+
+
+def _preserve_id3_metadata(metadata_source: Path, output_mp3_path: Path) -> None:
+    source = mutagen.File(metadata_source)
+    if (
+        source is None
+        or not isinstance(source.tags, ID3)
+        or output_mp3_path.suffix.lower() != ".mp3"
+    ):
+        return
+
+    output_tags = ID3(output_mp3_path)
+    for frame in source.tags.values():
+        output_tags.add(copy.deepcopy(frame))
+    output_tags.save()
 
 
 def create_compressed_original_with_cover(
@@ -176,39 +259,23 @@ def create_compressed_original_with_cover(
     album: str,
     title: str,
 ):
-    """Creates a 320k MP3 copy of the original input file with tags and embedded album art."""
+    """Creates a 320k MP3 copy while retaining source metadata and cover art."""
     cmd = [
         "ffmpeg",
+        "-v",
+        "error",
         "-y",
         "-i",
         str(input_file),
-        "-b:a",
-        "320k",
+        *_encoding_args(output_mp3_path),
         "-map_metadata",
-        "-1",
+        "0",
+        "-map_chapters",
+        "0",
         str(output_mp3_path),
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, check=True)
+    _preserve_id3_metadata(input_file, output_mp3_path)
+    _set_basic_tags(output_mp3_path, artist, album, title)
 
-    try:
-        tags = EasyID3(output_mp3_path)
-    except Exception:
-        tags = mutagen.File(output_mp3_path, easy=True)
-        tags.add_tags()
-
-    tags["artist"], tags["album"], tags["title"] = artist, album, title
-    tags.save()
-
-    if cover_path.exists():
-        audio = ID3(output_mp3_path)
-        with open(cover_path, "rb") as img:
-            audio.add(
-                APIC(
-                    encoding=3,
-                    mime="image/jpeg",
-                    type=3,
-                    desc="Cover",
-                    data=img.read(),
-                )
-            )
-        audio.save()
+    _embed_cover_art(output_mp3_path, cover_path)

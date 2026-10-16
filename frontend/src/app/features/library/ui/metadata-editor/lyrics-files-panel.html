@@ -1,0 +1,19 @@
+<section class="lyrics-panel">
+  <header class="panel-heading"><div><p class="eyebrow">TIMED LYRICS</p><h3>Lyrics files</h3></div><span class="level-badge">{{ song().lyrics_level || 'none' }} level</span></header>
+  @if (song().lyrics?.length) {
+    <ul class="lyrics-list">
+      @for (file of song().lyrics; track file.url) {
+        <li><div class="file-info"><svg lucideFileText [size]="18"></svg><span class="filename">{{ file.name }}</span><span class="file-level">{{ file.level || song().lyrics_level || 'lyrics' }}</span></div>
+          <button type="button" appTooltip="Remove lyrics" aria-label="Remove lyrics" class="icon-button" (click)="remove()" [disabled]="busy()"><svg lucideTrash2 [size]="17"></svg></button>
+        </li>
+      }
+    </ul>
+    <p class="helper-note">The lyrics endpoint manages one active set, so removing any entry clears the set.</p>
+  } @else { <div class="empty-state"><svg lucideFileText [size]="26"></svg><span>No lyrics files yet</span></div> }
+  <div class="drop-zone" [class.is-over]="over()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+    <svg lucideUpload [size]="21"></svg><strong>Drop a lyrics file</strong><span>or choose .lrc, .ttml, .srt, .vtt · up to 5 MB</span>
+    <label class="choose-button">Choose file<input type="file" accept=".lrc,.ttml,.srt,.vtt" (change)="onPicked($event)" [disabled]="busy()" /></label>
+  </div>
+  @if (busy()) { <p class="status-note">Updating lyrics…</p> }
+  @if (error()) { <p class="panel-error" role="alert">{{ error() }}</p> }
+</section>

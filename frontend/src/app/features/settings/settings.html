@@ -1,83 +1,52 @@
-<main
-  class="settings-page"
-  [style.--page-artwork]="pageArtwork() ? 'url(' + pageArtwork() + ')' : 'none'"
->
+<main class="settings-page">
   <header class="settings-header">
-    <a class="back-link" routerLink="/">Back to now playing</a>
+    <a class="back-button" routerLink="/" appTooltip="Back to now playing" aria-label="Back to now playing">
+      <svg lucideChevronLeft [size]="20"></svg>
+    </a>
     <h1>Settings</h1>
+    <span class="save-status" [class.error-status]="!!error()" role="status" aria-live="polite">
+      @if (saving()) { Saving… } @else if (saved()) { Saved } @else if (error()) { {{ error() }} }
+    </span>
   </header>
 
-  <form class="settings-form" (ngSubmit)="save()">
-    <section class="settings-group" aria-labelledby="output-folders-heading">
-      <h2 id="output-folders-heading">Processed files folders</h2>
-      <p>
-        Select the default folder for future processed songs. Existing folders remain available in
-        the library.
-      </p>
-      <div class="output-folder-list">
-        @for (folder of outputDirs(); track folder) {
-          <div class="output-folder-row">
-            <label class="default-folder-choice">
-              <input
-                type="radio"
-                name="defaultOutputDir"
-                [value]="folder"
-                [checked]="defaultOutputDir() === folder"
-                (change)="defaultOutputDir.set(folder)"
-              />
-              <span class="folder-path-label">{{ folder }}</span>
-              @if (defaultOutputDir() === folder) {
-                <small>Default</small>
-              }
-            </label>
-            <button
-              class="icon-button"
-              type="button"
-              [disabled]="outputDirs().length <= 1"
-              [attr.aria-label]="'Remove ' + folder"
-              (click)="removeOutputDir(folder)"
-            >
-              ×
-            </button>
-          </div>
-        }
-      </div>
-      <div class="add-folder-row">
-        <input
-          id="new-output-dir"
-          name="newOutputDir"
-          type="text"
-          autocomplete="off"
-          [ngModel]="newOutputDir()"
-          (ngModelChange)="newOutputDir.set($event)"
-          placeholder="/home/scott/Music/Kanta archive"
-        />
-        <button type="button" (click)="addOutputDir()">Add folder</button>
-      </div>
-    </section>
+  <div class="settings-content">
+    <app-settings-section title="Playback and Microphone" description="Choose which audio devices Kanta uses for playback and input.">
+      <app-settings-audio-devices />
+    </app-settings-section>
 
-    <section class="settings-group" aria-labelledby="model-folder-heading">
-      <h2 id="model-folder-heading">Models folder</h2>
-      <p>Choose the folder containing the audio separation models used for future jobs.</p>
-      <input
-        id="model-dir"
-        name="modelDir"
-        type="text"
-        autocomplete="off"
-        [ngModel]="modelDir()"
-        (ngModelChange)="modelDir.set($event)"
-        placeholder="/home/scott/projects/kanta/backend/models"
+    <app-settings-section title="Output Folders" description="Choose where processed songs are saved. Select a default folder for new jobs.">
+      <app-settings-folders
+        [outputDirs]="outputDirs()"
+        [defaultOutputDir]="defaultOutputDir()"
+        [newOutputDir]="newOutputDir()"
+        (outputDirsChange)="setOutputDirs($event)"
+        (defaultOutputDirChange)="setDefaultOutputDir($event)"
+        (newOutputDirChange)="setNewOutputDir($event)"
+        (browseRequest)="openPicker($event)"
       />
-    </section>
+    </app-settings-section>
 
-    <button type="submit" [disabled]="saving()">
-      {{ saving() ? 'Saving...' : 'Save settings' }}
-    </button>
-    @if (saved()) {
-      <p class="status success" role="status">Folder saved.</p>
-    }
-    @if (error()) {
-      <p class="status error" role="alert">{{ error() }}</p>
-    }
-  </form>
+    <app-settings-section title="Output Mode" description="Choose how many vocal and instrumental stems each job creates.">
+      <app-settings-option-group label="Output mode" [options]="modeOptions" [selected]="outputMode()" (selectedChange)="setOutputMode($event)" />
+    </app-settings-section>
+
+    <app-settings-section title="Output Quality" description="Balance file size with sound quality for processed audio.">
+      <app-settings-option-group label="Output quality" [columns]="3" [options]="qualityOptions" [selected]="outputQuality()" (selectedChange)="setOutputQuality($event)" />
+    </app-settings-section>
+
+    <app-settings-section title="Models Folder" description="Choose where the audio separation models are stored.">
+      <div class="model-path">
+        <input type="text" aria-label="Models folder path" autocomplete="off" placeholder="Choose models folder" [ngModel]="modelDir()" (ngModelChange)="setModelDir($event)" />
+        <button class="browse-button" type="button" appTooltip="Browse folders" aria-label="Browse model folders" (click)="openPicker('model')"><svg lucideFolderOpen [size]="17"></svg><span>Browse</span></button>
+      </div>
+    </app-settings-section>
+
+    <app-settings-section title="Inference Device" description="Select the processor used for audio separation. Some devices may be unavailable on this system.">
+      <app-settings-option-group label="Inference device" [options]="deviceOptions()" [selected]="inferenceDevice()" (selectedChange)="setInferenceDevice($event)" />
+    </app-settings-section>
+  </div>
+
+  @if (pickerTarget()) {
+    <app-settings-folder-picker [initialPath]="pickerStartPath()" (selected)="acceptFolder($event)" (cancelled)="pickerTarget.set(null)" />
+  }
 </main>
