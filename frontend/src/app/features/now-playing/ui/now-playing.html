@@ -49,6 +49,7 @@
       [coverUrl]="coverUrl()"
       [coverAlt]="selectedTrack()?.raw_title ?? selectedManifest()?.title ?? 'Current album cover'"
       [lyrics]="lyricsService.lyrics()"
+      [songKey]="selectedTrack()?.task_id ?? selectedManifest()?.title ?? ''"
       [currentTime]="lyricsTimeSeconds()"
       [playing]="audioPlayer.isPlaying()"
       [fullscreen]="isFullScreen()"

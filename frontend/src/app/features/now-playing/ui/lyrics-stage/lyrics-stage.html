@@ -12,12 +12,15 @@
   </section>
 
   <section class="lyrics-stage" aria-label="Lyrics">
-    <braccato-lyrics
-      [lyrics]="lyrics()"
-      [currentTime]="currentTime()"
-      [playing]="playing()"
-      (click)="lyricClick.emit($event)"
-    >
-    </braccato-lyrics>
+    <!-- The web component keeps rendered lines when lyrics become empty, so recreate it per lyrics set. -->
+    @for (key of [lyricsKey()]; track key) {
+      <braccato-lyrics
+        [lyrics]="lyrics() ?? []"
+        [currentTime]="currentTime()"
+        [playing]="playing()"
+        (click)="lyricClick.emit($event)"
+      >
+      </braccato-lyrics>
+    }
   </section>
 </div>

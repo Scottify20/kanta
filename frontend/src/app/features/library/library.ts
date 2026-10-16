@@ -1,4 +1,12 @@
-import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  Component,
+  HostListener,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideChevronLeft, LucideMenu } from '@lucide/angular';
 

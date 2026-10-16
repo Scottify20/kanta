@@ -1,4 +1,4 @@
-import { Component, CUSTOM_ELEMENTS_SCHEMA, input, output } from '@angular/core';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, computed, input, output } from '@angular/core';
 import type { Lyric } from '@braccato/parsers';
 
 @Component({
@@ -15,5 +15,7 @@ export class LyricsStage {
   readonly playing = input(false);
   readonly fullscreen = input(false);
   readonly collapsed = input(false);
+  readonly songKey = input('');
+  readonly lyricsKey = computed(() => `${this.songKey()}|${this.lyrics() ? 'lyrics' : 'none'}`);
   readonly lyricClick = output<Event>();
 }
