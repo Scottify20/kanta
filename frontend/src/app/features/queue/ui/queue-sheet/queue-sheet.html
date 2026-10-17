@@ -1,4 +1,5 @@
 <section class="queue-panel" [class.committing]="committing()" (dragover)="handleDragOver($event)">
+  <input #fileInput class="visually-hidden" type="file" multiple accept="audio/*,.flac,.mp3,.wav,.m4a,.ogg,.opus,.aac" tabindex="-1" aria-hidden="true" (change)="onFilesChosen(fileInput)" />
   <article
     cdkScrollable
     class="queue-section karaoke"
@@ -24,6 +25,15 @@
         <button
           class="icon-button"
           type="button"
+          appTooltip="Browse audio files"
+          aria-label="Browse audio files for the karaoke queue"
+          (click)="browseFiles('karaoke_queue')"
+        >
+          <svg lucideFilePlus [size]="16"></svg>
+        </button>
+        <button
+          class="icon-button"
+          type="button"
           appTooltip="Clear queue"
           aria-label="Clear karaoke queue"
           [disabled]="karaokeItems().length === 0"
@@ -45,8 +55,8 @@
         (drop)="dropExternal($event, 'karaoke_queue')"
       >
         @if (karaokeItems().length === 0) {
-          <li class="drop-zone" [class.is-over]="overQueue() === 'karaoke_queue'">
-            <span>Drop songs here to add them to the Karaoke Queue</span>
+          <li class="drop-zone" [class.is-over]="overQueue() === 'karaoke_queue'" role="button" tabindex="0" (click)="browseFiles('karaoke_queue')" (keydown.enter)="browseFiles('karaoke_queue')">
+            <span>Drop songs here, or click to browse</span>
           </li>
         }
 
@@ -114,6 +124,15 @@
         <h2>Processing Queue</h2>
       </div>
       <div class="section-actions" (click)="$event.stopPropagation()">
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Browse audio files"
+          aria-label="Browse audio files for the processing queue"
+          (click)="browseFiles('processing_queue')"
+        >
+          <svg lucideFilePlus [size]="16"></svg>
+        </button>
         @if (processingView().length > 0) {
         <button
           class="icon-button"
@@ -151,8 +170,8 @@
         (cdkDropListDropped)="onProcessingDrop($event)"
       >
         @if (processingView().length === 0) {
-          <li class="drop-zone" [class.is-over]="overQueue() === 'processing_queue'">
-            <span>Drop audio files here to process</span>
+          <li class="drop-zone" [class.is-over]="overQueue() === 'processing_queue'" role="button" tabindex="0" (click)="browseFiles('processing_queue')" (keydown.enter)="browseFiles('processing_queue')">
+            <span>Drop audio files here, or click to browse</span>
           </li>
         }
         @for (item of processingView(); track item.task_id) {

@@ -28,10 +28,16 @@ from app.services.lyrics import (
 )
 from app.services.queue_manager import queue_manager
 from app.services.separator import run_basic_pipeline, run_karaoke_pipeline
-from app.services.settings import find_song_directory, get_output_dir, get_output_dirs
+from app.services.settings import (
+    find_song_directory,
+    get_output_dir,
+    get_output_dirs,
+    warm_up_devices,
+)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    warm_up_devices()
     await queue_manager.start()
     try:
         yield

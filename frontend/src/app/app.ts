@@ -3,6 +3,7 @@ import { Router, RouterOutlet } from '@angular/router';
 
 import { QueueSheet } from './features/queue/ui/queue-sheet/queue-sheet';
 import { Backdrop } from './shared/components/backdrop/backdrop';
+import { ToastHost } from './shared/components/toast-host/toast-host';
 import { SetupModal } from './shared/components/setup-modal/setup-modal';
 import { Sidebar } from './shared/components/sidebar/sidebar';
 import { AudioPlayerService } from './shared/services/audio-player.service';
@@ -15,7 +16,7 @@ import { QueueItem } from './features/queue/interfaces/queue.models';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal],
+  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal, ToastHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

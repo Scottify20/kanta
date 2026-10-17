@@ -1,0 +1,15 @@
+<div class="toast-stack" role="status" aria-live="polite">
+  @for (toast of toastService.toasts(); track toast.id) {
+    <div class="toast" [class]="'toast ' + toast.kind" animate.enter="toast-in" animate.leave="toast-out">
+      @switch (toast.kind) {
+        @case ('success') { <svg lucideCircleCheck [size]="18"></svg> }
+        @case ('error') { <svg lucideCircleAlert [size]="18"></svg> }
+        @default { <svg lucideInfo [size]="18"></svg> }
+      }
+      <span class="message">{{ toast.message }}</span>
+      <button type="button" class="close" appTooltip="Dismiss" aria-label="Dismiss notification" (click)="toastService.dismiss(toast.id)">
+        <svg lucideX [size]="14"></svg>
+      </button>
+    </div>
+  }
+</div>

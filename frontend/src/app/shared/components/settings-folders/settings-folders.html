@@ -13,7 +13,7 @@
   }
 </div>
 <div class="path-entry">
-  <input type="text" autocomplete="off" aria-label="New output folder path" placeholder="/home/scott/Music/Kanta" [ngModel]="newOutputDir()" (ngModelChange)="newOutputDirChange.emit($event)" (keyup.enter)="addOutputDir()" />
+  <input type="text" autocomplete="off" aria-label="New output folder path" [placeholder]="placeholder()" [ngModel]="newOutputDir()" (ngModelChange)="newOutputDirChange.emit($event)" (keyup.enter)="addOutputDir()" />
   <button class="browse-button" type="button" [appTooltip]="'Browse folders'" aria-label="Browse output folders" (click)="browseRequest.emit('output')"><svg lucideFolderOpen [size]="17"></svg><span>Browse</span></button>
   <button class="add-button" type="button" (click)="addOutputDir()"><svg lucidePlus [size]="17"></svg><span>Add</span></button>
 </div>

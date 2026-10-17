@@ -301,6 +301,14 @@
   font-size: 0.85rem;
   text-align: center;
   background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.75);
+    outline: none;
+  }
 
   &.is-over {
     border-color: rgba(255, 255, 255, 0.55);
@@ -314,4 +322,13 @@
     border-radius: 1.5rem 0 0 1.5rem;
     padding: 1.25rem 1rem;
   }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

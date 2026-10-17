@@ -11,6 +11,7 @@
     <app-select label="Microphone input" [options]="inputOptions()" [value]="inputId()" (valueChange)="changeInput($event)" />
   </div>
 </div>
+@if (namesHidden()) { <p class="fallback">Device names are hidden until you allow microphone access. <button class="link-button" type="button" (click)="revealDeviceNames()">Show device names</button></p> }
 @if (!outputRoutingAvailable()) { <p class="fallback">Output-device routing is not supported by this audio system; using the system default.</p> }
 <div class="mic-test">
   <div class="test-heading">

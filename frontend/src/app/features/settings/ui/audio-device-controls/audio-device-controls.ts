@@ -28,6 +28,7 @@ export class AudioDeviceControls implements OnInit, OnDestroy {
   readonly inputId = signal('');
   readonly outputRoutingAvailable = signal(false);
   readonly monitor = signal(false);
+  readonly namesHidden = signal(false);
   readonly mic = inject(MicTestService);
   readonly peakPercent = () => Math.round(this.mic.peak() * 100);
   private readonly player = inject(AudioPlayerService);
@@ -51,11 +52,17 @@ export class AudioDeviceControls implements OnInit, OnDestroy {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      this.outputs.set(devices.filter((device) => device.kind === 'audiooutput').map((device, i) => ({
-        id: device.deviceId, label: device.label || `Audio output ${i + 1}`,
+      // Chromium (WebView2 on Windows) lists "default"/"communications" aliases of real devices.
+      const real = (kind: MediaDeviceKind) =>
+        devices.filter((device) => device.kind === kind && device.deviceId !== 'default' && device.deviceId !== 'communications');
+      const clean = (label: string) => label.replace(/^(default|communications) - /i, '');
+      // Device names stay blank until the page has been granted microphone access once.
+      this.namesHidden.set(devices.some((device) => device.kind !== 'videoinput' && !device.label));
+      this.outputs.set(real('audiooutput').map((device, i) => ({
+        id: device.deviceId, label: clean(device.label) || `Audio output ${i + 1}`,
       })));
-      this.inputs.set(devices.filter((device) => device.kind === 'audioinput').map((device, i) => ({
-        id: device.deviceId, label: device.label || `Microphone ${i + 1}`,
+      this.inputs.set(real('audioinput').map((device, i) => ({
+        id: device.deviceId, label: clean(device.label) || `Microphone ${i + 1}`,
       })));
       if (this.mic.running() && this.inputId() && !this.inputs().some((device) => device.id === this.inputId())) {
         this.mic.markUnplugged();
@@ -85,8 +92,21 @@ export class AudioDeviceControls implements OnInit, OnDestroy {
   }
 
   async toggleMicTest(): Promise<void> {
-    if (this.mic.running()) this.mic.stop();
-    else await this.mic.start(this.inputId());
+    if (this.mic.running()) {
+      this.mic.stop();
+      return;
+    }
+    await this.mic.start(this.inputId());
+    if (this.mic.running()) void this.refreshDevices();
+  }
+
+  // Asking for the microphone once makes the webview reveal real device names.
+  async revealDeviceNames(): Promise<void> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch { /* Denied: names stay generic. */ }
+    await this.refreshDevices();
   }
 
   setMonitor(enabled: boolean): void {

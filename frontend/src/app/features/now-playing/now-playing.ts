@@ -16,6 +16,7 @@ import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
 import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
+import { findPlaybackStems } from '../../shared/services/playback-actions.service';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { Tooltip } from '../../shared/directives/tooltip';
 import { FullscreenService } from '../../shared/services/fullscreen.service';
@@ -595,16 +596,13 @@ export class NowPlaying implements OnDestroy {
     try {
       const songKey = `${manifest.artist}/${manifest.album}/${manifest.title}`;
       if (this.loadedSongKey !== songKey) {
-        const vocals = manifest.stems.find((file) => file.name.toLowerCase().includes('vocals'));
-        const instrumental = manifest.stems.find((file) =>
-          file.name.toLowerCase().includes('instrumental'),
-        );
-        if (!vocals || !instrumental) {
+        const stems = findPlaybackStems(manifest.stems);
+        if (!stems) {
           throw new Error('This processed song is missing playback stems.');
         }
         await this.audioPlayer.loadStems({
-          vocals: vocals.url,
-          instrumental: instrumental.url,
+          vocals: stems.vocals.url,
+          instrumental: stems.instrumental.url,
           replayGain: {
             trackGain: manifest.replaygain_track_gain,
             trackPeak: manifest.replaygain_track_peak,

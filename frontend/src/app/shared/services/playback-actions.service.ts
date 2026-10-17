@@ -7,9 +7,20 @@ import { QueueItem } from '../../features/queue/interfaces/queue.models';
 import { SongRef } from './library.service';
 import { SongManifest, SongsService } from './songs.service';
 
+type StemFile = SongManifest['stems'][number];
+
+const stemNamed = (stems: StemFile[], kind: 'vocals' | 'instrumental'): StemFile | undefined =>
+  stems.find((file) => new RegExp(`\\(${kind}\\)\\.[a-z0-9]+$`, 'i').test(file.name));
+
+// Full mode also writes "(Lead Vocals)" / "(Backing Vocals)", so match the exact "(Vocals)" suffix.
+export const findPlaybackStems = (stems: StemFile[]): { vocals: StemFile; instrumental: StemFile } | null => {
+  const vocals = stemNamed(stems, 'vocals');
+  const instrumental = stemNamed(stems, 'instrumental');
+  return vocals && instrumental ? { vocals, instrumental } : null;
+};
+
 export const isPlayable = (song: Pick<SongManifest, 'stems'>): boolean =>
-  song.stems.some((file) => file.name.toLowerCase().includes('vocals')) &&
-  song.stems.some((file) => file.name.toLowerCase().includes('instrumental'));
+  findPlaybackStems(song.stems) !== null;
 
 // Shared "play / enqueue" behaviour for the library, search results and playlists.
 @Injectable({ providedIn: 'root' })

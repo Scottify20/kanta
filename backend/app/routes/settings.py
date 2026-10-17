@@ -15,6 +15,7 @@ from app.services.settings import (
     get_output_dirs,
     get_output_mode,
     get_output_quality,
+    suggested_output_dir,
     update_settings as save_settings,
 )
 
@@ -43,6 +44,7 @@ def _settings_payload(
         "output_quality": get_output_quality(),
         "inference_device": get_inference_device(),
         "output_dirs_status": storage.output_dirs_status(list(output_dirs)),
+        "suggested_output_dir": str(suggested_output_dir()),
     }
 
 

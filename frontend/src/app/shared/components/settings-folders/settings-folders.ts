@@ -14,6 +14,7 @@ export class SettingsFolders {
   readonly outputDirs = input.required<string[]>();
   readonly defaultOutputDir = input.required<string>();
   readonly newOutputDir = input.required<string>();
+  readonly placeholder = input('Path to a folder');
   readonly outputDirsChange = output<string[]>();
   readonly defaultOutputDirChange = output<string>();
   readonly newOutputDirChange = output<string>();

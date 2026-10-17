@@ -4,6 +4,8 @@ import { Observable, firstValueFrom } from 'rxjs';
 
 export const API_URL = 'http://127.0.0.1:8000';
 
+export type DeviceId = 'cuda' | 'mps' | 'directml' | 'vulkan' | 'cpu';
+
 export interface AppSettings {
   output_dir: string;
   output_dirs: string[];
@@ -11,8 +13,9 @@ export interface AppSettings {
   model_dir: string;
   output_mode: 'basic' | 'full';
   output_quality: 'high' | 'standard' | 'low';
-  inference_device: 'cuda' | 'vulkan' | 'cpu';
+  inference_device: DeviceId;
   output_dirs_status?: OutputDirectoryStatus[];
+  suggested_output_dir?: string;
 }
 
 export interface OutputDirectoryStatus {
@@ -34,7 +37,7 @@ export interface StorageDevice {
 }
 
 export interface InferenceDevice {
-  id: 'cuda' | 'vulkan' | 'cpu';
+  id: DeviceId;
   label: string;
   available: boolean;
 }
@@ -57,6 +60,14 @@ export class SettingsService {
     AppSettings,
     'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
   >): Observable<AppSettings> {
+    return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
+  }
+
+  // Partial update: the backend keeps whatever is not sent.
+  patchSettings(settings: Partial<Pick<
+    AppSettings,
+    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
+  >>): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
   }
 

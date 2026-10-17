@@ -17,71 +17,27 @@
 		"version": "2.0.0",
 		"tasks": [
 			{
-				"label": "Start Frontend",
+				"label": "Dev: backend + Tauri app",
 				"type": "shell",
-				"command": "npm run dev",
+				"command": "npm run dev:all",
 				"options": {
 					"cwd": "${workspaceFolder:Frontend (Angular)}"
 				},
 				"isBackground": true,
-				"problemMatcher": {
-					"owner": "custom",
-					"pattern": {
-						"regexp": "^$"
-					},
-					"background": {
-						"activeOnStart": true,
-						"beginsPattern": ".",
-						"endsPattern": "localhost:4200"
-					}
-				},
+				"problemMatcher": [],
 				"presentation": {
-					"group": "dev-servers",
 					"reveal": "always",
 					"panel": "dedicated"
 				}
 			},
 			{
-				"label": "Start Backend",
+				"label": "Build installer (this OS)",
 				"type": "shell",
-				"command": "source venv/bin/activate && uvicorn app.main:app --reload --port 8000",
+				"command": "npm run app:build",
 				"options": {
-					"cwd": "${workspaceFolder:Backend (FastAPI)}",
-					"shell": {
-						"executable": "/bin/bash",
-						"args": [
-							"-c"
-						]
-					}
+					"cwd": "${workspaceFolder:Frontend (Angular)}"
 				},
-				"isBackground": true,
-				"problemMatcher": {
-					"owner": "custom",
-					"pattern": {
-						"regexp": "^$"
-					},
-					"background": {
-						"activeOnStart": true,
-						"beginsPattern": ".",
-						"endsPattern": "Uvicorn running on"
-					}
-				},
-				"presentation": {
-					"group": "dev-servers",
-					"reveal": "always",
-					"panel": "dedicated"
-				}
-			},
-			{
-				"label": "Start Dev Servers",
-				"dependsOrder": "parallel",
-				"dependsOn": [
-					"Start Frontend",
-					"Start Backend"
-				],
-				"runOptions": {
-					"runOn": "folderOpen"
-				},
+				"group": "build",
 				"problemMatcher": []
 			}
 		]

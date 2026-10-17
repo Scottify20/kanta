@@ -21,6 +21,22 @@ _cache_lock = threading.RLock()
 _cache: dict[str, Any] = {"sig": None, "data": {}, "derived": {}}
 
 
+def suggested_output_dir() -> Path:
+    """A sensible per-user default for processed songs, shown in setup and as a placeholder."""
+    return Path.home() / "Music" / "Kanta"
+
+
+def is_output_configured() -> bool:
+    """True once the user (or setup) has explicitly chosen where processed songs live."""
+    settings = _read_settings()
+    return bool(settings.get("default_output_dir") or settings.get("output_dir"))
+
+
+def warm_up_devices() -> None:
+    """Probe GPUs in the background; importing torch can take many seconds on first use."""
+    threading.Thread(target=device_availability, name="device-probe", daemon=True).start()
+
+
 def get_output_dir() -> Path:
     return get_default_output_dir()
 
@@ -89,7 +105,7 @@ def get_settings_version() -> int:
 
 def get_output_mode() -> str:
     value = _read_settings().get("output_mode")
-    return value if value in OUTPUT_MODES else "full"
+    return value if value in OUTPUT_MODES else "basic"
 
 
 def get_output_quality() -> str:
@@ -201,8 +217,10 @@ def update_settings(
         raise ValueError("The default folder must be included in processed files folders")
 
     model_path = Path(model_dir).expanduser().resolve()
-    if not model_path.is_dir():
-        raise ValueError("The models folder must be an existing directory")
+    try:
+        model_path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(f"Could not use models folder '{model_path}': {exc.strerror or exc}") from exc
 
     settings = dict(_read_settings())
     settings.update(

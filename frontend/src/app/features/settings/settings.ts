@@ -2,7 +2,7 @@ import { OverlayModule } from '@angular/cdk/overlay';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideFolderOpen, LucideMenu } from '@lucide/angular';
-import { catchError, debounceTime, EMPTY, Subject, switchMap } from 'rxjs';
+import { catchError, debounceTime, EMPTY, Subject, retry, switchMap } from 'rxjs';
 import { SettingsFolderPicker } from '../../shared/components/settings-folder-picker/settings-folder-picker';
 import { SettingsFolders } from '../../shared/components/settings-folders/settings-folders';
 import { SettingsOption, SettingsOptionGroup } from '../../shared/components/settings-option-group/settings-option-group';
@@ -12,7 +12,7 @@ import { StorageDevices } from './ui/storage-devices/storage-devices';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { Tooltip } from '../../shared/directives/tooltip';
-import { InferenceDevice, OutputDirectoryStatus, SettingsService } from '../../shared/services/settings.service';
+import { DeviceId, InferenceDevice, OutputDirectoryStatus, SettingsService } from '../../shared/services/settings.service';
 
 interface ReplayGainControls {
   replayGainEnabled?: () => boolean;
@@ -40,10 +40,11 @@ export class Settings {
   readonly outputDirs = signal<string[]>([]);
   readonly defaultOutputDir = signal('');
   readonly newOutputDir = signal('');
+  readonly suggestedOutputDir = signal('Path to a folder');
   readonly modelDir = signal('');
-  readonly outputMode = signal<'basic' | 'full'>('full');
+  readonly outputMode = signal<'basic' | 'full'>('basic');
   readonly outputQuality = signal<'high' | 'standard' | 'low'>('standard');
-  readonly inferenceDevice = signal<'cuda' | 'vulkan' | 'cpu'>('cpu');
+  readonly inferenceDevice = signal<DeviceId>('cpu');
   readonly devices = signal<InferenceDevice[]>([]);
   readonly outputDirsStatus = signal<OutputDirectoryStatus[]>([]);
   readonly loaded = signal(false);
@@ -54,11 +55,20 @@ export class Settings {
   readonly pickerStartPath = signal('');
   readonly deviceOptions = computed<SettingsOption[]>(() => {
     const known = this.devices();
-    return [
-      { value: 'cuda', label: this.deviceLabel('cuda', 'CUDA'), description: 'NVIDIA GPU acceleration', ...this.deviceAvailability('cuda', known) },
-      { value: 'vulkan', label: this.deviceLabel('vulkan', 'Vulkan'), description: 'Cross-vendor GPU acceleration', ...this.deviceAvailability('vulkan', known) },
-      { value: 'cpu', label: this.deviceLabel('cpu', 'CPU'), description: 'Run on the processor', ...this.deviceAvailability('cpu', known) },
-    ];
+    const descriptions: Record<DeviceId, string> = {
+      cuda: 'NVIDIA GPU acceleration',
+      directml: 'Any DirectX 12 GPU on Windows',
+      mps: 'Apple silicon GPU',
+      vulkan: 'Cross-vendor GPU acceleration',
+      cpu: 'Run on the processor',
+    };
+    const ids = known.length ? known.map((device) => device.id) : (['cuda', 'cpu'] as DeviceId[]);
+    return ids.map((id) => ({
+      value: id,
+      label: this.deviceLabel(id, id.toUpperCase()),
+      description: descriptions[id] ?? '',
+      ...this.deviceAvailability(id, known),
+    }));
   });
   readonly modeOptions: SettingsOption[] = [
     { value: 'basic', label: 'Basic', description: 'Instrumentals and vocals' },
@@ -86,19 +96,21 @@ export class Settings {
       this.saving.set(false);
     });
 
-    this.settingsService.getSettings().subscribe({
+    // The backend can still be starting (first launch loads Python and torch), so retry for a while.
+    this.settingsService.getSettings().pipe(retry({ count: 20, delay: 1500 })).subscribe({
       next: (settings) => {
+        this.suggestedOutputDir.set(settings.suggested_output_dir || 'Path to a folder');
         const dirs = settings.output_dirs?.length ? settings.output_dirs : [settings.output_dir].filter(Boolean);
         this.outputDirs.set(dirs);
         this.defaultOutputDir.set(settings.default_output_dir || settings.output_dir || dirs[0] || '');
         this.modelDir.set(settings.model_dir ?? '');
-        this.outputMode.set(settings.output_mode || 'full');
+        this.outputMode.set(settings.output_mode || 'basic');
         this.outputQuality.set(settings.output_quality || 'standard');
         this.inferenceDevice.set(settings.inference_device || 'cpu');
         this.outputDirsStatus.set(settings.output_dirs_status ?? []);
         this.loaded.set(true);
       },
-      error: () => this.error.set('Could not load settings.'),
+      error: () => this.error.set('Could not reach the Kanta backend. Make sure it is running, then reopen Settings.'),
     });
     this.settingsService.getDevices().subscribe({ next: (devices) => this.devices.set(devices), error: () => undefined });
   }
@@ -109,7 +121,7 @@ export class Settings {
   setModelDir(path: string): void { this.modelDir.set(path); this.changed(); }
   setOutputMode(value: string): void { this.outputMode.set(value as 'basic' | 'full'); this.changed(); }
   setOutputQuality(value: string): void { this.outputQuality.set(value as 'high' | 'standard' | 'low'); this.changed(); }
-  setInferenceDevice(value: string): void { this.inferenceDevice.set(value as 'cuda' | 'vulkan' | 'cpu'); this.changed(); }
+  setInferenceDevice(value: string): void { this.inferenceDevice.set(value as DeviceId); this.changed(); }
   setReplayGainEnabled(value: boolean): void { this.audioPlayer.setReplayGainEnabled?.(value); }
   setReplayGainMode(value: 'track' | 'album'): void { this.audioPlayer.setReplayGainMode?.(value); }
   addOutputFolder(path: string): void {
@@ -140,7 +152,7 @@ export class Settings {
     if (picked === null) return;
     if (picked) {
       if (target === 'model') this.setModelDir(picked);
-      else this.setNewOutputDir(picked);
+      else this.addOutputFolder(picked);
       return;
     }
     this.pickerTarget.set(target);
@@ -149,7 +161,7 @@ export class Settings {
 
   acceptFolder(path: string): void {
     if (this.pickerTarget() === 'model') this.setModelDir(path);
-    else this.setNewOutputDir(path);
+    else this.addOutputFolder(path);
     this.pickerTarget.set(null);
   }
 

@@ -80,3 +80,17 @@ cd ../frontend && npm ci && npm run app:build:linux
 ```
 
 Output: `frontend/src-tauri/target/release/bundle/{deb,appimage}/`. Build on the oldest Ubuntu you want to support.
+
+## Quick commands (Windows, Linux, macOS)
+
+Run from `frontend/`:
+
+| Command | What it does |
+| --- | --- |
+| `npm run setup` | Creates `backend/venv` and installs deps (CUDA torch if an NVIDIA GPU is found, else CPU). Use `setup:cpu` / `setup:cuda` to force. |
+| `npm run dev:all` | Backend + `tauri dev` together |
+| `npm run dev:backend` | Backend only |
+| `npm run app:build` | Builds the sidecar and the installer for the current OS (nsis / deb / dmg) |
+| `npm run assets:fetch` | Downloads models + ffmpeg into the data dir |
+
+In VS Code, the same actions are available under Terminal > Run Task.

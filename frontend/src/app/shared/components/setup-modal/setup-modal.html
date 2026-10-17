@@ -1,35 +1,78 @@
 @if (setup.status(); as status) {
-  <div class="backdrop" role="presentation">
-    <section class="panel" role="dialog" aria-modal="true" aria-labelledby="setup-title">
-      <h2 id="setup-title">Finish setting up Kanta</h2>
-      <p class="lead">Some large files aren't bundled with the app and need to be downloaded once.</p>
-      <ul>
-        <li [class.ok]="status.models">
-          <span>Separation models</span>
-          <small>{{ status.models ? 'Ready' : 'About 1.6 GB' }}</small>
-        </li>
-        <li [class.ok]="status.ffmpeg">
-          <span>ffmpeg</span>
-          <small>{{ status.ffmpeg ? 'Ready' : status.ffmpeg_downloadable ? 'About 100 MB' : 'Install it manually' }}</small>
-        </li>
-      </ul>
-      @if (job(); as job) {
-        @if (job.running) {
-          <div class="progress" role="progressbar" [attr.aria-valuenow]="percent()" aria-valuemin="0" aria-valuemax="100">
-            <div class="bar" [style.width.%]="percent()"></div>
-          </div>
-          <p class="step">{{ job.step }}</p>
-        }
-        @if (job.error) {
-          <p class="error" role="alert">{{ job.error }}</p>
-        }
+  @if (setup.minimized()) {
+    <button class="pill" type="button" appTooltip="Show setup" aria-label="Show setup" (click)="setup.minimized.set(false)">
+      <svg lucideDownload [size]="16"></svg>
+      @if (downloading()) {
+        <span>{{ job()?.step }} {{ percent() }}%</span>
+        <span class="pill-bar"><span [style.width.%]="percent()"></span></span>
+      } @else {
+        <span>Finish setting up Kanta</span>
       }
-      <footer>
-        <button class="secondary" type="button" [disabled]="job()?.running" (click)="setup.dismiss()">Later</button>
-        <button class="primary" type="button" [disabled]="job()?.running" (click)="setup.install()">
-          {{ job()?.running ? 'Downloading…' : job()?.error ? 'Retry' : 'Download now' }}
-        </button>
-      </footer>
-    </section>
-  </div>
+    </button>
+  } @else {
+    <div class="backdrop" role="presentation">
+      <section class="panel" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+        <header>
+          <div>
+            <p class="eyebrow">{{ step() === 'folder' ? 'Step 1 of 2' : status.output_configured && !status.job.running ? 'Last step' : 'Almost there' }}</p>
+            <h2 id="setup-title">{{ step() === 'folder' ? 'Where should your songs go?' : 'Download the audio tools' }}</h2>
+          </div>
+          <button class="icon" type="button" appTooltip="Minimize" aria-label="Minimize setup" (click)="setup.minimized.set(true)">
+            <svg lucideMinus [size]="18"></svg>
+          </button>
+        </header>
+
+        @if (step() === 'folder') {
+          <p class="lead">Processed songs (instrumental, vocals, lyrics and covers) are saved here. You can add more folders later in Settings.</p>
+          <label class="field">
+            <span>Songs folder</span>
+            <div class="input-row">
+              <input type="text" autocomplete="off" spellcheck="false" [placeholder]="status.suggested_output_dir" [ngModel]="folder()" (ngModelChange)="folder.set($event)" (keyup.enter)="saveFolder()" />
+              <button class="secondary icon-text" type="button" (click)="browse()"><svg lucideFolderOpen [size]="16"></svg>Browse</button>
+            </div>
+          </label>
+          @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+          <footer>
+            <button class="secondary" type="button" (click)="setup.dismiss()">Skip for now</button>
+            <button class="primary" type="button" [disabled]="saving()" (click)="saveFolder()">{{ saving() ? 'Saving…' : 'Continue' }}</button>
+          </footer>
+        } @else {
+          @if (downloading()) {
+            <p class="lead">Downloading. You can minimize this and keep using Kanta.</p>
+            <div class="progress" role="progressbar" [attr.aria-valuenow]="percent()" aria-valuemin="0" aria-valuemax="100">
+              <div class="bar" [style.width.%]="percent()"></div>
+            </div>
+            <p class="step"><strong>{{ job()?.step }}</strong><span>{{ percent() }}%</span></p>
+            @if (job()?.detail) { <p class="detail">{{ job()?.detail }}</p> }
+            <footer>
+              <button class="primary" type="button" (click)="setup.minimized.set(true)">Minimize</button>
+            </footer>
+          } @else {
+            <p class="lead">These are large files, so they are not bundled with the app. They're downloaded once.</p>
+            @if (!status.models) {
+              <div class="choices" role="radiogroup" aria-label="Separation quality">
+                <button type="button" class="choice" role="radio" [class.selected]="!full()" [attr.aria-checked]="!full()" (click)="full.set(false)">
+                  <strong>Basic</strong>
+                  <span>Instrumental and vocals. Faster, about 640 MB.</span>
+                </button>
+                <button type="button" class="choice" role="radio" [class.selected]="full()" [attr.aria-checked]="full()" (click)="full.set(true)">
+                  <strong>Full</strong>
+                  <span>Adds lead and backing vocals, bass, drums, piano and more. About 1.6 GB.</span>
+                </button>
+              </div>
+            }
+            <ul>
+              <li [class.ok]="status.models"><span>Separation models</span><small>{{ status.models ? 'Ready' : full() ? 'About 1.6 GB' : 'About 640 MB' }}</small></li>
+              <li [class.ok]="status.ffmpeg"><span>ffmpeg</span><small>{{ status.ffmpeg ? 'Ready' : status.ffmpeg_downloadable ? 'About 100 MB' : 'Install it manually' }}</small></li>
+            </ul>
+            @if (job()?.error) { <p class="error" role="alert">{{ job()?.error }}</p> }
+            <footer>
+              <button class="secondary" type="button" (click)="setup.dismiss()">Later</button>
+              <button class="primary icon-text" type="button" (click)="download()"><svg lucideDownload [size]="16"></svg>{{ job()?.error ? 'Retry' : 'Download' }}</button>
+            </footer>
+          }
+        }
+      </section>
+    </div>
+  }
 }

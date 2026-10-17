@@ -1,6 +1,6 @@
-import { ApplicationRef, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { ApplicationRef, Component, DestroyRef, ElementRef, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LucideChevronDown, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
+import { LucideChevronDown, LucideFilePlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 
@@ -28,6 +28,7 @@ const UPLOAD_PREFIX = 'upload:';
     QueueTrackSummary,
     Tooltip,
     LucideChevronDown,
+    LucideFilePlus,
     LucidePause,
     LucidePlay,
     LucideTrash2,
@@ -38,6 +39,8 @@ const UPLOAD_PREFIX = 'upload:';
   styleUrl: './queue-sheet.scss',
 })
 export class QueueSheet implements OnInit {
+  private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  private browseTarget: QueueName = 'karaoke_queue';
   private readonly queueService = inject(QueueService);
   private readonly actions = inject(PlaybackActions);
   private readonly library = inject(LibraryService);
@@ -335,6 +338,16 @@ export class QueueSheet implements OnInit {
       clearTimeout(this.reorderTimer);
       this.reorderTimer = null;
     }
+  }
+
+  browseFiles(target: QueueName): void {
+    this.browseTarget = target;
+    this.fileInput()?.nativeElement.click();
+  }
+
+  onFilesChosen(input: HTMLInputElement): void {
+    if (input.files?.length) this.addFiles(input.files, this.browseTarget);
+    input.value = '';
   }
 
   private addFiles(files: FileList, targetQueue: QueueName): void {
