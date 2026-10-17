@@ -83,6 +83,40 @@
   transform: none;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+
+  strong {
+    min-width: 0;
+  }
+}
+
+.lyrics-chip {
+  flex-shrink: 0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+
+  &.level-word {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+  }
+  &.level-line {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+  }
+  &.level-none {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+  }
+}
+
 .text {
   display: grid;
   gap: 0.15rem;

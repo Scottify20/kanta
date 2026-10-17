@@ -40,6 +40,7 @@ export class LibraryItem {
   readonly dragStarted = output<DragEvent>();
   readonly dragEnded = output<void>();
 
+  readonly lyricsLevel = computed(() => (this.entry().kind === 'song' ? (this.entry().songs[0]?.lyrics_level ?? 'none') : null));
   readonly round = computed(() => this.entry().kind === 'artist');
   readonly mosaic = computed(() => this.entry().kind === 'playlist' && this.entry().covers.length > 1);
   readonly mosaicCovers = computed(() => {

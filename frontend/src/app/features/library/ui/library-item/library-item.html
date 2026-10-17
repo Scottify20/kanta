@@ -22,7 +22,12 @@
     <span class="check" aria-hidden="true"></span>
   </div>
   <div class="text">
-    <strong>{{ entry().title }}</strong>
+    <div class="title-row">
+      <strong>{{ entry().title }}</strong>
+      @if (lyricsLevel(); as level) {
+        <span class="lyrics-chip" [class]="'level-' + level">{{ level }}</span>
+      }
+    </div>
     <small>{{ entry().subtitle }}</small>
   </div>
   <app-popup-panel
