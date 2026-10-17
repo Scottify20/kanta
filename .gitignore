@@ -16,6 +16,7 @@
 /backend/build/
 /backend/dist/
 /backend/vendor/
+/backend/*.egg-info/
 /backend/models/*
 !/backend/models/*.yaml
 
@@ -24,6 +25,21 @@
 /frontend/dist/
 /frontend/.angular/
 /frontend/coverage/
+/frontend/out-tsc/
+/frontend/src-tauri/target/
+/frontend/src-tauri/gen/
+/frontend/src-tauri/binaries/*
+!/frontend/src-tauri/binaries/.gitignore
+*.spec.bak
+npm-debug.log*
+
+# Packaged installers
+*.deb
+*.msi
+*.exe
+*.dmg
+*.AppImage
+*.rpm
 
 # Local workspace and OS files
 .DS_Store
