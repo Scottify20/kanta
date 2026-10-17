@@ -82,6 +82,14 @@ function setup(flags) {
     pip(['install', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu']);
   }
   pip(['install', '-r', 'requirements.txt']);
+  if (wantCuda && platform !== 'darwin') {
+    // A dependency may have pulled in a CPU torch from PyPI; reinstall the CUDA wheels if so.
+    const cuda = capture(venvPython, ['-c', 'import torch;print(torch.version.cuda or "")']);
+    if (!cuda) {
+      console.log('CUDA PyTorch was replaced by a CPU build; reinstalling ...');
+      pip(['install', '--force-reinstall', '--no-deps', 'torch', '--index-url', 'https://download.pytorch.org/whl/cu121']);
+    }
+  }
   if (wantCuda && win) {
     // requirements.txt ships the DirectML runtime on Windows; CUDA needs the GPU build instead.
     console.log('Switching ONNX Runtime to the CUDA build ...');
@@ -123,8 +131,12 @@ function hostTriple() {
 }
 
 function requireCudaTorch() {
-  const out = capture(venvPython, ['-c', 'import torch;print(torch.version.cuda or "")']);
-  if (!out) fail('The venv has no CUDA build of PyTorch. Run `npm run setup:cuda` first, then build again.');
+  const result = spawnSync(venvPython, ['-c', 'import torch;print(torch.__version__);print(torch.version.cuda or "")'], { encoding: 'utf8' });
+  if (result.error || result.status !== 0) {
+    fail(`Could not import PyTorch from backend/venv:\n${result.error?.message ?? result.stderr}\nRun \`npm run setup:cuda\` first.`);
+  }
+  const [version, cuda] = result.stdout.trim().split(/\r?\n/);
+  if (!cuda) fail(`backend/venv has a CPU-only PyTorch (${version}). Run \`npm run setup:cuda\` first, then build again.`);
 }
 
 function sidecar(flags = []) {
