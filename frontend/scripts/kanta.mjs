@@ -94,7 +94,13 @@ function setup(flags) {
     // requirements.txt ships the DirectML runtime on Windows; CUDA needs the GPU build instead.
     console.log('Switching ONNX Runtime to the CUDA build ...');
     run(venvPython, ['-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-directml'], { cwd: backend });
-    pip(['install', 'onnxruntime-gpu>=1.18']);
+    pip(['install', 'onnxruntime-gpu>=1.18,<1.24']);
+  }
+  if (!wantCuda && platform === 'linux') {
+    // requirements.txt ships onnxruntime-gpu on Linux; the CPU build only needs the much smaller CPU runtime.
+    console.log('Switching ONNX Runtime to the CPU build ...');
+    run(venvPython, ['-m', 'pip', 'uninstall', '-y', 'onnxruntime-gpu'], { cwd: backend });
+    pip(['install', '--force-reinstall', '--no-deps', 'onnxruntime>=1.18']);
   }
   console.log('\nBackend ready. Next: npm run dev (or npm run dev:backend and npm run tauri:dev in two terminals).');
 }
@@ -145,7 +151,7 @@ function sidecar(flags = []) {
   run(venvTool('pyinstaller'), ['kanta-backend.spec', '--noconfirm'], {
     cwd: backend,
     shell: false,
-    env: { ...process.env, KANTA_ONEFILE: '1' },
+    env: { ...process.env, KANTA_ONEFILE: '1', KANTA_CUDA: flags.includes('--cuda') ? '1' : '0' },
   });
   const built = join(backend, 'dist', win ? 'kanta-backend.exe' : 'kanta-backend');
   const target = join(root, 'src-tauri', 'binaries', `kanta-backend-${hostTriple()}${win ? '.exe' : ''}`);
