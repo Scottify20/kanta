@@ -50,7 +50,7 @@ import { MetadataEditor } from './ui/metadata-editor/metadata-editor';
   styleUrl: './library.scss',
 })
 export class Library {
-  private readonly library = inject(LibraryService);
+  protected readonly library = inject(LibraryService);
   private readonly songsService = inject(SongsService);
   private readonly actions = inject(PlaybackActions);
   private readonly playlistsService = inject(PlaylistsService);

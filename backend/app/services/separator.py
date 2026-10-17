@@ -1,9 +1,11 @@
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 import mutagen
-from audio_separator.separator import Separator
 import tqdm
+
+if TYPE_CHECKING:
+    from audio_separator.separator import Separator
 
 from app.tasks import check_cancellation_and_update
 from app.services.metadata import (
@@ -58,7 +60,10 @@ class TaskProgressTqdm(tqdm.tqdm):
 tqdm.tqdm = TaskProgressTqdm
 
 
-def _create_separator() -> Separator:
+def _create_separator() -> "Separator":
+    # Imported lazily: audio_separator pulls in torch, which would delay API startup by many seconds.
+    from audio_separator.separator import Separator
+
     configure_environment()
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     seed_bundled_models(get_model_dir())
@@ -69,7 +74,7 @@ def _create_separator() -> Separator:
     return separator
 
 
-def _apply_inference_device(separator: Separator) -> None:
+def _apply_inference_device(separator: "Separator") -> None:
     """Override audio-separator's auto-detected device with the configured one."""
     device = get_inference_device()
     if device == "cpu":

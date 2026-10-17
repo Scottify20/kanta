@@ -316,6 +316,25 @@ async def list_songs(request: Request) -> list[Dict[str, Any]]:
     return await asyncio.to_thread(library.list_songs, str(request.base_url))
 
 
+@songs_router.get("/songs/stream")
+async def stream_songs(request: Request) -> StreamingResponse:
+    """NDJSON: one JSON array of songs per line, so the UI can fill in while the library is scanned."""
+    base_url = str(request.base_url)
+    batches = library.stream_songs(base_url)
+
+    async def body():
+        try:
+            while True:
+                batch = await asyncio.to_thread(next, batches, None)
+                if batch is None:
+                    return
+                yield json.dumps(batch) + "\n"
+        finally:
+            batches.close()
+
+    return StreamingResponse(body(), media_type="application/x-ndjson")
+
+
 @songs_router.get("/songs/{artist}/{album}/{title}")
 async def get_song_manifest(
     request: Request,

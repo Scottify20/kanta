@@ -76,7 +76,7 @@ for other platforms (`aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`).
 ```bash
 sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf
 cd backend && python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt   # plus torch
-cd ../frontend && npm ci && npm run app:build:linux
+cd ../frontend && npm ci && npm run app:build
 ```
 
 Output: `frontend/src-tauri/target/release/bundle/{deb,appimage}/`. Build on the oldest Ubuntu you want to support.
@@ -90,6 +90,8 @@ Run from `frontend/`:
 | `npm run setup` | Creates `backend/venv` and installs deps (CUDA torch if an NVIDIA GPU is found, else CPU). Use `setup:cpu` / `setup:cuda` to force. |
 | `npm run dev:all` | Backend + `tauri dev` together |
 | `npm run dev:backend` | Backend only |
+| `npm run setup:cuda` | Same, but forces CUDA PyTorch (and ONNX Runtime GPU on Windows) |
+| `npm run app:build:cuda` | Like `app:build`, but refuses to build unless the venv has CUDA PyTorch (run `setup:cuda` first). `backend:build:cuda` builds only the sidecar |
 | `npm run app:build` | Builds the sidecar and the installer for the current OS (nsis / deb / dmg) |
 | `npm run assets:fetch` | Downloads models + ffmpeg into the data dir |
 

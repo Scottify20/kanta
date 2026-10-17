@@ -53,9 +53,12 @@
         (dragEnded)="onDragEnd()"
       />
     } @empty {
-      <p class="empty">Nothing here yet.</p>
+      @if (!library.loading()) { <p class="empty">Nothing here yet.</p> }
     }
   </div>
+  @if (library.loading()) {
+    <p class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading songs…</p>
+  }
 </div>
 
 @if (editingSong(); as song) {

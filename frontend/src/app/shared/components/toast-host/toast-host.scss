@@ -1,5 +1,5 @@
-:host { position: fixed; right: 1rem; bottom: 1rem; z-index: 1200; pointer-events: none; }
-.toast-stack { display: grid; gap: 0.5rem; justify-items: end; }
+:host { position: fixed; top: 1rem; left: 0; right: 0; z-index: 1200; pointer-events: none; }
+.toast-stack { display: grid; gap: 0.5rem; justify-items: center; }
 .toast {
   display: flex; align-items: center; gap: 0.65rem; max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.65rem 0.75rem 0.65rem 0.9rem; border: 1px solid var(--surface-border); border-radius: var(--radius-md);
@@ -12,5 +12,5 @@
 .close { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%; color: rgba(255,255,255,.6); background: transparent; cursor: pointer; transition: background-color var(--motion-fast), color var(--motion-fast); &:hover { color: #fff; background: var(--surface-hover); } }
 .toast.toast-in { animation: toast-in var(--dur-base) var(--ease-out) both; }
 .toast.toast-out { animation: toast-out var(--dur-fast) var(--ease-in-out) forwards; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(0.75rem) scale(0.96); } to { opacity: 1; transform: none; } }
-@keyframes toast-out { to { opacity: 0; transform: translateX(1rem); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-0.75rem) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(-0.5rem); } }

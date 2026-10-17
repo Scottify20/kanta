@@ -1,5 +1,4 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
 
 import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
 
@@ -96,9 +95,16 @@ export class LibraryService {
     if (this.loaded() && !force) return Promise.resolve();
     if (this.inflight) return this.inflight;
     this.loading.set(true);
-    this.inflight = firstValueFrom(this.songsService.listSongs())
-      .then((songs) => {
-        this.songs.set(songs);
+    // A first load shows songs as each batch arrives; a refresh swaps the list once, avoiding flicker.
+    const progressive = !this.loaded();
+    const collected: SongManifest[] = [];
+    this.inflight = this.songsService
+      .streamSongs((batch) => {
+        collected.push(...batch);
+        if (progressive) this.songs.update((songs) => [...songs, ...batch]);
+      }, progressive ? () => this.songs.set([]) : undefined)
+      .then(() => {
+        if (!progressive) this.songs.set(collected);
         this.loaded.set(true);
       })
       .finally(() => {

@@ -35,7 +35,7 @@ button { font: inherit; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 .icon { display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 50%; color: inherit; background: transparent; transition: background-color var(--motion-fast); }
 .icon:hover { background: var(--surface-hover); }
-.pill { position: fixed; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: .55rem; padding: .55rem .9rem; border: 1px solid var(--surface-border); border-radius: 999px; color: #f7f4f1; background: rgba(25,28,31,.92); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-popup); font-size: .82rem; pointer-events: auto; animation: panel-in var(--dur-base) var(--ease-out) both; }
+.pill { position: fixed; top: 1rem; left: 0; right: 0; margin-inline: auto; width: fit-content; display: flex; align-items: center; gap: .55rem; padding: .55rem .9rem; border: 1px solid var(--surface-border); border-radius: 999px; color: #f7f4f1; background: rgba(25,28,31,.92); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow-popup); font-size: .82rem; pointer-events: auto; animation: panel-in var(--dur-base) var(--ease-out) both; }
 .pill:hover { background: rgba(40,44,48,.95); }
 .pill-bar { width: 4rem; height: .3rem; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.15); }
 .pill-bar span { display: block; height: 100%; background: #fff; transition: width var(--dur-slow) var(--ease-out); }

@@ -38,6 +38,7 @@ from app.services.settings import (
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     warm_up_devices()
+    library.warm_up()
     await queue_manager.start()
     try:
         yield

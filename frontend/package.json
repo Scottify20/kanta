@@ -16,10 +16,12 @@
     "dev:backend": "node scripts/kanta.mjs backend",
     "dev:all": "node scripts/kanta.mjs dev",
     "backend:build": "node scripts/kanta.mjs sidecar",
+    "backend:build:cuda": "node scripts/kanta.mjs sidecar --cuda",
     "assets:fetch": "node scripts/kanta.mjs fetch",
     "assets:models": "node scripts/kanta.mjs fetch models",
     "assets:ffmpeg": "node scripts/kanta.mjs fetch ffmpeg",
-    "app:build": "node scripts/kanta.mjs bundle"
+    "app:build": "node scripts/kanta.mjs bundle",
+    "app:build:cuda": "node scripts/kanta.mjs bundle --cuda"
   },
   "private": true,
   "packageManager": "npm@11.19.0",

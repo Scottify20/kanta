@@ -99,6 +99,23 @@ export class SongsService {
     return this.http.get<SongManifest[]>(`${API_URL}/api/songs`);
   }
 
+  // Reads the NDJSON stream; each line is a batch of songs, delivered while the backend is still scanning.
+  async streamSongs(onBatch: (songs: SongManifest[]) => void, onStart?: () => void): Promise<void> {
+    const response = await fetch(`${API_URL}/api/songs/stream`);
+    if (!response.ok || !response.body) throw new Error(`Could not load songs (${response.status})`);
+    onStart?.();
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let pending = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      pending += value ?? '';
+      const lines = pending.split('\n');
+      pending = done ? '' : (lines.pop() ?? '');
+      for (const line of lines) if (line.trim()) onBatch(JSON.parse(line) as SongManifest[]);
+      if (done) return;
+    }
+  }
+
   saveLyricsTiming(
     song: Pick<SongManifest, 'artist' | 'album' | 'title'>,
     offsetMs: number,

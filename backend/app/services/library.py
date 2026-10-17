@@ -30,6 +30,7 @@ SIDECAR_NAME = ".kanta.json"
 MEDIA_PREFIX = "/media-roots/"
 
 _lock = threading.RLock()
+_scan_lock = threading.Lock()
 _song_cache: dict[Path, tuple[tuple, dict[str, Any]]] = {}
 _state: dict[str, Any] = {
     "records": None,  # list[dict] with relative urls
@@ -175,8 +176,8 @@ def absolutize(record: dict[str, Any], base_url: str) -> dict[str, Any]:
     return out
 
 
-def _scan() -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
+def _iter_scan():
+    """Yield song records one at a time so callers can stream them while the disk walk continues."""
     seen: set[tuple[str, str, str]] = set()
     live: set[Path] = set()
     for root_index, root in enumerate(get_output_dirs()):
@@ -203,26 +204,33 @@ def _scan() -> list[dict[str, Any]]:
                         seen.add(key)
                         resolved = song_dir.resolve()
                         live.add(resolved)
-                        records.append(build_song_record(resolved, root, root_index, *key))
+                        yield build_song_record(resolved, root, root_index, *key)
         except OSError:
             continue  # drive removed mid-scan; it is rescanned once it is back
     with _lock:
         for stale in set(_song_cache) - live:
             _song_cache.pop(stale, None)
-    return records
 
 
-def _ensure_records() -> list[dict[str, Any]]:
-    version = (get_settings_version(), tuple(is_available(root) for root in get_output_dirs()))
+def _scan() -> list[dict[str, Any]]:
+    return list(_iter_scan())
+
+
+def _current_version() -> tuple:
+    return (get_settings_version(), tuple(is_available(root) for root in get_output_dirs()))
+
+
+def _fresh_records(version: tuple) -> Optional[list[dict[str, Any]]]:
     with _lock:
         fresh = (
             _state["records"] is not None
             and _state["settings_version"] == version
             and time.monotonic() - _state["built_at"] < LIST_TTL_SECONDS
         )
-        if fresh:
-            return _state["records"]
-    records = _scan()
+        return _state["records"] if fresh else None
+
+
+def _store_records(records: list[dict[str, Any]], version: tuple) -> None:
     with _lock:
         _state.update(
             records=records,
@@ -232,7 +240,50 @@ def _ensure_records() -> list[dict[str, Any]]:
             abs_cache={},
             search=None,
         )
+
+
+def _ensure_records() -> list[dict[str, Any]]:
+    version = _current_version()
+    cached = _fresh_records(version)
+    if cached is not None:
+        return cached
+    # Serialized so the startup warm-up and an early request do not walk the disk twice.
+    with _scan_lock:
+        cached = _fresh_records(version)
+        if cached is not None:
+            return cached
+        records = _scan()
+        _store_records(records, version)
         return records
+
+
+def warm_up() -> None:
+    threading.Thread(target=_ensure_records, name="library-warmup", daemon=True).start()
+
+
+def stream_songs(base_url: str, batch_size: int = 40):
+    """Yield lists of absolutized records; a cold library is delivered as it is scanned."""
+    base = base_url.rstrip("/")
+    version = _current_version()
+    cached = _fresh_records(version)
+    if cached is None:
+        with _scan_lock:
+            cached = _fresh_records(version)
+            if cached is None:
+                records: list[dict[str, Any]] = []
+                batch: list[dict[str, Any]] = []
+                for record in _iter_scan():
+                    records.append(record)
+                    batch.append(absolutize(record, base))
+                    if len(batch) >= batch_size:
+                        yield batch
+                        batch = []
+                if batch:
+                    yield batch
+                _store_records(records, version)
+                return
+    for start in range(0, len(cached), batch_size * 5):
+        yield [absolutize(r, base) for r in cached[start : start + batch_size * 5]]
 
 
 def invalidate(song_dir: Optional[Path] = None) -> None:

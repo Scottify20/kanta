@@ -2,8 +2,9 @@
 //   setup [--cpu|--cuda]  create backend/venv and install Python deps (auto-detects an NVIDIA GPU)
 //   backend               run the API (python run_server.py)
 //   dev                   backend + `tauri dev` together
-//   sidecar               PyInstaller build copied into src-tauri/binaries for this OS
-//   bundle                sidecar + `tauri build` with this OS's installer config
+//   sidecar [--cuda]      PyInstaller build copied into src-tauri/binaries for this OS
+//   bundle [--cuda]       sidecar + `tauri build` with this OS's installer config
+//                         --cuda requires a CUDA PyTorch in backend/venv (`setup --cuda`) and fails otherwise
 //   fetch [models|ffmpeg] download runtime assets into the Kanta data dir
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -81,6 +82,12 @@ function setup(flags) {
     pip(['install', 'torch', '--index-url', 'https://download.pytorch.org/whl/cpu']);
   }
   pip(['install', '-r', 'requirements.txt']);
+  if (wantCuda && win) {
+    // requirements.txt ships the DirectML runtime on Windows; CUDA needs the GPU build instead.
+    console.log('Switching ONNX Runtime to the CUDA build ...');
+    run(venvPython, ['-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-directml'], { cwd: backend });
+    pip(['install', 'onnxruntime-gpu>=1.18']);
+  }
   console.log('\nBackend ready. Next: npm run dev (or npm run dev:backend and npm run tauri:dev in two terminals).');
 }
 
@@ -115,8 +122,14 @@ function hostTriple() {
   return match ? match[1] : fail('rustc not found. Install Rust from https://rustup.rs and reopen your terminal.');
 }
 
-function sidecar() {
+function requireCudaTorch() {
+  const out = capture(venvPython, ['-c', 'import torch;print(torch.version.cuda or "")']);
+  if (!out) fail('The venv has no CUDA build of PyTorch. Run `npm run setup:cuda` first, then build again.');
+}
+
+function sidecar(flags = []) {
   requireVenv();
+  if (flags.includes('--cuda')) requireCudaTorch();
   run(venvTool('pyinstaller'), ['kanta-backend.spec', '--noconfirm'], {
     cwd: backend,
     shell: false,
@@ -129,10 +142,10 @@ function sidecar() {
   console.log(`Sidecar ready: ${target}`);
 }
 
-function bundle() {
+function bundle(flags = []) {
   const config = BUNDLE_CONFIG[platform];
   if (!config) fail(`No bundle config for ${platform}.`);
-  sidecar();
+  sidecar(flags);
   run('npx', ['tauri', 'build', '--config', `src-tauri/${config}`], { cwd: root });
 }
 
@@ -142,6 +155,6 @@ function fetchAssets(args) {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-const commands = { setup: () => setup(rest), backend: () => { const api = startBackend(); api.on('exit', (code) => process.exit(code ?? 0)); }, dev, sidecar, bundle, fetch: () => fetchAssets(rest) };
+const commands = { setup: () => setup(rest), backend: () => { const api = startBackend(); api.on('exit', (code) => process.exit(code ?? 0)); }, dev, sidecar: () => sidecar(rest), bundle: () => bundle(rest), fetch: () => fetchAssets(rest) };
 if (!commands[command]) fail('Usage: kanta.mjs <setup|backend|dev|sidecar|bundle|fetch>');
 commands[command]();

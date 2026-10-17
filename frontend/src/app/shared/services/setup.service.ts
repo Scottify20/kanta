@@ -51,7 +51,7 @@ export class SetupService {
     try {
       next = await firstValueFrom(this.http.get<SetupStatus>(`${API_URL}/api/setup/status`));
     } catch {
-      this.poll(2000); // backend still starting
+      this.poll(500); // backend still starting
       return;
     }
     this.announce(this.status(), next);

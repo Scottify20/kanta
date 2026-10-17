@@ -25,15 +25,6 @@
         <button
           class="icon-button"
           type="button"
-          appTooltip="Browse audio files"
-          aria-label="Browse audio files for the karaoke queue"
-          (click)="browseFiles('karaoke_queue')"
-        >
-          <svg lucideFilePlus [size]="16"></svg>
-        </button>
-        <button
-          class="icon-button"
-          type="button"
           appTooltip="Clear queue"
           aria-label="Clear karaoke queue"
           [disabled]="karaokeItems().length === 0"
@@ -55,8 +46,8 @@
         (drop)="dropExternal($event, 'karaoke_queue')"
       >
         @if (karaokeItems().length === 0) {
-          <li class="drop-zone" [class.is-over]="overQueue() === 'karaoke_queue'" role="button" tabindex="0" (click)="browseFiles('karaoke_queue')" (keydown.enter)="browseFiles('karaoke_queue')">
-            <span>Drop songs here, or click to browse</span>
+          <li class="drop-zone" [class.is-over]="overQueue() === 'karaoke_queue'" >
+            <span>Drop processed songs here</span>
           </li>
         }
 

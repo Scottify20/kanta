@@ -10,6 +10,7 @@ import { SongManifest, songAlbum, songArtist, songTitle } from '../../../../shar
 import { PlaybackActions } from '../../../../shared/services/playback-actions.service';
 import { KANTA_DRAG_TYPE } from '../../../../shared/services/layout.service';
 import { readDragPayload } from '../../../../shared/util/drag-payload';
+import { ToastService } from '../../../../shared/services/toast.service';
 import { QueueItemActions } from '../queue-item-actions/queue-item-actions';
 import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
@@ -45,6 +46,8 @@ export class QueueSheet implements OnInit {
   private readonly actions = inject(PlaybackActions);
   private readonly library = inject(LibraryService);
   private readonly appRef = inject(ApplicationRef);
+  private readonly toast = inject(ToastService);
+  private readonly lastStatus = new Map<string, string>();
   private readonly destroyRef = inject(DestroyRef);
 
   // While true, polled server orders are ignored so optimistic local order is not overwritten.
@@ -85,6 +88,7 @@ export class QueueSheet implements OnInit {
 
   ngOnInit(): void {
     this.queueService.queue$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((snapshot) => {
+      this.announceCompleted([...snapshot.processing_queue, ...snapshot.karaoke_queue]);
       if (!this.processingLocked) this.processingItems.set(snapshot.processing_queue);
       this.uploads.update((list) =>
         list.filter((item) => item.task_id.startsWith(UPLOAD_PREFIX) || !snapshot.processing_queue.some((queued) => queued.task_id === item.task_id)),
@@ -115,6 +119,17 @@ export class QueueSheet implements OnInit {
           : [...snapshot.karaoke_queue],
       );
     });
+  }
+
+  // Toasts once per task when it moves from an in-progress status to completed.
+  private announceCompleted(items: QueueItem[]): void {
+    for (const item of items) {
+      const previous = this.lastStatus.get(item.task_id);
+      if (previous && ACTIVE_STATUSES.has(previous) && item.status === 'completed') {
+        this.toast.success(`Finished processing “${item.title || item.raw_title}”`);
+      }
+      this.lastStatus.set(item.task_id, item.status);
+    }
   }
 
   clearQueue(priority: 1 | 2): void {
