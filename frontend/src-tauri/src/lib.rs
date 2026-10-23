@@ -7,9 +7,22 @@ struct Backend(Mutex<Option<CommandChild>>);
 
 // Release builds ship the FastAPI backend as a sidecar; in dev it is started manually.
 fn start_backend(app: &tauri::AppHandle) {
-  let Ok(command) = app.shell().sidecar("kanta-backend") else {
-    log::warn!("kanta-backend sidecar is not bundled");
-    return;
+  // The CUDA build ships the backend as a resource folder (see tauri.bundle.windows-cuda.conf.json).
+  let folder_exe = app
+    .path()
+    .resource_dir()
+    .ok()
+    .map(|dir| dir.join("backend").join(if cfg!(windows) { "kanta-backend.exe" } else { "kanta-backend" }))
+    .filter(|path| path.is_file());
+  let command = match folder_exe {
+    Some(path) => app.shell().command(path),
+    None => match app.shell().sidecar("kanta-backend") {
+      Ok(command) => command,
+      Err(_) => {
+        log::warn!("kanta-backend is not bundled");
+        return;
+      }
+    },
   };
   match command.env("KANTA_PARENT_PID", std::process::id().to_string()).spawn() {
     Ok((_rx, child)) => *app.state::<Backend>().0.lock().unwrap() = Some(child),

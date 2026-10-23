@@ -91,7 +91,7 @@ Run from `frontend/`:
 | `npm run dev:all` | Backend + `tauri dev` together |
 | `npm run dev:backend` | Backend only |
 | `npm run setup:cuda` | Same, but forces CUDA PyTorch (and ONNX Runtime GPU on Windows) |
-| `npm run app:build:cuda` | Like `app:build`, but refuses to build unless the venv has CUDA PyTorch (run `setup:cuda` first). `backend:build:cuda` builds only the sidecar |
+| `npm run app:build:cuda` | Like `app:build`, but refuses to build unless the venv has CUDA PyTorch (run `setup:cuda` first). On Windows the CUDA backend is built one-folder and bundled as a resource (`tauri.bundle.windows-cuda.conf.json`), because a single exe over 2 GB breaks NSIS. `backend:build:cuda` builds only the backend |
 | `npm run app:build` | Builds the sidecar and the installer for the current OS (nsis / deb / dmg) |
 | `npm run assets:fetch` | Downloads models + ffmpeg into the data dir |
 

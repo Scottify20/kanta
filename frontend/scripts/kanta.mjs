@@ -145,14 +145,23 @@ function requireCudaTorch() {
   if (!cuda) fail(`backend/venv has a CPU-only PyTorch (${version}). Run \`npm run setup:cuda\` first, then build again.`);
 }
 
+// The Windows CUDA backend exceeds NSIS's 2 GB per-file limit as a single exe, so it ships as a
+// one-folder build bundled through bundle.resources instead of a sidecar.
+const usesFolderBuild = (flags) => win && flags.includes('--cuda');
+
 function sidecar(flags = []) {
   requireVenv();
   if (flags.includes('--cuda')) requireCudaTorch();
+  const folder = usesFolderBuild(flags);
   run(venvTool('pyinstaller'), ['kanta-backend.spec', '--noconfirm'], {
     cwd: backend,
     shell: false,
-    env: { ...process.env, KANTA_ONEFILE: '1', KANTA_CUDA: flags.includes('--cuda') ? '1' : '0' },
+    env: { ...process.env, KANTA_ONEFILE: folder ? '0' : '1', KANTA_CUDA: flags.includes('--cuda') ? '1' : '0' },
   });
+  if (folder) {
+    console.log(`Backend folder ready: ${join(backend, 'dist', 'kanta-backend')}`);
+    return;
+  }
   const built = join(backend, 'dist', win ? 'kanta-backend.exe' : 'kanta-backend');
   const target = join(root, 'src-tauri', 'binaries', `kanta-backend-${hostTriple()}${win ? '.exe' : ''}`);
   mkdirSync(dirname(target), { recursive: true });
@@ -161,7 +170,7 @@ function sidecar(flags = []) {
 }
 
 function bundle(flags = []) {
-  const config = BUNDLE_CONFIG[platform];
+  const config = usesFolderBuild(flags) ? 'tauri.bundle.windows-cuda.conf.json' : BUNDLE_CONFIG[platform];
   if (!config) fail(`No bundle config for ${platform}.`);
   sidecar(flags);
   run('npx', ['tauri', 'build', '--config', `src-tauri/${config}`], { cwd: root });
