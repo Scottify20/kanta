@@ -51,7 +51,14 @@
           <strong>{{ hit.title }}</strong>
           <small>{{ hit.subtitle }}</small>
         </span>
-        <button type="button" class="add" aria-label="Add to queue" title="Add to queue" (click)="addToQueue(hit, $event)">+</button>
+        <app-entry-menu
+          [kind]="hit.kind"
+          [popupId]="'search:' + hit.key"
+          group="search"
+          [playlists]="playlists()"
+          [canRename]="false"
+          (action)="onAction(hit, $event)"
+        />
       </li>
     } @empty {
       <li class="empty">No matches</li>

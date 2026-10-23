@@ -60,11 +60,50 @@ class TaskProgressTqdm(tqdm.tqdm):
 tqdm.tqdm = TaskProgressTqdm
 
 
+def _patch_librosa_compat() -> None:
+    """audio-separator still calls librosa.get_duration(filename=...), removed in librosa 1.0.
+
+    Without this every stem write fails (the error is swallowed and no stems are produced).
+    """
+    import inspect
+    import librosa
+
+    if getattr(librosa.get_duration, "_kanta_patched", False):
+        return
+    if "filename" in inspect.signature(librosa.get_duration).parameters:
+        return
+    original = librosa.get_duration
+
+    def get_duration(*args, filename=None, **kwargs):
+        if filename is not None:
+            kwargs.setdefault("path", filename)
+        return original(*args, **kwargs)
+
+    get_duration._kanta_patched = True  # type: ignore[attr-defined]
+    librosa.get_duration = get_duration
+
+
+def _separate(separator: "Separator", input_path: Path, expected: int) -> list[Path]:
+    """Run a separation and return absolute stem paths, failing loudly if nothing was written."""
+    names = separator.separate(str(input_path))
+    paths = [
+        Path(n) if Path(n).is_absolute() else TEMP_DIR / n for n in (names or [])
+    ]
+    missing = [p for p in paths if not p.is_file()]
+    if len(paths) < expected or missing:
+        raise RuntimeError(
+            f"Stem separation produced no usable output for {input_path.name} "
+            f"(got {len(paths)} of {expected} files); see the backend log for the cause."
+        )
+    return paths
+
+
 def _create_separator() -> "Separator":
     # Imported lazily: audio_separator pulls in torch, which would delay API startup by many seconds.
     from audio_separator.separator import Separator
 
     configure_environment()
+    _patch_librosa_compat()
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     seed_bundled_models(get_model_dir())
     separator = Separator(
@@ -165,11 +204,11 @@ def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> 
 
     separator = _create_separator()
     separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = separator.separate(str(input_file_path))
+    pass1_files = _separate(separator, input_file_path, 2)
 
     check_cancellation_and_update(task_id, "Converting stems...", 85)
     convert_and_tag_stem(
-        TEMP_DIR / pass1_files[0],
+        pass1_files[0],
         stems_dir / f"{title} (Instrumental){ext}",
         raw_artist,
         raw_album,
@@ -178,7 +217,7 @@ def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> 
         cover_path,
     )
     convert_and_tag_stem(
-        TEMP_DIR / pass1_files[1],
+        pass1_files[1],
         stems_dir / f"{title} (Vocals){ext}",
         raw_artist,
         raw_album,
@@ -246,12 +285,12 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
     # Pass 1: BS-RoFormer (15% -> 40%)
     TaskProgressTqdm.set_task_context(task_id, 15, 40, "Pass 1/3 (BS-RoFormer)")
     separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = separator.separate(str(input_file_path))
+    pass1_files = _separate(separator, input_file_path, 2)
     vocal_pass2_input = TEMP_DIR / f"vocal_temp_{task_id or 'default'}.wav"
-    shutil.copy(TEMP_DIR / pass1_files[1], vocal_pass2_input)
+    shutil.copy(pass1_files[1], vocal_pass2_input)
 
     convert_and_tag_stem(
-        TEMP_DIR / pass1_files[0],
+        pass1_files[0],
         stems_dir / f"{title} (Instrumental){ext}",
         raw_artist,
         raw_album,
@@ -260,7 +299,7 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
         cover_path,
     )
     convert_and_tag_stem(
-        TEMP_DIR / pass1_files[1],
+        pass1_files[1],
         stems_dir / f"{title} (Vocals){ext}",
         raw_artist,
         raw_album,
@@ -272,9 +311,9 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
     # Pass 2: Lead/Backing Vocals (40% -> 65%)
     TaskProgressTqdm.set_task_context(task_id, 40, 65, "Pass 2/3 (Karaoke Split)")
     separator.load_model("mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt")
-    pass2_files = separator.separate(str(vocal_pass2_input))
+    pass2_files = _separate(separator, vocal_pass2_input, 2)
     convert_and_tag_stem(
-        TEMP_DIR / pass2_files[1],
+        pass2_files[1],
         stems_dir / f"{title} (Lead Vocals){ext}",
         raw_artist,
         raw_album,
@@ -283,7 +322,7 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
         cover_path,
     )
     convert_and_tag_stem(
-        TEMP_DIR / pass2_files[0],
+        pass2_files[0],
         stems_dir / f"{title} (Backing Vocals){ext}",
         raw_artist,
         raw_album,
@@ -297,10 +336,9 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
     # Pass 3: Multi-Instruments (65% -> 90%)
     TaskProgressTqdm.set_task_context(task_id, 65, 90, "Pass 3/3 (Demucs 6s)")
     separator.load_model("htdemucs_6s.yaml")
-    pass3_files = separator.separate(str(input_file_path))
-    for file_name in pass3_files:
-        wav_file = TEMP_DIR / file_name
-        stem_type = file_name.split("_(")[-1].split(")")[0].title()
+    pass3_files = _separate(separator, input_file_path, 1)
+    for wav_file in pass3_files:
+        stem_type = wav_file.name.split("_(")[-1].split(")")[0].title()
         if stem_type.lower() in ["vocals", "instrumental"]:
             if wav_file.exists():
                 wav_file.unlink()

@@ -18,6 +18,19 @@ export interface AppSettings {
   suggested_output_dir?: string;
 }
 
+export interface LyricsProviderInfo {
+  id: string;
+  label: string;
+  description: string;
+  word_level: boolean;
+  enabled: boolean;
+}
+
+export interface LyricsSettings {
+  providers: LyricsProviderInfo[];
+  auto_fetch: boolean;
+}
+
 export interface OutputDirectoryStatus {
   path: string;
   available: boolean;
@@ -51,6 +64,14 @@ export interface BrowseFoldersResponse {
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private readonly http = inject(HttpClient);
+
+  getLyricsSettings(): Observable<LyricsSettings> {
+    return this.http.get<LyricsSettings>(`${API_URL}/api/settings/lyrics`);
+  }
+
+  updateLyricsSettings(update: { providers?: Record<string, boolean>; auto_fetch?: boolean }): Observable<LyricsSettings> {
+    return this.http.put<LyricsSettings>(`${API_URL}/api/settings/lyrics`, update);
+  }
 
   getSettings(): Observable<AppSettings> {
     return this.http.get<AppSettings>(`${API_URL}/api/settings`);

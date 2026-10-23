@@ -21,11 +21,13 @@ interface ReplayGainControls {
   setReplayGainMode?: (value: 'track' | 'album') => void;
 }
 
+import { SettingsLyrics } from '../../shared/components/settings-lyrics/settings-lyrics';
+
 @Component({
   selector: 'app-settings',
   imports: [
     FormsModule, OverlayModule, LucideFolderOpen, LucideMenu, Tooltip,
-    AudioDeviceControls, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
+    AudioDeviceControls, SettingsLyrics, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
   ],
   templateUrl: './settings.html',
   styleUrl: './settings.scss',
@@ -112,7 +114,7 @@ export class Settings {
       },
       error: () => this.error.set('Could not reach the Kanta backend. Make sure it is running, then reopen Settings.'),
     });
-    this.settingsService.getDevices().subscribe({ next: (devices) => this.devices.set(devices), error: () => undefined });
+    this.settingsService.getDevices().pipe(retry({ count: 20, delay: 1500 })).subscribe({ next: (devices) => this.devices.set(devices), error: () => undefined });
   }
 
   setOutputDirs(dirs: string[]): void { this.outputDirs.set(dirs); this.changed(); }

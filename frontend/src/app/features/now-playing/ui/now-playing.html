@@ -143,7 +143,7 @@
             class="circle-button play-button"
             type="button"
             (click)="togglePlayback()"
-            [disabled]="selectedTrackProcessing()"
+            [disabled]="selectedTrackProcessing() || (!selectedTrack() && !selectedManifest())"
             [attr.aria-label]="
               selectedTrackProcessing()
                 ? selectedTrackPaused()
@@ -185,9 +185,25 @@
 
         <!-- Action Buttons and Volume Control-->
         <div class="track-actions">
-          <button class="circle-button" type="button" aria-label="Favorite" appTooltip="Favorite">
-            <svg lucideStar [size]="18"></svg>
-          </button>
+          <app-popup-panel popupId="add-to-playlist" label="Add to playlist" [closeOnContentClick]="true">
+            <button
+              popup-trigger
+              class="circle-button"
+              type="button"
+              aria-label="Add to playlist"
+              appTooltip="Add to playlist"
+              [disabled]="!currentSong()"
+              (click)="playlistsService.refresh()"
+            >
+              <svg lucideListPlus [size]="18"></svg>
+            </button>
+            <app-playlist-picker
+              popup-content
+              [playlists]="playlistsService.playlists()"
+              (pick)="addToPlaylist($event)"
+              (create)="addToNewPlaylist($event)"
+            />
+          </app-popup-panel>
           @if (selectedManifest() && lyricsService.lyrics()) {
             <app-lyrics-timing-control
               [offsetMs]="lyricsOffsetMs()"

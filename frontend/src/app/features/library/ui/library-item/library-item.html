@@ -19,6 +19,9 @@
     } @else {
       <span class="placeholder"></span>
     }
+    @if (progress() !== null) {
+      <span class="progress" [style.--progress]="progress() + '%'" role="progressbar" [attr.aria-valuenow]="progress()" aria-label="Processing"></span>
+    }
     <span class="check" aria-hidden="true"></span>
   </div>
   <div class="text">
@@ -30,38 +33,14 @@
     </div>
     <small>{{ entry().subtitle }}</small>
   </div>
-  <app-popup-panel
+  <app-entry-menu
     class="menu"
+    [kind]="entry().kind"
     [popupId]="'lib:' + entry().key"
     group="library"
-    placement="below"
-    [closeOnContentClick]="true"
-    label="Options"
-  >
-    <button popup-trigger class="menu-trigger" type="button" aria-label="More options">
-      <svg lucideMoreHorizontal [size]="18"></svg>
-    </button>
-    <div popup-content class="menu-list" role="menu">
-      <button type="button" role="menuitem" (click)="action.emit('play')">Play</button>
-      <button type="button" role="menuitem" (click)="action.emit('play-next')">Play next</button>
-      <button type="button" role="menuitem" (click)="action.emit('queue')">Add to queue</button>
-      @if (entry().kind !== 'playlist') {
-        @for (playlist of playlists(); track playlist.id) {
-          <button type="button" role="menuitem" (click)="action.emit($any('playlist:' + playlist.id))">
-            Add to “{{ playlist.name }}”
-          </button>
-        }
-      }
-      @if (entry().kind === 'song') {
-        <button type="button" role="menuitem" (click)="action.emit('edit')">Edit metadata</button>
-      }
-      @if (inPlaylist()) {
-        <button type="button" role="menuitem" (click)="action.emit('remove-from-playlist')">Remove from playlist</button>
-      }
-      @if (entry().kind === 'playlist') {
-        <button type="button" role="menuitem" (click)="action.emit('rename-playlist')">Rename</button>
-        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete-playlist')">Delete playlist</button>
-      }
-    </div>
-  </app-popup-panel>
+    [playlists]="playlists()"
+    [inPlaylist]="inPlaylist()"
+    [revealOnHover]="true"
+    (action)="action.emit($event)"
+  />
 </div>

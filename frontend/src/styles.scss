@@ -171,20 +171,12 @@ app-root {
       }
       small { color: rgba(255, 255, 255, 0.6); }
     }
-    .add {
-      width: 1.8rem;
-      height: 1.8rem;
-      border: 0;
-      border-radius: 50%;
-      color: #fff;
-      background: var(--surface-hover);
-      font-size: 1.1rem;
-      cursor: pointer;
+    .entry-menu-trigger {
       opacity: 0;
-      transition: opacity var(--motion-fast);
     }
-    li:hover .add,
-    li.active .add {
+    li:hover .entry-menu-trigger,
+    li.active .entry-menu-trigger,
+    .popup-open .entry-menu-trigger {
       opacity: 1;
     }
   }

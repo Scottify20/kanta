@@ -3,6 +3,9 @@ import { Component, ElementRef, HostListener, computed, inject, input, signal } 
 import { LucideSearch, LucideX } from '@lucide/angular';
 
 import { LibraryService, SearchHit } from '../../services/library.service';
+import { EntryActionsService } from '../../services/entry-actions.service';
+import { PlaylistsService } from '../../services/playlists.service';
+import { EntryAction, EntryMenu } from '../entry-menu/entry-menu';
 import { songArtist, songTitle } from '../../services/songs.service';
 import { PlaybackActions } from '../../services/playback-actions.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../util/drag-payload';
@@ -10,7 +13,7 @@ import { LayoutService } from '../../services/layout.service';
 
 @Component({
   selector: 'app-search-bar',
-  imports: [CdkConnectedOverlay, CdkOverlayOrigin, LucideSearch, LucideX],
+  imports: [CdkConnectedOverlay, CdkOverlayOrigin, LucideSearch, LucideX, EntryMenu],
   templateUrl: './search-bar.html',
   styleUrl: './search-bar.scss',
 })
@@ -18,6 +21,9 @@ export class SearchBar {
   private readonly library = inject(LibraryService);
   private readonly actions = inject(PlaybackActions);
   private readonly layout = inject(LayoutService);
+  private readonly entryActions = inject(EntryActionsService);
+  private readonly playlistsService = inject(PlaylistsService);
+  readonly playlists = this.playlistsService.playlists;
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly placeholder = input('Search songs, albums, artists');
@@ -31,6 +37,7 @@ export class SearchBar {
     this.focused.set(true);
     // The index is cached; this only hits the network the first time or after changes.
     void this.library.load();
+    this.playlistsService.refresh();
   }
 
   onInput(event: Event): void {
@@ -64,7 +71,8 @@ export class SearchBar {
   onOutside(event: PointerEvent): void {
     const target = event.target as Node;
     const overlayPane = document.querySelector('.kanta-search-pane');
-    if (!this.host.nativeElement.contains(target) && !overlayPane?.contains(target)) {
+    const menuPane = (target as Element).closest?.('.kanta-popup-pane');
+    if (!this.host.nativeElement.contains(target) && !overlayPane?.contains(target) && !menuPane) {
       this.focused.set(false);
     }
   }
@@ -74,10 +82,13 @@ export class SearchBar {
     void this.actions.playSongs(hit.songs);
   }
 
-  addToQueue(hit: SearchHit, event: Event): void {
-    event.stopPropagation();
-    void this.actions.enqueue(hit.songs);
-    this.layout.openQueue();
+  onAction(hit: SearchHit, action: EntryAction): void {
+    const target = { kind: hit.kind, title: hit.title, songs: hit.songs, playlistId: hit.playlistId };
+    if (action === 'play' || action === 'shuffle' || action === 'open' || action === 'edit' || action.startsWith('go-')) {
+      this.focused.set(false);
+    }
+    void this.entryActions.perform(target, action);
+    if (action === 'queue' || action === 'play-next') this.layout.openQueue();
   }
 
   dragStart(event: DragEvent, hit: SearchHit): void {

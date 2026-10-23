@@ -4,12 +4,18 @@
       @if (detail()) { <svg lucideChevronLeft [size]="20"></svg> } @else { <svg lucideMenu [size]="20"></svg> }
     </button>
     <h1>{{ detail() ? detail()!.title : 'Library' }}</h1>
-    @if (!layoutService.sidebarOpen()) { <app-search-bar class="header-search" /> }
+    <div class="header-right">
+      @if (!layoutService.sidebarOpen()) { <app-search-bar class="header-search" /> }
+      <button class="back" type="button" aria-label="Toggle queue" appTooltip="Queue" tooltipPosition="below" [attr.aria-expanded]="layoutService.queueOpen()" (click)="layoutService.toggleQueue()">
+        <svg lucideListMusic [size]="20"></svg>
+      </button>
+    </div>
   </header>
 
-  @if (detail(); as current) {
+  @if (detailEntry(); as current) {
     <app-library-detail-header
       [entry]="current"
+      [artistInfo]="detailBio()"
       (playAll)="detailAction('play')"
       (shuffle)="detailAction('shuffle')"
       (addToQueue)="detailAction('queue')"
@@ -45,6 +51,7 @@
         [layout]="effectiveLayout()"
         [selected]="isSelected(entry)"
         [current]="isCurrent(entry)"
+        [progress]="progressOf(entry)"
         [playlists]="playlists()"
         [inPlaylist]="!!detail()?.playlistId"
         (activate)="activate(entry, i, $event)"
@@ -60,7 +67,3 @@
     <p class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading songs…</p>
   }
 </div>
-
-@if (editingSong(); as song) {
-  <app-metadata-editor [song]="song" (closed)="editingSong.set(null)" (saved)="onSongSaved()" />
-}

@@ -1,7 +1,10 @@
 import asyncio
 import io
 import json
+import os
 import re
+import shutil
+import stat
 import subprocess
 import time
 import uuid
@@ -17,15 +20,17 @@ from app.services.fsutil import safe_upload_name
 from app.services.paths import UPLOADS_DIR, ffmpeg_path, subprocess_kwargs
 from app.services.lyrics import (
     LOCK_FILE,
+    fetch_and_save_lyrics,
     classify_lyrics_file,
     convert_subtitles_to_lrc,
+    lyrics_locked,
     max_offset_ms_for_duration,
     save_lyrics_offset_ms,
     saved_lyrics_level,
 )
 from app.services.metadata import extract_raw_metadata, sanitize_filename
 from app.services.queue_manager import QueueItem, QueuePriority, queue_manager
-from app.services.settings import find_song_directory
+from app.services.settings import find_song_directory, get_lyrics_auto_fetch
 from app.services.tagging import (
     EXTENDED_FIELDS,
     audio_files,
@@ -105,15 +110,45 @@ async def add_to_queue(
         input_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Could not read audio metadata: {exc}") from exc
 
+    duration = await asyncio.to_thread(read_duration, input_path)
     item = QueueItem(
         task_id=task_id,
         file_path=str(input_path.resolve()),
+        duration_seconds=duration,
         priority=QueuePriority(priority),
         status="pending",
         **metadata,
     )
     await queue_manager.add_item(item)
     return {"message": "Added to queue", "item": item.model_dump()}
+
+
+_lyrics_in_flight: set[str] = set()
+
+
+def _refresh_lyrics(song_dir: Path, artist: str, album: str, title: str) -> str:
+    """Fetch lyrics unless word-level ones exist or the user locked them; returns the resulting level."""
+    lyrics_dir = song_dir / "lyrics"
+    level = saved_lyrics_level(lyrics_dir)
+    key = str(song_dir)
+    if level == "word" or lyrics_locked(lyrics_dir) or key in _lyrics_in_flight:
+        return level
+    _lyrics_in_flight.add(key)
+    try:
+        reference = library.reference_audio(song_dir)
+        names = read_display_names(reference) if reference else {}
+        fetch_and_save_lyrics(
+            song_dir,
+            names.get("artist") or artist,
+            names.get("album") or album,
+            names.get("title") or title,
+            sanitize_filename(title),
+            read_duration(reference) if reference else None,
+        )
+    finally:
+        _lyrics_in_flight.discard(key)
+    library.invalidate(song_dir)
+    return saved_lyrics_level(lyrics_dir)
 
 
 @router.post("/add-processed", status_code=202)
@@ -128,9 +163,11 @@ async def add_processed_to_queue(song: ProcessedSongRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=409, detail="Processed song has no playable audio file")
 
     names = await asyncio.to_thread(read_display_names, reference)
+    duration = await asyncio.to_thread(read_duration, reference)
     task_id = str(uuid.uuid4())
     item = QueueItem(
         task_id=task_id,
+        duration_seconds=duration,
         file_path=str(reference.resolve()),
         raw_title=names.get("title") or song.title,
         raw_artist=names.get("artist") or song.artist,
@@ -150,6 +187,10 @@ async def add_processed_to_queue(song: ProcessedSongRequest) -> Dict[str, Any]:
         at_front=song.play_next,
         after_task_id=song.after_task_id,
     )
+    if get_lyrics_auto_fetch():
+        asyncio.create_task(
+            asyncio.to_thread(_refresh_lyrics, song_dir, song.artist, song.album, song.title)
+        )
     return {"message": "Processed song added to Karaoke Queue", "item": item.model_dump()}
 
 
@@ -480,6 +521,17 @@ async def update_song_metadata(
     return record or {"artist": new_artist, "album": new_album, "title": new_title}
 
 
+@songs_router.post("/songs/{artist}/{album}/{title}/lyrics/auto-fetch")
+async def auto_fetch_song_lyrics(artist: str, album: str, title: str) -> Dict[str, Any]:
+    """Pre-playback lyrics upgrade; a no-op when the auto-fetch setting is off."""
+    song_dir, _, _ = _locate(artist, album, title)
+    before = saved_lyrics_level(song_dir / "lyrics")
+    if not get_lyrics_auto_fetch():
+        return {"lyrics_level": before, "changed": False}
+    after = await asyncio.to_thread(_refresh_lyrics, song_dir, artist, album, title)
+    return {"lyrics_level": after, "changed": after != before}
+
+
 @songs_router.put("/songs/{artist}/{album}/{title}/lyrics-timing")
 async def update_lyrics_timing(
     artist: str,
@@ -556,6 +608,34 @@ async def upload_song_cover(
     library.invalidate(song_dir)
     record = await asyncio.to_thread(library.get_song, artist, album, title, str(request.base_url))
     return {"cover_url": record["cover_url"] if record else None}
+
+
+def _delete_song_files(song_dir: Path, root: Path) -> None:
+    def _make_writable(func, path, _exc):
+        # Windows refuses to delete read-only files (and files copied from read-only media).
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    shutil.rmtree(song_dir, onerror=_make_writable)
+    for parent in (song_dir.parent, song_dir.parent.parent):
+        if parent == root or not parent.is_relative_to(root):
+            break
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+
+@songs_router.delete("/songs/{artist}/{album}/{title}")
+async def delete_song(artist: str, album: str, title: str) -> Dict[str, str]:
+    song_dir, root, _ = _locate(artist, album, title)
+    try:
+        await asyncio.to_thread(_delete_song_files, song_dir, root)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not delete song: {exc}") from exc
+    library.invalidate(song_dir)
+    playlists.remove_song((artist, album, title))
+    return {"message": "Song deleted"}
 
 
 @songs_router.delete("/songs/{artist}/{album}/{title}/cover")

@@ -26,7 +26,20 @@ export class FullscreenService {
     this.zone.runOutsideAngular(() => {
       this.document.addEventListener('fullscreenchange', () => this.sync());
       view.addEventListener('resize', () => this.sync());
+      this.document.addEventListener('keydown', (event) => this.onShortcut(event));
     });
+  }
+
+  // Global so fullscreen survives (and can be toggled from) every page, not just now-playing.
+  private onShortcut(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    const typing =
+      !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    const plainF =
+      event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey && !typing;
+    if ((event.key !== 'F11' && !plainF) || event.repeat) return;
+    event.preventDefault();
+    void this.toggle();
   }
 
   async toggle(): Promise<void> {

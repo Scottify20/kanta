@@ -1,0 +1,59 @@
+<app-popup-panel [popupId]="popupId()" [group]="group()" placement="below" [closeOnContentClick]="true" label="Options">
+  <button popup-trigger class="entry-menu-trigger" type="button" aria-label="More options" (click)="view.set('main')">
+    <svg lucideMoreHorizontal [size]="18"></svg>
+  </button>
+  <div popup-content class="entry-menu-list" role="menu">
+    @if (view() === 'playlists') {
+      <button type="button" class="back" data-keep-open (click)="view.set('main')">
+        <svg lucideChevronLeft [size]="16"></svg> Add to playlist
+      </button>
+      <hr />
+      <app-playlist-picker [playlists]="playlists()" (pick)="pickPlaylist($event)" (create)="createPlaylist($event)" />
+    } @else {
+    <button type="button" role="menuitem" (click)="action.emit('play')">Play</button>
+    @if (kind() !== 'song') {
+      <button type="button" role="menuitem" (click)="action.emit('shuffle')">Shuffle</button>
+    }
+    <button type="button" role="menuitem" (click)="action.emit('play-next')">Play next</button>
+    <button type="button" role="menuitem" (click)="action.emit('queue')">Add to queue</button>
+
+    @if (kind() !== 'playlist') {
+      <button type="button" role="menuitem" class="submenu" data-keep-open (click)="view.set('playlists')">
+        <span>Add to playlist</span><svg lucideChevronRight [size]="16"></svg>
+      </button>
+    }
+
+    @switch (kind()) {
+      @case ('song') {
+        <hr />
+        <button type="button" role="menuitem" (click)="action.emit('go-album')">Go to album</button>
+        <button type="button" role="menuitem" (click)="action.emit('go-artist')">Go to artist</button>
+        <button type="button" role="menuitem" (click)="action.emit('edit')">Edit metadata</button>
+        @if (inPlaylist()) {
+          <button type="button" role="menuitem" (click)="action.emit('remove-from-playlist')">Remove from playlist</button>
+        }
+        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete song</button>
+      }
+      @case ('album') {
+        <hr />
+        <button type="button" role="menuitem" (click)="action.emit('open')">View album</button>
+        <button type="button" role="menuitem" (click)="action.emit('go-artist')">Go to artist</button>
+        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete album</button>
+      }
+      @case ('artist') {
+        <hr />
+        <button type="button" role="menuitem" (click)="action.emit('open')">View artist</button>
+        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete artist’s songs</button>
+      }
+      @case ('playlist') {
+        <hr />
+        <button type="button" role="menuitem" (click)="action.emit('open')">View playlist</button>
+        @if (canRename()) {
+          <button type="button" role="menuitem" (click)="action.emit('rename-playlist')">Rename</button>
+        }
+        <button type="button" role="menuitem" class="danger" (click)="action.emit('delete-playlist')">Delete playlist</button>
+      }
+    }
+    }
+  </div>
+</app-popup-panel>

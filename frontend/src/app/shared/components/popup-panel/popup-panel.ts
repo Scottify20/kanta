@@ -70,7 +70,8 @@ export class PopupPanel {
     if (
       this.closeOnContentClick() &&
       target instanceof Element &&
-      target.closest('button,[role="menuitem"]')
+      target.closest('button,[role="menuitem"]') &&
+      !target.closest('[data-keep-open]')
     ) {
       this.popupState.close(this.group(), this.popupId());
     }

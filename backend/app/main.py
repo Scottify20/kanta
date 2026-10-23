@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 import httpx
 
 from app.tasks import tasks_db, TaskCancelledException
+from app.routes.artists import router as artists_router
 from app.routes.playlists import router as playlists_router
 from app.routes.queue import router as queue_router, search_router, songs_router
 from app.routes.setup import router as setup_router
@@ -72,6 +73,7 @@ app.include_router(settings_router)
 app.include_router(fs_router)
 app.include_router(setup_router)
 app.include_router(playlists_router)
+app.include_router(artists_router)
 app.include_router(search_router)
 
 

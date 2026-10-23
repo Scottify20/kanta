@@ -152,9 +152,6 @@
   top: 0.9rem;
   right: 0.9rem;
 }
-:host(.grid) .menu-trigger {
-  background: rgba(0, 0, 0, 0.5);
-}
 
 :host(.list) .item {
   grid-template-columns: 3.25rem minmax(0, 1fr) auto;
@@ -166,57 +163,14 @@
   width: 3.25rem;
 }
 
-.menu-trigger {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border: 0;
-  border-radius: 50%;
-  color: #fff;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    opacity var(--motion-fast),
-    background var(--motion-fast);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
+:host(.processing) .item {
+  opacity: 0.55;
+  filter: grayscale(0.8);
 }
-
-@media (hover: hover) {
-  .menu-trigger {
-    opacity: 0;
-  }
-  .item:hover .menu-trigger,
-  .item:focus-within .menu-trigger {
-    opacity: 1;
-  }
-}
-
-.menu-list {
-  display: grid;
-  min-width: 11rem;
-  padding: 0.35rem;
-
-  button {
-    padding: 0.6rem 0.8rem;
-    border: 0;
-    border-radius: 0.5rem;
-    color: rgba(255, 255, 255, 0.92);
-    background: transparent;
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.85rem;
-    text-align: left;
-    transition: background var(--motion-fast);
-
-    &:hover {
-      background: var(--surface-hover);
-    }
-    &.danger {
-      color: #ff8a80;
-    }
-  }
+.progress {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
+  pointer-events: none;
 }

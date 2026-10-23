@@ -1,0 +1,83 @@
+app-entry-menu {
+  display: inline-flex;
+}
+
+.entry-menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    opacity var(--motion-fast),
+    background var(--motion-fast);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+app-library-item.grid .entry-menu-trigger {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Library items only reveal the trigger while hovered, focused or while its menu is open. */
+@media (hover: hover) {
+  app-entry-menu.reveal .entry-menu-trigger {
+    opacity: 0;
+  }
+  .item:hover app-entry-menu.reveal .entry-menu-trigger,
+  .item:focus-within app-entry-menu.reveal .entry-menu-trigger,
+  app-entry-menu.reveal .popup-open .entry-menu-trigger {
+    opacity: 1;
+  }
+}
+
+.entry-menu-list {
+  display: grid;
+  min-width: 11rem;
+  max-height: min(70vh, 26rem);
+  padding: 0.35rem;
+  overflow-y: auto;
+
+  hr {
+    width: 100%;
+    margin: 0.3rem 0;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  button {
+    padding: 0.6rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    transition: background var(--motion-fast);
+
+    &:hover {
+      background: var(--surface-hover);
+    }
+    &.submenu,
+    &.back {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    &.back {
+      justify-content: flex-start;
+    }
+    &.danger {
+      color: #ff8a80;
+    }
+  }
+}

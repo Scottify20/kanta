@@ -1,0 +1,86 @@
+app-playlist-picker {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 13rem;
+}
+
+.playlist-picker-new {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.15rem;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 0.5rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    font: inherit;
+    font-size: 0.85rem;
+    outline: 0;
+
+    &:focus {
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+  }
+  button {
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+}
+
+.playlist-picker-list {
+  display: grid;
+  max-height: 13rem;
+  overflow-y: auto;
+
+  p {
+    margin: 0;
+    padding: 0.6rem 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+  }
+  button {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.55rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+
+    &:hover {
+      background: var(--surface-hover);
+    }
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    small {
+      color: rgba(255, 255, 255, 0.5);
+    }
+  }
+}
+
+.popup-content > app-playlist-picker {
+  padding: 0.35rem;
+}

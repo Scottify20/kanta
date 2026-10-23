@@ -4,8 +4,9 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
-import httpx
+from app.services.lyrics_providers import PROVIDERS, run_provider
 from app.services.metadata import remove_title_annotations
+from app.services.settings import get_lyrics_providers
 
 logger = logging.getLogger("uvicorn")
 MAX_LYRICS_OFFSET_MS = 10_000
@@ -254,44 +255,31 @@ def fetch_and_save_lyrics(
         None,
     )
 
-    # Attempt 1: Full Query (Title + Artist + Album + Duration)
-    # Attempt 2: Fallback Query without Album constraint
-    attempts = [
-        {"s": query_title, "a": raw_artist, "d": duration_seconds, "al": raw_album},
-        {"s": query_title, "a": raw_artist, "d": duration_seconds},
+    found_line = existing_line_file is not None
+    providers = [
+        provider
+        for provider in PROVIDERS
+        if get_lyrics_providers().get(provider.id)
     ]
-    line_lyrics_found = False
+    if not providers:
+        return "lrc" if found_line else False
 
-    for idx, params in enumerate(attempts, 1):
-        try:
-            response = httpx.get(
-                "https://lyrics-api.boidu.dev/getLyrics",
-                params=params,
-                timeout=10.0,
-            )
-            if response.status_code != 200:
-                continue
+    for provider in providers:
+        # A saved line file can't be improved on by line sources; only keep looking for word-level.
+        if found_line and not provider.word_level:
+            continue
+        payload = run_provider(provider, raw_artist, raw_album, query_title, duration_seconds)
+        if not payload:
+            continue
+        saved = save_lyrics_result(lyrics_dir, save_filename, payload.get("ttml"), payload.get("lrc"))
+        if saved and saved["ttml"]:
+            logger.info("[Lyrics] Saved word-level lyrics from %s for: %s", provider.label, raw_title)
+            return "ttml"
+        if saved and saved["lrc"]:
+            logger.info("[Lyrics] Saved line lyrics from %s for: %s", provider.label, raw_title)
+            found_line = True
 
-            data = response.json()
-
-            saved_result = save_lyrics_result(
-                lyrics_dir,
-                save_filename,
-                data.get("ttml"),
-                data.get("lrc"),
-            )
-            if saved_result and saved_result["ttml"]:
-                print(f"[Lyrics] Successfully saved TTML for: {raw_title}")
-                return "ttml"
-            if saved_result and saved_result["lrc"]:
-                print(f"[Lyrics] Successfully saved LRC for: {raw_title}")
-                line_lyrics_found = True
-
-        except Exception as e:
-            print(f"[Lyrics] Attempt {idx} error for '{raw_title}': {e}")
-
-    if existing_line_file or line_lyrics_found:
+    if found_line:
         return "lrc"
-
-    print(f"[Lyrics] No lyrics found on API for: {raw_title}")
+    logger.info("[Lyrics] No lyrics found for: %s", raw_title)
     return False

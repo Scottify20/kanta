@@ -37,6 +37,8 @@ describe('Settings', () => {
         {
           provide: SettingsService,
           useValue: {
+            getLyricsSettings: () => of({ providers: [], auto_fetch: true }),
+            updateLyricsSettings: () => of({ providers: [], auto_fetch: true }),
             getSettings: () =>
               of({
                 output_dir: '/library/main',

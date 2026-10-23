@@ -95,6 +95,14 @@ export class SongsService {
     );
   }
 
+  // Looks for better lyrics before playback; the backend skips it when auto-fetch is disabled.
+  autoFetchLyrics(song: { artist: string; album: string; title: string }): Observable<{ lyrics_level: LyricsLevel; changed: boolean }> {
+    return this.http.post<{ lyrics_level: LyricsLevel; changed: boolean }>(
+      `${API_URL}/api/songs/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.album)}/${encodeURIComponent(song.title)}/lyrics/auto-fetch`,
+      {},
+    );
+  }
+
   listSongs(): Observable<SongManifest[]> {
     return this.http.get<SongManifest[]>(`${API_URL}/api/songs`);
   }
@@ -160,6 +168,10 @@ export class SongsService {
     return this.http.post<Pick<SongManifest, 'replaygain_track_gain' | 'replaygain_track_peak'>>(
       `${this.songUrl(song)}/replaygain/analyze`, {},
     );
+  }
+
+  deleteSong(song: Pick<SongManifest, 'artist' | 'album' | 'title'>): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(this.songUrl(song));
   }
 
   private songUrl(song: Pick<SongManifest, 'artist' | 'album' | 'title'>): string {

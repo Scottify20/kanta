@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, signal, untracked, DOCUMENT, HostListener } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal, untracked, DOCUMENT } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -10,8 +10,13 @@ import {
   LucideMenu,
   LucidePause,
   LucidePlay,
-  LucideStar,
+  LucideListPlus,
 } from '@lucide/angular';
+import { PlaylistPicker } from '../../shared/components/playlist-picker/playlist-picker';
+import { PopupPanel } from '../../shared/components/popup-panel/popup-panel';
+import { EntryActionsService } from '../../shared/services/entry-actions.service';
+import { LibraryService, songKey } from '../../shared/services/library.service';
+import { PlaylistsService } from '../../shared/services/playlists.service';
 import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
@@ -43,7 +48,9 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
     LucideMenu,
     LucidePause,
     LucidePlay,
-    LucideStar,
+    LucideListPlus,
+    PopupPanel,
+    PlaylistPicker,
   ],
   templateUrl: './ui/now-playing.html',
   styleUrl: './ui/now-playing.scss',
@@ -58,6 +65,29 @@ export class NowPlaying implements OnDestroy {
   private readonly fullscreen = inject(FullscreenService);
   private readonly document = inject(DOCUMENT);
   readonly layout = inject(LayoutService);
+  readonly playlistsService = inject(PlaylistsService);
+  private readonly entryActions = inject(EntryActionsService);
+  private readonly library = inject(LibraryService);
+
+  // The song loaded in the player: its manifest, or the library record matching the selected queue item.
+  readonly currentSong = computed<SongManifest | null>(() => {
+    const manifest = this.selectedManifest();
+    if (manifest) return manifest;
+    const track = this.selectedTrack();
+    if (!track || track.status !== 'completed') return null;
+    const key = songKey({ artist: track.artist, album: track.album, title: track.title });
+    return this.library.songs().find((song) => songKey(song) === key) ?? null;
+  });
+
+  addToPlaylist(id: string): void {
+    const song = this.currentSong();
+    if (song) void this.entryActions.addToPlaylist(id, [song]);
+  }
+
+  addToNewPlaylist(name: string): void {
+    const song = this.currentSong();
+    if (song) void this.entryActions.addToNewPlaylist(name, [song]);
+  }
   readonly lyricsOffsetMs = signal(0);
   readonly selectedTrack = signal<QueueItem | null>(null);
 
@@ -181,15 +211,8 @@ export class NowPlaying implements OnDestroy {
       }
       const updated = snapshot.karaoke_queue.find((item) => item.task_id === current.task_id);
       if (!updated) {
-        if (this.selectedTrackProcessing()) {
-          this.audioPlayer.pause();
-          this.lyricsService.clearLyrics();
-          this.selectedTrack.set(null);
-          this.selectedManifest.set(null);
-          this.coverUrl.set(null);
-          this.queuedAutoplayTaskId = null;
-          this.songsService.setNowPlaying(null);
-        }
+        // The queue entry vanished (cleared or removed elsewhere): reset the whole player.
+        this.stopPlayback();
         return;
       }
       this.selectedTrack.set(updated);
@@ -229,18 +252,7 @@ export class NowPlaying implements OnDestroy {
     return this.fullscreen.toggle();
   }
 
-  @HostListener('document:keydown', ['$event'])
-  onShortcut(event: KeyboardEvent): void {
-    const target = event.target as HTMLElement | null;
-    const typing = !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
-    const isToggle = event.key === 'F11' || (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey && !typing);
-    if (!isToggle || event.repeat) return;
-    event.preventDefault();
-    void this.fullscreen.toggle();
-  }
-
   ngOnDestroy(): void {
-    void this.fullscreen.exit();
     this.clearHideTimer();
   }
 
@@ -462,6 +474,8 @@ export class NowPlaying implements OnDestroy {
     this.loadedSongKey = null;
     this.loadedTaskId = null;
     this.queuedAutoplayTaskId = null;
+    this.lyricsOffsetMs.set(0);
+    this.playbackError.set('');
     this.songsService.setNowPlaying(null);
   }
 
@@ -638,7 +652,7 @@ export class NowPlaying implements OnDestroy {
     }
   }
 
-  private async loadLyrics(song: SongManifest): Promise<void> {
+  private async loadLyrics(song: SongManifest, upgrade = true): Promise<void> {
     this.lyricsService.lyrics.set(null);
     this.lyricsService.lyricsLevel.set('none');
     const wordLyrics = song.lyrics.find(
@@ -652,17 +666,25 @@ export class NowPlaying implements OnDestroy {
     const lineLyrics = song.lyrics.find(
       (file) => file.level === 'line' || file.name.toLowerCase().endsWith('.lrc'),
     );
-    const loadedLineLyrics = lineLyrics
-      ? await this.lyricsService.loadStoredLyrics(lineLyrics.url, 'line')
-      : false;
-    await this.lyricsService.fetchLyrics(
-      {
-        artistName: song.artist,
-        albumName: song.album,
-        trackName: song.title,
-      },
-      loadedLineLyrics,
-    );
+    if (lineLyrics) await this.lyricsService.loadStoredLyrics(lineLyrics.url, 'line');
+    if (upgrade) void this.upgradeLyrics(song);
+  }
+
+  // Runs in the background so playback never waits on the network; reloads the lyrics if something better was found.
+  private async upgradeLyrics(song: SongManifest): Promise<void> {
+    try {
+      const result = await firstValueFrom(this.songsService.autoFetchLyrics(song));
+      if (!result.changed) return;
+      const manifest = await firstValueFrom(
+        this.songsService.getManifest(song.artist, song.album, song.title),
+      );
+      const current = this.selectedManifest();
+      if (!current || current.artist !== song.artist || current.album !== song.album || current.title !== song.title) return;
+      this.selectedManifest.set(manifest);
+      await this.loadLyrics(manifest, false);
+    } catch {
+      // Lyrics upgrades are best-effort.
+    }
   }
 
   private restoreCurrentSong(song: SongManifest): void {

@@ -159,6 +159,36 @@ def default_inference_device() -> str:
     return "cpu"
 
 
+def get_lyrics_providers() -> dict[str, bool]:
+    """Enabled flag per lyrics provider id; providers not mentioned default to enabled."""
+    from app.services.lyrics_providers import PROVIDER_IDS
+
+    stored = _read_settings().get("lyrics_providers")
+    stored = stored if isinstance(stored, dict) else {}
+    return {pid: stored.get(pid) is not False for pid in PROVIDER_IDS}
+
+
+def get_lyrics_auto_fetch() -> bool:
+    return _read_settings().get("lyrics_auto_fetch") is not False
+
+
+def update_lyrics_settings(
+    providers: dict[str, bool] | None = None, auto_fetch: bool | None = None
+) -> dict[str, Any]:
+    from app.services.lyrics_providers import PROVIDER_IDS
+
+    unknown = [pid for pid in (providers or {}) if pid not in PROVIDER_IDS]
+    if unknown:
+        raise ValueError(f"Unknown lyrics provider: {', '.join(unknown)}")
+    settings = dict(_read_settings())
+    if providers is not None:
+        settings["lyrics_providers"] = {**get_lyrics_providers(), **providers}
+    if auto_fetch is not None:
+        settings["lyrics_auto_fetch"] = bool(auto_fetch)
+    _write_settings(settings)
+    return settings
+
+
 def get_inference_device() -> str:
     value = _read_settings().get("inference_device")
     return value if value in INFERENCE_DEVICES else default_inference_device()

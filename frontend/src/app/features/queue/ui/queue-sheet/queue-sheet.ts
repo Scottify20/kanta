@@ -16,6 +16,15 @@ import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
 
+const formatPlaytime = (seconds: number): string => {
+  const total = Math.round(seconds);
+  if (total <= 0) return '';
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours) return `${hours} hr ${minutes} min`;
+  return minutes ? `${minutes} min ${total % 60} s` : `${total} s`;
+};
+
 type QueueName = 'karaoke_queue' | 'processing_queue';
 
 const SERVER_TRUST_DELAY_MS = 1200;
@@ -68,6 +77,12 @@ export class QueueSheet implements OnInit {
 
   readonly karaokeItems = signal<QueueItem[]>([]);
   readonly processingItems = signal<QueueItem[]>([]);
+  readonly karaokeTotalSeconds = computed(() =>
+    this.karaokeItems()
+      .filter((item) => !['failed', 'cancelled', 'cancelling'].includes(item.status))
+      .reduce((sum, item) => sum + (item.duration_seconds ?? 0), 0),
+  );
+  readonly karaokeTotalLabel = computed(() => formatPlaytime(this.karaokeTotalSeconds()));
   readonly processingPaused = signal(false);
   // Optimistic rows for files that are still uploading, so a drop morphs into a queue item immediately.
   private readonly uploads = signal<QueueItem[]>([]);

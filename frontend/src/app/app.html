@@ -27,4 +27,7 @@
 @if (setup.needsSetup()) {
   <app-setup-modal />
 }
+@if (entryActions.editingSong(); as song) {
+  <app-metadata-editor [song]="song" (closed)="entryActions.editingSong.set(null)" (saved)="library.load(true)" />
+}
 <app-toast-host />

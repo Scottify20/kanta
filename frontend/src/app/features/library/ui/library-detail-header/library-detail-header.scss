@@ -39,6 +39,48 @@ p {
   color: rgba(255, 255, 255, 0.65);
 }
 
+.info {
+  min-width: 0;
+}
+
+p.bio {
+  display: -webkit-box;
+  max-width: 44rem;
+  margin: 0 0 0.3rem;
+  overflow: hidden;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+
+  &.expanded {
+    display: block;
+    max-height: 10rem;
+    overflow-y: auto;
+  }
+}
+
+.bio-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  small {
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    color: #fff;
+    background: none;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    text-decoration: underline;
+  }
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

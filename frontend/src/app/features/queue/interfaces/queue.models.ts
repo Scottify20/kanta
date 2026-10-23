@@ -26,6 +26,7 @@ export interface QueueItem {
   lyrics_level?: LyricsLevel;
   lyrics_offset_ms?: number;
   error?: string | null;
+  duration_seconds?: number | null;
 }
 
 export interface QueueSnapshot {

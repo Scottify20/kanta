@@ -128,3 +128,21 @@ def rename_song(old: tuple[str, str, str], new: tuple[str, str, str]) -> None:
             rebuilt.append({**playlist, "songs": songs})
         if changed:
             _save(rebuilt)
+
+
+def remove_song(key: tuple[str, str, str]) -> None:
+    """Drop every reference to a deleted song from all playlists."""
+    with _lock:
+        data = _load()
+        changed = False
+        rebuilt = []
+        for playlist in data:
+            songs = [
+                entry
+                for entry in playlist.get("songs", [])
+                if (entry["artist"], entry["album"], entry["title"]) != key
+            ]
+            changed = changed or len(songs) != len(playlist.get("songs", []))
+            rebuilt.append({**playlist, "songs": songs})
+        if changed:
+            _save(rebuilt)

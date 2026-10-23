@@ -7,15 +7,19 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services import folder_dialog, storage
+from app.services.lyrics_providers import PROVIDERS
 from app.services.settings import (
     device_availability,
     get_default_output_dir,
     get_inference_device,
+    get_lyrics_auto_fetch,
+    get_lyrics_providers,
     get_model_dir,
     get_output_dirs,
     get_output_mode,
     get_output_quality,
     suggested_output_dir,
+    update_lyrics_settings,
     update_settings as save_settings,
 )
 
@@ -43,6 +47,8 @@ def _settings_payload(
         "output_mode": get_output_mode(),
         "output_quality": get_output_quality(),
         "inference_device": get_inference_device(),
+        "lyrics_providers": get_lyrics_providers(),
+        "lyrics_auto_fetch": get_lyrics_auto_fetch(),
         "output_dirs_status": storage.output_dirs_status(list(output_dirs)),
         "suggested_output_dir": str(suggested_output_dir()),
     }
@@ -97,6 +103,37 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
     return _settings_payload(
         updated["default_output_dir"], updated["output_dirs"], updated["model_dir"]
     )
+
+
+class LyricsSettingsUpdate(BaseModel):
+    providers: Optional[dict[str, bool]] = None
+    auto_fetch: Optional[bool] = None
+
+
+@router.get("/lyrics")
+def get_lyrics_settings() -> dict[str, Any]:
+    return {
+        "providers": [
+            {
+                "id": provider.id,
+                "label": provider.label,
+                "description": provider.description,
+                "word_level": provider.word_level,
+                "enabled": get_lyrics_providers()[provider.id],
+            }
+            for provider in PROVIDERS
+        ],
+        "auto_fetch": get_lyrics_auto_fetch(),
+    }
+
+
+@router.put("/lyrics")
+def update_lyrics(update: LyricsSettingsUpdate) -> dict[str, Any]:
+    try:
+        update_lyrics_settings(update.providers, update.auto_fetch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return get_lyrics_settings()
 
 
 class PickFolderRequest(BaseModel):

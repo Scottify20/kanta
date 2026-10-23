@@ -10,6 +10,7 @@
 # Local backend state and generated media
 /backend/.env
 /backend/settings.json
+/backend/artist_info.json
 /backend/queue_state.json
 /backend/temp_processing/
 /backend/separated/

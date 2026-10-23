@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
+import { PlaylistsService } from './playlists.service';
 import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
 
 export interface SongRef {
@@ -27,10 +28,15 @@ export interface ArtistEntry {
   songs: SongManifest[];
 }
 
-export type SearchHit =
-  | { kind: 'song'; key: string; title: string; subtitle: string; coverUrl: string | null; songs: SongManifest[] }
-  | { kind: 'album'; key: string; title: string; subtitle: string; coverUrl: string | null; songs: SongManifest[] }
-  | { kind: 'artist'; key: string; title: string; subtitle: string; coverUrl: string | null; songs: SongManifest[] };
+export interface SearchHit {
+  kind: 'song' | 'album' | 'artist' | 'playlist';
+  key: string;
+  title: string;
+  subtitle: string;
+  coverUrl: string | null;
+  songs: SongManifest[];
+  playlistId?: string;
+}
 
 const normalize = (value: string): string =>
   value
@@ -44,11 +50,14 @@ export const songCover = (song: SongManifest): string | null => song.covers[0]?.
 @Injectable({ providedIn: 'root' })
 export class LibraryService {
   private readonly songsService = inject(SongsService);
+  private readonly playlistsService = inject(PlaylistsService);
 
   readonly songs = signal<SongManifest[]>([]);
   readonly loaded = signal(false);
   readonly loading = signal(false);
   private inflight: Promise<void> | null = null;
+  // Entry key (album:/artist:/playlist:) the library page should open as soon as it is shown.
+  readonly pendingOpen = signal<string | null>(null);
 
   readonly albums = computed<AlbumEntry[]>(() => {
     const groups = new Map<string, AlbumEntry>();
@@ -123,30 +132,24 @@ export class LibraryService {
       if (title.includes(q)) return 1;
       return text.includes(q) ? 2 : -1;
     };
-    const collect = <T>(items: T[], pick: (item: T) => { text: string; title: string }): { item: T; score: number }[] =>
+    const collect = <T extends { text: string; title: string }>(items: T[]): { item: T; score: number }[] =>
       items
-        .map((item) => ({ item, score: rank(pick(item).text, pick(item).title) }))
+        .map((item) => ({ item, score: rank(item.text, item.title) }))
         .filter((hit) => hit.score >= 0)
-        .sort((a, b) => a.score - b.score)
-        .slice(0, limit);
+        .sort((a, b) => a.score - b.score);
 
-    const artists = collect(index.artists, (e) => e).map(({ item }): SearchHit => ({
-      kind: 'artist',
-      key: `artist:${item.artist.key}`,
-      title: item.artist.displayArtist,
-      subtitle: `Artist • ${item.artist.songs.length} songs`,
-      coverUrl: item.artist.coverUrl,
-      songs: item.artist.songs,
-    }));
-    const albums = collect(index.albums, (e) => e).map(({ item }): SearchHit => ({
-      kind: 'album',
-      key: `album:${item.album.key}`,
-      title: item.album.displayAlbum,
-      subtitle: `Album • ${item.album.displayArtist}`,
-      coverUrl: item.album.coverUrl,
-      songs: item.album.songs,
-    }));
-    const songs = collect(index.songs, (e) => e).map(({ item }): SearchHit => ({
+    const songIndex = new Map(this.songs().map((song) => [songKey(song), song]));
+    const playlists = this.playlistsService.playlists().map((playlist) => {
+      const name = normalize(playlist.name);
+      return { playlist, text: name, title: name };
+    });
+
+    const songs = collect(index.songs);
+    const artists = collect(index.artists);
+    const albums = collect(index.albums);
+    const matchedPlaylists = collect(playlists);
+
+    const songHits = songs.map(({ item }): SearchHit => ({
       kind: 'song',
       key: `song:${songKey(item.song)}`,
       title: songTitle(item.song),
@@ -154,6 +157,50 @@ export class LibraryService {
       coverUrl: songCover(item.song),
       songs: [item.song],
     }));
-    return [...songs.slice(0, 5), ...albums.slice(0, 3), ...artists.slice(0, 3)];
+    const artistHits = artists.map(({ item }): SearchHit => ({
+      kind: 'artist',
+      key: `artist:${item.artist.key}`,
+      title: item.artist.displayArtist,
+      subtitle: `Artist • ${item.artist.songs.length} ${item.artist.songs.length === 1 ? 'song' : 'songs'}`,
+      coverUrl: item.artist.coverUrl,
+      songs: item.artist.songs,
+    }));
+    const albumHits = albums.map(({ item }): SearchHit => ({
+      kind: 'album',
+      key: `album:${item.album.key}`,
+      title: item.album.displayAlbum,
+      subtitle: `Album • ${item.album.displayArtist}`,
+      coverUrl: item.album.coverUrl,
+      songs: item.album.songs,
+    }));
+    const playlistHits = matchedPlaylists.map(({ item }): SearchHit => {
+      const members = item.playlist.songs
+        .map((ref) => songIndex.get(songKey(ref)))
+        .filter((song): song is SongManifest => !!song);
+      return {
+        kind: 'playlist',
+        key: `playlist:${item.playlist.id}`,
+        title: item.playlist.name,
+        subtitle: `Playlist • ${item.playlist.song_count} ${item.playlist.song_count === 1 ? 'song' : 'songs'}`,
+        coverUrl: item.playlist.cover_urls[0] ?? null,
+        songs: members,
+        playlistId: item.playlist.id,
+      };
+    });
+
+    // Songs also match on artist/album text, so only count songs whose own title matches.
+    // Artist, album and playlist groups matching by name more often than songs lead the results.
+    const titleMatches = songs.filter(({ score }) => score < 2).length;
+    const groups: { hits: SearchHit[]; matches: number; cap: number; order: number }[] = [
+      { hits: songHits, matches: titleMatches, cap: 5, order: 0 },
+      { hits: artistHits, matches: artists.length, cap: 3, order: 1 },
+      { hits: albumHits, matches: albums.length, cap: 3, order: 2 },
+      { hits: playlistHits, matches: playlistHits.length, cap: 3, order: 3 },
+    ];
+    const leading = groups
+      .filter((group) => group.order > 0 && group.matches > titleMatches)
+      .sort((a, b) => b.matches - a.matches || a.order - b.order);
+    const rest = groups.filter((group) => !leading.includes(group));
+    return [...leading, ...rest].flatMap((group) => group.hits.slice(0, Math.min(group.cap, limit)));
   }
 }

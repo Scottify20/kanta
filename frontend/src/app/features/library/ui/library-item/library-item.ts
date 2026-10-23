@@ -1,23 +1,13 @@
 import { Component, computed, input, output } from '@angular/core';
-import { LucideMoreHorizontal } from '@lucide/angular';
-
-import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
+import { EntryAction, EntryMenu } from '../../../../shared/components/entry-menu/entry-menu';
 import { Playlist } from '../../../../shared/services/playlists.service';
 import { LibraryEntry } from '../../data/library-entries';
 
-export type EntryAction =
-  | 'play'
-  | 'play-next'
-  | 'queue'
-  | 'edit'
-  | 'delete-playlist'
-  | 'rename-playlist'
-  | 'remove-from-playlist'
-  | `playlist:${string}`;
+export type { EntryAction };
 
 @Component({
   selector: 'app-library-item',
-  imports: [PopupPanel, LucideMoreHorizontal],
+  imports: [EntryMenu],
   templateUrl: './library-item.html',
   styleUrl: './library-item.scss',
   host: {
@@ -25,6 +15,7 @@ export type EntryAction =
     '[class.list]': "layout() === 'list'",
     '[class.selected]': 'selected()',
     '[class.current]': 'current()',
+    '[class.processing]': 'progress() !== null',
   },
 })
 export class LibraryItem {
@@ -34,6 +25,8 @@ export class LibraryItem {
   readonly current = input(false);
   readonly playlists = input<Playlist[]>([]);
   readonly inPlaylist = input(false);
+  // Percent complete while this entry's songs are still being processed; null otherwise.
+  readonly progress = input<number | null>(null);
 
   readonly activate = output<MouseEvent | KeyboardEvent>();
   readonly action = output<EntryAction>();

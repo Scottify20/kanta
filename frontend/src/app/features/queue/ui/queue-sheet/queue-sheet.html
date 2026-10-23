@@ -20,6 +20,9 @@
           [class.is-collapsed]="karaokeCollapsed()"
         ></svg>
         <h2>Karaoke Queue</h2>
+        @if (karaokeTotalLabel(); as total) {
+          <span class="queue-total" aria-label="Total playtime">{{ total }}</span>
+        }
       </div>
       <div class="section-actions" (click)="$event.stopPropagation()">
         <button

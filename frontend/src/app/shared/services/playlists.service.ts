@@ -3,7 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { API_URL } from './settings.service';
-import { SongRef } from './library.service';
+import type { SongRef } from './library.service';
 
 export interface Playlist {
   id: string;

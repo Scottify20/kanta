@@ -1,0 +1,25 @@
+<form class="playlist-picker-new" (submit)="submit($event)">
+  <input
+    type="text"
+    placeholder="New playlist name"
+    aria-label="New playlist name"
+    maxlength="80"
+    autocomplete="off"
+    [value]="name()"
+    (input)="name.set($any($event.target).value)"
+    (keydown)="$event.stopPropagation()"
+  />
+  <button type="submit" aria-label="Create playlist and add" [disabled]="!name().trim()">
+    <svg lucidePlus [size]="16"></svg>
+  </button>
+</form>
+<div class="playlist-picker-list" role="group" aria-label="Existing playlists">
+  @for (playlist of playlists(); track playlist.id) {
+    <button type="button" role="menuitem" (click)="pick.emit(playlist.id)">
+      <span>{{ playlist.name }}</span>
+      <small>{{ playlist.song_count }}</small>
+    </button>
+  } @empty {
+    <p>No playlists yet</p>
+  }
+</div>

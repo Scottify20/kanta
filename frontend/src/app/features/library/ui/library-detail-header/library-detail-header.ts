@@ -1,6 +1,7 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { LucidePlay, LucideListPlus, LucideShuffle } from '@lucide/angular';
 
+import { ArtistInfo } from '../../../../shared/services/artist-info.service';
 import { LibraryEntry, formatRuntime } from '../../data/library-entries';
 
 @Component({
@@ -11,6 +12,8 @@ import { LibraryEntry, formatRuntime } from '../../data/library-entries';
 })
 export class LibraryDetailHeader {
   readonly entry = input.required<LibraryEntry>();
+  readonly artistInfo = input<ArtistInfo | null>(null);
+  readonly bioExpanded = signal(false);
   readonly playAll = output<void>();
   readonly shuffle = output<void>();
   readonly addToQueue = output<void>();

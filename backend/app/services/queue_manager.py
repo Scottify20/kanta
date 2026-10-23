@@ -52,6 +52,7 @@ class QueueItem(BaseModel):
     source_type: str = "uploaded"
     created_at: float = Field(default_factory=time.time)
     position: int = 0
+    duration_seconds: Optional[float] = None
 
 
 class QueueManager:
