@@ -11,6 +11,8 @@
 /backend/.env
 /backend/settings.json
 /backend/artist_info.json
+/backend/playlists.json
+/backend/uploads/
 /backend/queue_state.json
 /backend/temp_processing/
 /backend/separated/
