@@ -42,7 +42,7 @@
     braccato-lyrics {
       height: 65vh;
       padding-left: 2rem;
-      --blyrics-font-size: clamp(2.75rem, 3.2vw, 3.5rem);
+      --blyrics-font-size: calc(clamp(2.75rem, 3.2vw, 3.5rem) * var(--lyrics-scale, 1));
       --blyrics-line-height: 1.5;
     }
   }
@@ -82,7 +82,7 @@
     padding-left: 3rem;
     text-align: left;
     pointer-events: auto;
-    --blyrics-font-size: clamp(2.75rem, 2.75vw, 3rem);
+    --blyrics-font-size: calc(clamp(2.75rem, 2.75vw, 3rem) * var(--lyrics-scale, 1));
     --blyrics-line-height: 1.25;
     --blyrics-font-family: Inter, sans-serif;
     --blyrics-font-weight: 600;

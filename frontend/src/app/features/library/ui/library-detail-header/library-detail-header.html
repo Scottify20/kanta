@@ -24,6 +24,9 @@
     <button type="button" (click)="shuffle.emit()">
       <svg lucideShuffle [size]="16"></svg> Shuffle and Play
     </button>
+    <button type="button" (click)="playNext.emit()">
+      <svg lucideSkipForward [size]="16"></svg> Play Next
+    </button>
     <button type="button" (click)="addToQueue.emit()">
       <svg lucideListPlus [size]="16"></svg> Add to Queue
     </button>

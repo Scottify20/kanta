@@ -301,12 +301,15 @@ export class Library {
     }
   }
 
-  detailAction(action: 'play' | 'shuffle' | 'queue'): void {
+  detailAction(action: 'play' | 'shuffle' | 'queue' | 'next'): void {
     const detail = this.detail();
     if (!detail) return;
     let songs = this.playable(detail.songs);
     if (action === 'shuffle') songs = [...songs].sort(() => Math.random() - 0.5);
     if (action === 'queue') void this.run(() => this.actions.enqueue(songs));
+    else if (action === 'next') {
+      void this.run(() => this.actions.enqueue(songs, this.songsService.currentQueueTaskId(), true));
+    }
     else void this.run(() => this.actions.playSongs(songs));
   }
 

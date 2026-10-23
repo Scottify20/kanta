@@ -115,14 +115,24 @@
             {{ selectedTrack()?.raw_title ?? selectedManifest()?.display_title ?? selectedManifest()?.title ?? 'No track selected' }}
           </h1>
           <p class="track-artist-album">
-            {{
+            @let artistName =
               selectedTrack()?.raw_artist ??
-                selectedManifest()?.display_artist ??
-                selectedManifest()?.artist ??
-                'Drop an audio file into the queue'
-            }}
-            @if (selectedTrack()?.raw_album ?? selectedManifest()?.display_album ?? selectedManifest()?.album) {
-              <span>•</span> {{ selectedTrack()?.raw_album ?? selectedManifest()?.display_album ?? selectedManifest()?.album }}
+              selectedManifest()?.display_artist ??
+              selectedManifest()?.artist;
+            @let albumName =
+              selectedTrack()?.raw_album ?? selectedManifest()?.display_album ?? selectedManifest()?.album;
+            @if (artistName && currentSong()) {
+              <button type="button" class="track-link" (click)="openInLibrary('go-artist')">{{ artistName }}</button>
+            } @else {
+              {{ artistName ?? 'Drop an audio file into the queue' }}
+            }
+            @if (albumName) {
+              <span>•</span>
+              @if (currentSong()) {
+                <button type="button" class="track-link" (click)="openInLibrary('go-album')">{{ albumName }}</button>
+              } @else {
+                {{ albumName }}
+              }
             }
           </p>
         </div>
@@ -204,6 +214,7 @@
               (create)="addToNewPlaylist($event)"
             />
           </app-popup-panel>
+          <app-lyrics-size-control />
           @if (selectedManifest() && lyricsService.lyrics()) {
             <app-lyrics-timing-control
               [offsetMs]="lyricsOffsetMs()"

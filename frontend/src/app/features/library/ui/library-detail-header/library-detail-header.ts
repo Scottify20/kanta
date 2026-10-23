@@ -1,12 +1,12 @@
 import { Component, computed, input, output, signal } from '@angular/core';
-import { LucidePlay, LucideListPlus, LucideShuffle } from '@lucide/angular';
+import { LucidePlay, LucideListPlus, LucideShuffle, LucideSkipForward } from '@lucide/angular';
 
 import { ArtistInfo } from '../../../../shared/services/artist-info.service';
 import { LibraryEntry, formatRuntime } from '../../data/library-entries';
 
 @Component({
   selector: 'app-library-detail-header',
-  imports: [LucidePlay, LucideListPlus, LucideShuffle],
+  imports: [LucidePlay, LucideListPlus, LucideShuffle, LucideSkipForward],
   templateUrl: './library-detail-header.html',
   styleUrl: './library-detail-header.scss',
 })
@@ -17,6 +17,7 @@ export class LibraryDetailHeader {
   readonly playAll = output<void>();
   readonly shuffle = output<void>();
   readonly addToQueue = output<void>();
+  readonly playNext = output<void>();
 
   readonly covers = computed(() => {
     const covers = this.entry().covers;

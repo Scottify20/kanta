@@ -90,7 +90,12 @@ async def add_songs(playlist_id: str, body: AddSongs, request: Request) -> Dict[
     entries = [s.model_dump() for s in body.songs]
 
     def change(playlist: dict) -> None:
-        playlist["songs"].extend(entries)
+        seen = {(s["artist"], s["album"], s["title"]) for s in playlist["songs"]}
+        for entry in entries:
+            key = (entry["artist"], entry["album"], entry["title"])
+            if key not in seen:
+                seen.add(key)
+                playlist["songs"].append(entry)
 
     return _render(await _run(playlists.mutate, playlist_id, change), request)
 

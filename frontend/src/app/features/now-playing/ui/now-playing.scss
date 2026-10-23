@@ -331,6 +331,20 @@
     span {
       padding: 0 0.3rem;
     }
+    .track-link {
+      padding: 0;
+      border: 0;
+      color: inherit;
+      background: none;
+      font: inherit;
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        color: #fff;
+        text-decoration: underline;
+      }
+    }
   }
 }
 

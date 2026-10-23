@@ -14,6 +14,26 @@
     <svg lucideUpload [size]="21"></svg><strong>Drop a lyrics file</strong><span>or choose .lrc, .ttml, .srt, .vtt · up to 5 MB</span>
     <label class="choose-button">Choose file<input type="file" accept=".lrc,.ttml,.srt,.vtt" (change)="onPicked($event)" [disabled]="busy()" /></label>
   </div>
+  <div class="refetch">
+    <button type="button" class="refetch-button" (click)="refetch()" [disabled]="busy() || searching()"><svg lucideRefreshCw [size]="16" [class.spinning]="searching()"></svg>{{ searching() ? 'Searching providers…' : 'Re-fetch lyrics' }}</button>
+    <span>Search the enabled providers again for better lyrics.</span>
+  </div>
+  @if (notFound()) { <p class="status-note">No lyrics were found by the enabled providers.</p> }
+  @if (candidate(); as found) {
+    <div class="candidate" role="group" aria-label="Fetched lyrics">
+      <p><strong>{{ found.level }}-level lyrics</strong> found on {{ found.provider }}. {{ song().lyrics?.length ? 'Replace the existing lyrics with these?' : 'Use these lyrics?' }}</p>
+      <div class="candidate-actions">
+        <button type="button" class="secondary" (click)="previewing.set(!previewing())"><svg lucideEye [size]="15"></svg>{{ previewing() ? 'Hide preview' : 'Preview' }}</button>
+        <button type="button" class="secondary" (click)="discardCandidate()" [disabled]="busy()">Keep current</button>
+        <button type="button" class="primary" (click)="replaceWithCandidate()" [disabled]="busy()">{{ song().lyrics?.length ? 'Replace' : 'Use lyrics' }}</button>
+      </div>
+      @if (previewing()) {
+        <ol class="preview" aria-label="Lyrics preview">
+          @for (line of previewLines(); track $index) { <li><time>{{ line.time }}</time><span>{{ line.text }}</span></li> }
+        </ol>
+      }
+    </div>
+  }
   @if (busy()) { <p class="status-note">Updating lyrics…</p> }
   @if (error()) { <p class="panel-error" role="alert">{{ error() }}</p> }
 </section>

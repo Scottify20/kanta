@@ -1,0 +1,64 @@
+<div class="rows">
+  <label class="row">
+    <input class="switch" type="checkbox" role="switch" [checked]="autoFetch()" (change)="setAutoFetch($any($event.target).checked)" />
+    <span class="text">
+      <strong>Fetch lyrics automatically</strong>
+      <small>When a song is added to the karaoke queue or about to play without word-level lyrics, look for better ones.</small>
+    </span>
+  </label>
+  <div class="row providers-row">
+    <span class="text">
+      <strong>Lyrics providers</strong>
+      <small>{{ enabledCount() }} of {{ providers().length }} enabled. Providers are searched from top to bottom.</small>
+    </span>
+    <button class="manage" type="button" (click)="open.set(true)"><svg lucideListOrdered [size]="16"></svg>Manage</button>
+  </div>
+</div>
+@if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+
+<ng-template #modalTpl>
+  <div class="modal-backdrop" role="presentation" (click)="open.set(false)">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="lyrics-providers-title" (click)="$event.stopPropagation()" (keydown.escape)="open.set(false)">
+      <header>
+        <div>
+          <h2 id="lyrics-providers-title">Lyrics providers</h2>
+          <p>Drag to reorder. Higher providers are searched first, so keep word-level sources at the top.</p>
+        </div>
+        <button class="icon-button" type="button" aria-label="Close lyrics providers" (click)="open.set(false)"><svg lucideX [size]="18"></svg></button>
+      </header>
+      <div class="list" cdkDropList (cdkDropListDropped)="drop($event)">
+        @for (provider of providers(); track provider.id) {
+          <div class="provider" cdkDrag cdkDragLockAxis="y" [class.disabled]="!provider.enabled">
+            <div class="provider-main">
+              <span class="handle" cdkDragHandle aria-label="Drag to reorder"><svg lucideGripVertical [size]="18"></svg></span>
+              <span class="text">
+                <strong>{{ provider.label }}<em [class.word]="provider.word_level">{{ provider.word_level ? 'Word-level' : 'Line-level' }}</em></strong>
+                <small>{{ provider.description }}</small>
+              </span>
+              @if (provider.key_fields.length) {
+                <button class="icon-button" type="button" [attr.aria-expanded]="expanded() === provider.id" [attr.aria-label]="provider.label + ' API key settings'" (click)="toggleKeys(provider.id)">
+                  <svg lucideKeyRound [size]="17" [class.missing]="provider.key_required && !hasKeys(provider)"></svg>
+                </button>
+              }
+              <input class="switch" type="checkbox" role="switch" [attr.aria-label]="'Use ' + provider.label" [checked]="provider.enabled" (change)="setProvider(provider, $any($event.target).checked)" />
+            </div>
+            @if (expanded() === provider.id) {
+              <div class="keys">
+                <p>
+                  {{ provider.key_required ? 'Required: this provider is skipped until these are filled in.' : 'Optional: raises the rate limit.' }}
+                  @if (provider.key_url) { <a [href]="provider.key_url" target="_blank" rel="noopener noreferrer">Get an API key <svg lucideExternalLink [size]="13"></svg></a> }
+                </p>
+                @for (field of provider.key_fields; track field.id) {
+                  <label>
+                    <span>{{ field.label }}</span>
+                    <input type="text" autocomplete="off" spellcheck="false" [attr.aria-label]="provider.label + ' ' + field.label" [value]="field.value" (change)="setKey(provider, field.id, $any($event.target).value)" />
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</ng-template>

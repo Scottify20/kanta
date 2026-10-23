@@ -168,21 +168,59 @@ def get_lyrics_providers() -> dict[str, bool]:
     return {pid: stored.get(pid) is not False for pid in PROVIDER_IDS}
 
 
+def get_lyrics_provider_order() -> list[str]:
+    """Provider ids in lookup priority; unknown ids are dropped and new providers keep their default slot."""
+    from app.services.lyrics_providers import PROVIDER_IDS
+
+    stored = _read_settings().get("lyrics_provider_order")
+    order = [pid for pid in stored if pid in PROVIDER_IDS] if isinstance(stored, list) else []
+    order = list(dict.fromkeys(order))
+    for index, pid in enumerate(PROVIDER_IDS):
+        if pid not in order:
+            order.insert(min(index, len(order)), pid)
+    return order
+
+
+def get_lyrics_provider_keys() -> dict[str, dict[str, str]]:
+    stored = _read_settings().get("lyrics_provider_keys")
+    return stored if isinstance(stored, dict) else {}
+
+
 def get_lyrics_auto_fetch() -> bool:
     return _read_settings().get("lyrics_auto_fetch") is not False
 
 
 def update_lyrics_settings(
-    providers: dict[str, bool] | None = None, auto_fetch: bool | None = None
+    providers: dict[str, bool] | None = None,
+    auto_fetch: bool | None = None,
+    order: list[str] | None = None,
+    keys: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    from app.services.lyrics_providers import PROVIDER_IDS
+    from app.services.lyrics_providers import PROVIDER_IDS, PROVIDERS_BY_ID
 
-    unknown = [pid for pid in (providers or {}) if pid not in PROVIDER_IDS]
+    unknown = [
+        pid
+        for pid in [*(providers or {}), *(order or []), *(keys or {})]
+        if pid not in PROVIDER_IDS
+    ]
     if unknown:
-        raise ValueError(f"Unknown lyrics provider: {', '.join(unknown)}")
+        raise ValueError(f"Unknown lyrics provider: {', '.join(dict.fromkeys(unknown))}")
     settings = dict(_read_settings())
     if providers is not None:
         settings["lyrics_providers"] = {**get_lyrics_providers(), **providers}
+    if order is not None:
+        rest = [pid for pid in get_lyrics_provider_order() if pid not in order]
+        settings["lyrics_provider_order"] = [*dict.fromkeys(order), *rest]
+    if keys is not None:
+        stored = {pid: dict(values) for pid, values in get_lyrics_provider_keys().items()}
+        for pid, values in keys.items():
+            allowed = {field.id for field in PROVIDERS_BY_ID[pid].key_fields}
+            cleaned = {k: v.strip() for k, v in values.items() if k in allowed and v.strip()}
+            if cleaned:
+                stored[pid] = cleaned
+            else:
+                stored.pop(pid, None)
+        settings["lyrics_provider_keys"] = stored
     if auto_fetch is not None:
         settings["lyrics_auto_fetch"] = bool(auto_fetch)
     _write_settings(settings)

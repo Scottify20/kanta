@@ -1,0 +1,24 @@
+<app-popup-panel popupId="lyrics-size" label="Lyrics size">
+  <button popup-trigger class="circle-button" type="button" aria-label="Adjust lyrics size">
+    <svg lucideALargeSmall [size]="20"></svg>
+  </button>
+  <section popup-content class="lyrics-size-popover">
+    <header>
+      <strong>Lyrics size</strong>
+      <output>{{ size.scale() * 100 | number: '1.0-0' }}%</output>
+    </header>
+    <input
+      type="range"
+      [min]="size.min"
+      [max]="size.max"
+      [step]="size.step"
+      [value]="size.scale()"
+      (input)="update($event)"
+      aria-label="Lyrics size slider"
+    />
+    <button class="lyrics-size-reset" type="button" [disabled]="size.scale() === 1" (click)="size.set(1)">
+      <svg lucideRotateCcw [size]="14"></svg>
+      Reset size
+    </button>
+  </section>
+</app-popup-panel>

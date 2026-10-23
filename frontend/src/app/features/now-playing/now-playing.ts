@@ -19,6 +19,7 @@ import { LibraryService, songKey } from '../../shared/services/library.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
 import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
+import { LyricsSizeControl } from './ui/lyrics-size-control/lyrics-size-control';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
 import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
 import { findPlaybackStems } from '../../shared/services/playback-actions.service';
@@ -39,6 +40,7 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
     LyricsStage,
     SearchBar,
     LyricsTimingControl,
+    LyricsSizeControl,
     StemVolumeControl,
     LucideChevronLeft,
     LucideChevronRight,
@@ -78,6 +80,12 @@ export class NowPlaying implements OnDestroy {
     const key = songKey({ artist: track.artist, album: track.album, title: track.title });
     return this.library.songs().find((song) => songKey(song) === key) ?? null;
   });
+
+  openInLibrary(action: 'go-artist' | 'go-album'): void {
+    const song = this.currentSong();
+    if (!song) return;
+    void this.entryActions.perform({ kind: 'song', title: song.title, songs: [song] }, action);
+  }
 
   addToPlaylist(id: string): void {
     const song = this.currentSong();
@@ -674,7 +682,7 @@ export class NowPlaying implements OnDestroy {
   private async upgradeLyrics(song: SongManifest): Promise<void> {
     try {
       const result = await firstValueFrom(this.songsService.autoFetchLyrics(song));
-      if (!result.changed) return;
+      if (!result.changed && result.lyrics_level === this.lyricsService.lyricsLevel()) return;
       const manifest = await firstValueFrom(
         this.songsService.getManifest(song.artist, song.album, song.title),
       );

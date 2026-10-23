@@ -1,0 +1,62 @@
+.circle-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.85rem;
+  height: 2.85rem;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.lyrics-size-popover {
+  display: grid;
+  width: min(16rem, calc(100vw - 3rem));
+  padding: 1.5rem;
+  gap: 1.25rem;
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  output {
+    color: var(--color-accent);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+  }
+
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--color-accent);
+  }
+}
+
+.lyrics-size-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}

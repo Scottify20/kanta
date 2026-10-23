@@ -6,6 +6,7 @@ import {
 } from '@braccato/provider-blyrics';
 import { parseLRC, parseTTMLContent } from '@braccato/parsers';
 import type { Lyric } from '@braccato/parsers';
+import { stripLyricMetadata } from '../util/lyrics-metadata';
 import type { LyricsLevel } from './songs.service';
 
 export interface SongQuery {
@@ -136,9 +137,9 @@ export class LyricsService {
       }
       const text = await response.text();
       if (this.requestController !== requestController) return false;
-      const lyrics = url.toLowerCase().endsWith('.ttml')
-        ? parseTTMLContent(text).lyrics
-        : parseLRC(text, 0);
+      const lyrics = stripLyricMetadata(
+        url.toLowerCase().endsWith('.ttml') ? parseTTMLContent(text).lyrics : parseLRC(text, 0),
+      );
       this.lyrics.set(lyrics.length ? lyrics : null);
       this.lyricsLevel.set(lyrics.length ? (level ?? this.classifyParsedLyrics(lyrics)) : 'none');
       if (!lyrics.length) {

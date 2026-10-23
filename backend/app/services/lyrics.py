@@ -4,9 +4,13 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
-from app.services.lyrics_providers import PROVIDERS, run_provider
+from app.services.lyrics_providers import PROVIDERS_BY_ID, run_provider
 from app.services.metadata import remove_title_annotations
-from app.services.settings import get_lyrics_providers
+from app.services.settings import (
+    get_lyrics_provider_keys,
+    get_lyrics_provider_order,
+    get_lyrics_providers,
+)
 
 logger = logging.getLogger("uvicorn")
 MAX_LYRICS_OFFSET_MS = 10_000
@@ -220,6 +224,27 @@ def save_lyrics_result(
         return {"ttml": None, "lrc": line_lyrics}
     return None
 
+def provider_keys(provider) -> dict[str, str]:
+    return get_lyrics_provider_keys().get(provider.id, {})
+
+
+def enabled_providers() -> list:
+    """Enabled providers in priority order; key-gated ones only run once their keys are set."""
+    enabled = get_lyrics_providers()
+    result = []
+    for pid in get_lyrics_provider_order():
+        provider = PROVIDERS_BY_ID[pid]
+        if not enabled.get(pid):
+            continue
+        keys = provider_keys(provider)
+        if provider.key_required and not all(
+            keys.get(f.id) for f in provider.key_fields if f.id != "storefront"
+        ):
+            continue
+        result.append(provider)
+    return result
+
+
 def fetch_and_save_lyrics(
     song_dir: Path,
     raw_artist: str,
@@ -256,11 +281,7 @@ def fetch_and_save_lyrics(
     )
 
     found_line = existing_line_file is not None
-    providers = [
-        provider
-        for provider in PROVIDERS
-        if get_lyrics_providers().get(provider.id)
-    ]
+    providers = enabled_providers()
     if not providers:
         return "lrc" if found_line else False
 
@@ -268,7 +289,9 @@ def fetch_and_save_lyrics(
         # A saved line file can't be improved on by line sources; only keep looking for word-level.
         if found_line and not provider.word_level:
             continue
-        payload = run_provider(provider, raw_artist, raw_album, query_title, duration_seconds)
+        payload = run_provider(
+            provider, raw_artist, raw_album, query_title, duration_seconds, provider_keys(provider)
+        )
         if not payload:
             continue
         saved = save_lyrics_result(lyrics_dir, save_filename, payload.get("ttml"), payload.get("lrc"))
@@ -283,3 +306,25 @@ def fetch_and_save_lyrics(
         return "lrc"
     logger.info("[Lyrics] No lyrics found for: %s", raw_title)
     return False
+
+
+def find_lyrics_candidate(
+    raw_artist: str, raw_album: str, raw_title: str, duration: Optional[float]
+) -> Optional[dict[str, str]]:
+    """Look up lyrics without saving them: the first word-level result, else the first line-synced one."""
+    duration_seconds = max(1, round(duration or 1))
+    query_title = remove_title_annotations(raw_title)
+    fallback = None
+    for provider in enabled_providers():
+        payload = run_provider(
+            provider, raw_artist, raw_album, query_title, duration_seconds, provider_keys(provider)
+        )
+        if not payload:
+            continue
+        ttml, lrc = payload.get("ttml"), payload.get("lrc")
+        if ttml and classify_ttml_content(ttml) == "word":
+            return {"provider": provider.label, "level": "word", "format": "ttml", "content": ttml}
+        line = lrc or (_ttml_lines_to_lrc(ttml) if ttml else None)
+        if line and fallback is None:
+            fallback = {"provider": provider.label, "level": "line", "format": "lrc", "content": line}
+    return fallback

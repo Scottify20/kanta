@@ -3,7 +3,7 @@
     <button class="back" type="button" [appTooltip]="detail() ? 'Back to library' : 'Menu'" [attr.aria-label]="detail() ? 'Back to library' : 'Toggle menu'" [attr.aria-expanded]="detail() ? null : layoutService.sidebarOpen()" (click)="detail() ? back() : layoutService.toggleSidebar()">
       @if (detail()) { <svg lucideChevronLeft [size]="20"></svg> } @else { <svg lucideMenu [size]="20"></svg> }
     </button>
-    <h1>{{ detail() ? detail()!.title : 'Library' }}</h1>
+    <h1>{{ detail() ? (detail()!.kind === 'artist' ? 'Artist' : detail()!.kind === 'album' ? 'Album' : 'Playlist') : 'Library' }}</h1>
     <div class="header-right">
       @if (!layoutService.sidebarOpen()) { <app-search-bar class="header-search" /> }
       <button class="back" type="button" aria-label="Toggle queue" appTooltip="Queue" tooltipPosition="below" [attr.aria-expanded]="layoutService.queueOpen()" (click)="layoutService.toggleQueue()">
@@ -19,6 +19,7 @@
       (playAll)="detailAction('play')"
       (shuffle)="detailAction('shuffle')"
       (addToQueue)="detailAction('queue')"
+      (playNext)="detailAction('next')"
     />
   } @else {
     <app-library-toolbar

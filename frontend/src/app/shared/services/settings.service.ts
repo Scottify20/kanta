@@ -24,6 +24,9 @@ export interface LyricsProviderInfo {
   description: string;
   word_level: boolean;
   enabled: boolean;
+  key_required: boolean;
+  key_url: string | null;
+  key_fields: { id: string; label: string; secret: boolean; value: string }[];
 }
 
 export interface LyricsSettings {
@@ -69,7 +72,12 @@ export class SettingsService {
     return this.http.get<LyricsSettings>(`${API_URL}/api/settings/lyrics`);
   }
 
-  updateLyricsSettings(update: { providers?: Record<string, boolean>; auto_fetch?: boolean }): Observable<LyricsSettings> {
+  updateLyricsSettings(update: {
+    providers?: Record<string, boolean>;
+    auto_fetch?: boolean;
+    order?: string[];
+    keys?: Record<string, Record<string, string>>;
+  }): Observable<LyricsSettings> {
     return this.http.put<LyricsSettings>(`${API_URL}/api/settings/lyrics`, update);
   }
 

@@ -1,4 +1,5 @@
-import { Component, CUSTOM_ELEMENTS_SCHEMA, computed, input, output } from '@angular/core';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, computed, inject, input, output } from '@angular/core';
+import { LyricsSizeService } from '../../../../shared/services/lyrics-size.service';
 import type { Lyric } from '@braccato/parsers';
 
 @Component({
@@ -8,6 +9,7 @@ import type { Lyric } from '@braccato/parsers';
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class LyricsStage {
+  protected readonly size = inject(LyricsSizeService);
   readonly coverUrl = input<string | null>(null);
   readonly coverAlt = input('Current album cover');
   readonly lyrics = input<Lyric[] | null>(null);

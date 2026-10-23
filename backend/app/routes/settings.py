@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services import folder_dialog, storage
-from app.services.lyrics_providers import PROVIDERS
+from app.services.lyrics_providers import PROVIDERS_BY_ID
 from app.services.settings import (
     device_availability,
     get_default_output_dir,
     get_inference_device,
     get_lyrics_auto_fetch,
+    get_lyrics_provider_keys,
+    get_lyrics_provider_order,
     get_lyrics_providers,
     get_model_dir,
     get_output_dirs,
@@ -108,29 +110,40 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
 class LyricsSettingsUpdate(BaseModel):
     providers: Optional[dict[str, bool]] = None
     auto_fetch: Optional[bool] = None
+    order: Optional[list[str]] = None
+    keys: Optional[dict[str, dict[str, str]]] = None
 
 
 @router.get("/lyrics")
 def get_lyrics_settings() -> dict[str, Any]:
-    return {
-        "providers": [
+    enabled = get_lyrics_providers()
+    stored_keys = get_lyrics_provider_keys()
+    providers = []
+    for pid in get_lyrics_provider_order():
+        provider = PROVIDERS_BY_ID[pid]
+        values = stored_keys.get(pid, {})
+        providers.append(
             {
                 "id": provider.id,
                 "label": provider.label,
                 "description": provider.description,
                 "word_level": provider.word_level,
-                "enabled": get_lyrics_providers()[provider.id],
+                "enabled": enabled[pid],
+                "key_required": provider.key_required,
+                "key_url": provider.key_url,
+                "key_fields": [
+                    {"id": f.id, "label": f.label, "secret": f.secret, "value": values.get(f.id, "")}
+                    for f in provider.key_fields
+                ],
             }
-            for provider in PROVIDERS
-        ],
-        "auto_fetch": get_lyrics_auto_fetch(),
-    }
+        )
+    return {"providers": providers, "auto_fetch": get_lyrics_auto_fetch()}
 
 
 @router.put("/lyrics")
 def update_lyrics(update: LyricsSettingsUpdate) -> dict[str, Any]:
     try:
-        update_lyrics_settings(update.providers, update.auto_fetch)
+        update_lyrics_settings(update.providers, update.auto_fetch, update.order, update.keys)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return get_lyrics_settings()

@@ -7,6 +7,14 @@ import { API_URL } from './settings.service';
 
 export type LyricsLevel = 'word' | 'line' | 'none';
 
+export interface LyricsCandidate {
+  found: boolean;
+  provider?: string;
+  level?: LyricsLevel;
+  format?: 'ttml' | 'lrc';
+  content?: string;
+}
+
 export interface SongFile {
   name: string;
   url: string;
@@ -158,6 +166,17 @@ export class SongsService {
     const body = new FormData();
     body.append('file', file);
     return this.http.post<{ name: string; lyrics_level: LyricsLevel }>(`${this.songUrl(song)}/lyrics`, body);
+  }
+
+  refetchSongLyrics(song: Pick<SongManifest, 'artist' | 'album' | 'title'>): Observable<LyricsCandidate> {
+    return this.http.post<LyricsCandidate>(`${this.songUrl(song)}/lyrics/refetch`, {});
+  }
+
+  applySongLyrics(
+    song: Pick<SongManifest, 'artist' | 'album' | 'title'>,
+    lyrics: Pick<LyricsCandidate, 'format' | 'content'>,
+  ): Observable<{ name: string; lyrics_level: LyricsLevel }> {
+    return this.http.put<{ name: string; lyrics_level: LyricsLevel }>(`${this.songUrl(song)}/lyrics/apply`, lyrics);
   }
 
   deleteSongLyrics(song: Pick<SongManifest, 'artist' | 'album' | 'title'>): Observable<{ lyrics_level: LyricsLevel }> {

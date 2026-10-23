@@ -1,3 +1,4 @@
+import threading
 import asyncio
 import io
 import json
@@ -9,7 +10,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -21,6 +22,7 @@ from app.services.paths import UPLOADS_DIR, ffmpeg_path, subprocess_kwargs
 from app.services.lyrics import (
     LOCK_FILE,
     fetch_and_save_lyrics,
+    find_lyrics_candidate,
     classify_lyrics_file,
     convert_subtitles_to_lrc,
     lyrics_locked,
@@ -123,7 +125,7 @@ async def add_to_queue(
     return {"message": "Added to queue", "item": item.model_dump()}
 
 
-_lyrics_in_flight: set[str] = set()
+_lyrics_locks: dict[str, threading.Lock] = {}
 
 
 def _refresh_lyrics(song_dir: Path, artist: str, album: str, title: str) -> str:
@@ -131,10 +133,13 @@ def _refresh_lyrics(song_dir: Path, artist: str, album: str, title: str) -> str:
     lyrics_dir = song_dir / "lyrics"
     level = saved_lyrics_level(lyrics_dir)
     key = str(song_dir)
-    if level == "word" or lyrics_locked(lyrics_dir) or key in _lyrics_in_flight:
+    if level == "word" or lyrics_locked(lyrics_dir):
         return level
-    _lyrics_in_flight.add(key)
-    try:
+    # Concurrent callers wait for the running fetch instead of returning stale state.
+    with _lyrics_locks.setdefault(key, threading.Lock()):
+        level = saved_lyrics_level(lyrics_dir)
+        if level == "word" or lyrics_locked(lyrics_dir):
+            return level
         reference = library.reference_audio(song_dir)
         names = read_display_names(reference) if reference else {}
         fetch_and_save_lyrics(
@@ -145,8 +150,6 @@ def _refresh_lyrics(song_dir: Path, artist: str, album: str, title: str) -> str:
             sanitize_filename(title),
             read_duration(reference) if reference else None,
         )
-    finally:
-        _lyrics_in_flight.discard(key)
     library.invalidate(song_dir)
     return saved_lyrics_level(lyrics_dir)
 
@@ -683,6 +686,53 @@ async def upload_song_lyrics(
     try:
         if classify_lyrics_file(staged) == "none":
             raise HTTPException(status_code=422, detail="No timed lyrics found in file")
+        _clear_lyrics_files(lyrics_dir, keep=staged)
+        staged.replace(target)
+    finally:
+        staged.unlink(missing_ok=True)
+    (lyrics_dir / LOCK_FILE).write_text("", encoding="utf-8")
+    library.invalidate(song_dir)
+    return {"name": target.name, "lyrics_level": saved_lyrics_level(lyrics_dir)}
+
+
+@songs_router.post("/songs/{artist}/{album}/{title}/lyrics/refetch")
+async def refetch_song_lyrics(artist: str, album: str, title: str) -> Dict[str, Any]:
+    """Search the enabled providers for lyrics and return the best match without saving it."""
+    song_dir, _, _ = _locate(artist, album, title)
+    reference = await asyncio.to_thread(library.reference_audio, song_dir)
+    names = await asyncio.to_thread(read_display_names, reference) if reference else {}
+    duration = await asyncio.to_thread(read_duration, reference) if reference else None
+    candidate = await asyncio.to_thread(
+        find_lyrics_candidate,
+        names.get("artist") or artist,
+        names.get("album") or album,
+        names.get("title") or title,
+        duration,
+    )
+    return {"found": candidate is not None, **(candidate or {})}
+
+
+class ApplyLyricsRequest(BaseModel):
+    format: Literal["ttml", "lrc"]
+    content: str
+
+
+@songs_router.put("/songs/{artist}/{album}/{title}/lyrics/apply")
+async def apply_song_lyrics(
+    artist: str, album: str, title: str, lyrics: ApplyLyricsRequest
+) -> Dict[str, Any]:
+    song_dir, _, _ = _locate(artist, album, title)
+    if len(lyrics.content.encode("utf-8")) > MAX_LYRICS_BYTES:
+        raise HTTPException(status_code=413, detail="Lyrics too large")
+    lyrics_dir = song_dir / "lyrics"
+    lyrics_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f".{lyrics.format}"
+    target = lyrics_dir / f"{sanitize_filename(title)}{suffix}"
+    staged = lyrics_dir / f".apply{suffix}"
+    staged.write_text(lyrics.content, encoding="utf-8")
+    try:
+        if classify_lyrics_file(staged) == "none":
+            raise HTTPException(status_code=422, detail="No timed lyrics found")
         _clear_lyrics_files(lyrics_dir, keep=staged)
         staged.replace(target)
     finally:

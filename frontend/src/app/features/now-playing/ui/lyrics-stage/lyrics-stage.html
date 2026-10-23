@@ -2,6 +2,7 @@
   class="cover-and-lyrics-container"
   [class.fullscreen]="fullscreen()"
   [class.collapsed]="collapsed()"
+  [style.--lyrics-scale]="size.scale()"
 >
   <section>
     @if (coverUrl(); as cover) {
