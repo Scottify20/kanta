@@ -84,6 +84,17 @@
       <app-settings-section title="Lyrics" description="Choose which sources are searched for lyrics, in what order, and whether Kanta keeps looking for better lyrics on its own.">
         <app-settings-lyrics />
       </app-settings-section>
+      <app-settings-section title="Developer Mode" description="Show detailed backend logs in a separate window to help diagnose problems such as failed song processing.">
+        <div class="replaygain-controls">
+          <label class="replaygain-toggle">
+            <input class="switch" type="checkbox" role="switch" [checked]="developerMode()" (change)="setDeveloperMode($any($event.target).checked)" />
+            <span><strong>Enable developer mode</strong><small>Adds a button to open the live backend log window.</small></span>
+          </label>
+          @if (developerMode()) {
+            <button class="browse-button" type="button" (click)="openLogs()"><span>Open log window</span></button>
+          }
+        </div>
+      </app-settings-section>
     </div>
   </div>
 

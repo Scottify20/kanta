@@ -14,6 +14,7 @@ export interface AppSettings {
   output_mode: 'basic' | 'full';
   output_quality: 'high' | 'standard' | 'low';
   inference_device: DeviceId;
+  developer_mode?: boolean;
   output_dirs_status?: OutputDirectoryStatus[];
   suggested_output_dir?: string;
 }
@@ -95,7 +96,7 @@ export class SettingsService {
   // Partial update: the backend keeps whatever is not sent.
   patchSettings(settings: Partial<Pick<
     AppSettings,
-    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
+    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device' | 'developer_mode'
   >>): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
   }

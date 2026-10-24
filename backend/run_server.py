@@ -31,6 +31,25 @@ def _ensure_streams() -> None:
         sys.stderr = stream
 
 
+def _enable_file_logging() -> None:
+    """Persist backend logs (including failed queue jobs) to <data dir>/logs/kanta.log."""
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    from app.services.paths import get_data_dir
+
+    log_dir = get_data_dir() / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(
+        log_dir / "kanta.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8"
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+    logging.getLogger("uvicorn.access").addHandler(handler)
+
+
 def _pid_alive(pid: int) -> bool:
     if sys.platform == "win32":
         import ctypes
@@ -76,7 +95,7 @@ def main() -> None:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
     os.environ.setdefault("PYTHONUTF8", "1")
     _ensure_streams()
-
+    _enable_file_logging()
     parent_pid = os.environ.get("KANTA_PARENT_PID", "").strip()
     if parent_pid.isdigit():
         _watch_parent(int(parent_pid))

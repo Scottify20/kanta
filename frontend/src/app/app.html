@@ -1,3 +1,6 @@
+@if (logsWindow) {
+  <router-outlet></router-outlet>
+} @else {
 <app-backdrop />
 <div
   id="main"
@@ -31,3 +34,4 @@
   <app-metadata-editor [song]="song" (closed)="entryActions.editingSong.set(null)" (saved)="library.load(true)" />
 }
 <app-toast-host />
+}

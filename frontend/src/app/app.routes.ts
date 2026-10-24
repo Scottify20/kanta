@@ -11,5 +11,9 @@ export const routes: Routes = [
     path: 'settings',
     loadComponent: () => import('./features/settings/settings').then((module) => module.Settings),
   },
+  {
+    path: 'logs',
+    loadComponent: () => import('./features/logs/logs').then((module) => module.Logs),
+  },
   { path: '**', redirectTo: '' },
 ];

@@ -13,11 +13,12 @@ import httpx
 
 from app.tasks import tasks_db, TaskCancelledException
 from app.routes.artists import router as artists_router
+from app.routes.logs import router as logs_router
 from app.routes.playlists import router as playlists_router
 from app.routes.queue import router as queue_router, search_router, songs_router
 from app.routes.setup import router as setup_router
 from app.routes.settings import fs_router, router as settings_router
-from app.services import library
+from app.services import library, log_buffer
 from app.services.fsutil import safe_join, safe_upload_name
 from app.services.paths import UPLOADS_DIR, configure_environment
 from app.services.metadata import sanitize_filename
@@ -38,6 +39,7 @@ from app.services.settings import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    log_buffer.install()
     warm_up_devices()
     library.warm_up()
     await queue_manager.start()
@@ -67,6 +69,7 @@ app.mount(
     StaticFiles(directory=get_output_dir(), check_dir=False),
     name="separated",
 )
+app.include_router(logs_router)
 app.include_router(queue_router)
 app.include_router(songs_router)
 app.include_router(settings_router)

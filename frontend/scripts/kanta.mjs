@@ -5,9 +5,11 @@
 //   sidecar [--cuda]      PyInstaller build copied into src-tauri/binaries for this OS
 //   bundle [--cuda]       sidecar + `tauri build` with this OS's installer config
 //                         --cuda requires a CUDA PyTorch in backend/venv (`setup --cuda`) and fails otherwise
+//   portable              Windows CUDA only: app exe + one-folder backend zipped into dist/portable
+//   clean [--all]         remove build outputs (backend/build, backend/dist, dist, binaries); --all adds the Rust target dir
 //   fetch [models|ffmpeg] download runtime assets into the Kanta data dir
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,8 +95,8 @@ function setup(flags) {
   if (wantCuda && win) {
     // requirements.txt ships the DirectML runtime on Windows; CUDA needs the GPU build instead.
     console.log('Switching ONNX Runtime to the CUDA build ...');
-    run(venvPython, ['-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-directml'], { cwd: backend });
-    pip(['install', 'onnxruntime-gpu>=1.18,<1.24']);
+    run(venvPython, ['-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-directml', 'onnxruntime-gpu'], { cwd: backend });
+    pip(['install', '--no-cache-dir', 'onnxruntime-gpu>=1.18,<1.24']);
   }
   if (!wantCuda && platform === 'linux') {
     // requirements.txt ships onnxruntime-gpu on Linux; the CPU build only needs the much smaller CPU runtime.
@@ -145,12 +147,19 @@ function requireCudaTorch() {
   if (!cuda) fail(`backend/venv has a CPU-only PyTorch (${version}). Run \`npm run setup:cuda\` first, then build again.`);
 }
 
-// The Windows CUDA backend exceeds NSIS's 2 GB per-file limit as a single exe, so it ships as a
-// one-folder build bundled through bundle.resources instead of a sidecar.
+function requireWorkingOnnx() {
+  const result = spawnSync(venvPython, ['-c', 'import onnxruntime as o;print(",".join(o.get_available_providers()))'], { encoding: 'utf8' });
+  if (result.error || result.status !== 0) {
+    fail(`onnxruntime in backend/venv is broken (its package files are missing or mismatched):\n${result.stderr || result.error?.message}\nFix it with:\n  backend\\venv\\Scripts\\python -m pip uninstall -y onnxruntime onnxruntime-directml onnxruntime-gpu\n  backend\\venv\\Scripts\\python -m pip install "onnxruntime-gpu>=1.18,<1.24"   (use onnxruntime-directml for the non-CUDA Windows build)`);
+  }
+}
+
+// The Windows CUDA backend exceeds NSIS's 2 GB limit, so it ships as a one-folder build in a portable zip.
 const usesFolderBuild = (flags) => win && flags.includes('--cuda');
 
 function sidecar(flags = []) {
   requireVenv();
+  requireWorkingOnnx();
   if (flags.includes('--cuda')) requireCudaTorch();
   const folder = usesFolderBuild(flags);
   run(venvTool('pyinstaller'), ['kanta-backend.spec', '--noconfirm'], {
@@ -170,10 +179,57 @@ function sidecar(flags = []) {
 }
 
 function bundle(flags = []) {
-  const config = usesFolderBuild(flags) ? 'tauri.bundle.windows-cuda.conf.json' : BUNDLE_CONFIG[platform];
+  if (usesFolderBuild(flags)) fail('The Windows CUDA build is too large for an NSIS installer. Use `npm run app:build:cuda:zip` instead.');
+  const config = BUNDLE_CONFIG[platform];
   if (!config) fail(`No bundle config for ${platform}.`);
   sidecar(flags);
   run('npx', ['tauri', 'build', '--config', `src-tauri/${config}`], { cwd: root });
+}
+
+// Portable Windows CUDA package: app exe + backend/ folder (found by lib.rs next to the exe), zipped.
+function portable() {
+  if (!win) fail('The portable CUDA package is Windows only.');
+  const flags = ['--cuda'];
+  sidecar(flags);
+  run('npx', ['tauri', 'build', '--no-bundle'], { cwd: root });
+
+  const stage = join(root, 'dist', 'portable', 'kanta-cuda');
+  rmSync(join(root, 'dist', 'portable'), { recursive: true, force: true });
+  mkdirSync(stage, { recursive: true });
+  copyFileSync(join(root, 'src-tauri', 'target', 'release', 'app.exe'), join(stage, 'kanta.exe'));
+  cpSync(join(backend, 'dist', 'kanta-backend'), join(stage, 'backend'), { recursive: true });
+
+  const out = join(root, 'dist', 'portable');
+  const has7z = spawnSync('7z', ['i'], { stdio: 'ignore' }).status === 0;
+  if (has7z) {
+    // Volumes under 2 GB so each part fits a GitHub release asset.
+    run('7z', ['a', '-tzip', '-v1900m', 'kanta-cuda-windows.zip', 'kanta-cuda'], { cwd: out, shell: false });
+  } else {
+    run('tar', ['-a', '-c', '-f', 'kanta-cuda-windows.zip', 'kanta-cuda'], { cwd: out, shell: false });
+  }
+  console.log(`Portable package ready in ${out}`);
+}
+
+// Removes build outputs and temp files. --all also drops the Rust target dir and Angular cache (slow to rebuild).
+function clean(flags = []) {
+  const targets = [
+    join(backend, 'build'),
+    join(backend, 'dist'),
+    join(root, 'dist'),
+    join(root, 'src-tauri', 'target', 'release', 'bundle'),
+    join(root, 'src-tauri', 'target', 'release', 'nsis'),
+    join(root, 'src-tauri', 'target', 'release', 'app.exe'),
+  ];
+  if (flags.includes('--all')) targets.push(join(root, 'src-tauri', 'target'), join(root, '.angular'));
+  const binaries = join(root, 'src-tauri', 'binaries');
+  if (existsSync(binaries)) {
+    for (const name of readdirSync(binaries)) if (name !== '.gitignore') targets.push(join(binaries, name));
+  }
+  for (const target of targets) {
+    if (!existsSync(target)) continue;
+    rmSync(target, { recursive: true, force: true });
+    console.log(`Removed ${target}`);
+  }
 }
 
 function fetchAssets(args) {
@@ -182,6 +238,6 @@ function fetchAssets(args) {
 }
 
 const [command, ...rest] = process.argv.slice(2);
-const commands = { setup: () => setup(rest), backend: () => { const api = startBackend(); api.on('exit', (code) => process.exit(code ?? 0)); }, dev, sidecar: () => sidecar(rest), bundle: () => bundle(rest), fetch: () => fetchAssets(rest) };
+const commands = { setup: () => setup(rest), backend: () => { const api = startBackend(); api.on('exit', (code) => process.exit(code ?? 0)); }, dev, sidecar: () => sidecar(rest), bundle: () => bundle(rest), portable, clean: () => clean(rest), fetch: () => fetchAssets(rest) };
 if (!commands[command]) fail('Usage: kanta.mjs <setup|backend|dev|sidecar|bundle|fetch>');
 commands[command]();

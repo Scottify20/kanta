@@ -11,6 +11,7 @@ from app.services.lyrics_providers import PROVIDERS_BY_ID
 from app.services.settings import (
     device_availability,
     get_default_output_dir,
+    get_developer_mode,
     get_inference_device,
     get_lyrics_auto_fetch,
     get_lyrics_provider_keys,
@@ -36,6 +37,7 @@ class SettingsUpdate(BaseModel):
     output_mode: Optional[Literal["basic", "full"]] = None
     output_quality: Optional[Literal["high", "standard", "low"]] = None
     inference_device: Optional[Literal["cuda", "mps", "directml", "vulkan", "cpu"]] = None
+    developer_mode: Optional[bool] = None
 
 
 def _settings_payload(
@@ -49,6 +51,7 @@ def _settings_payload(
         "output_mode": get_output_mode(),
         "output_quality": get_output_quality(),
         "inference_device": get_inference_device(),
+        "developer_mode": get_developer_mode(),
         "lyrics_providers": get_lyrics_providers(),
         "lyrics_auto_fetch": get_lyrics_auto_fetch(),
         "output_dirs_status": storage.output_dirs_status(list(output_dirs)),
@@ -99,6 +102,7 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
             output_mode=settings.output_mode,
             output_quality=settings.output_quality,
             inference_device=settings.inference_device,
+            developer_mode=settings.developer_mode,
         )
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

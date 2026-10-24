@@ -21,7 +21,10 @@
     "assets:models": "node scripts/kanta.mjs fetch models",
     "assets:ffmpeg": "node scripts/kanta.mjs fetch ffmpeg",
     "app:build": "node scripts/kanta.mjs bundle",
-    "app:build:cuda": "node scripts/kanta.mjs bundle --cuda"
+    "app:build:cuda": "node scripts/kanta.mjs bundle --cuda",
+    "app:build:cuda:zip": "node scripts/kanta.mjs portable",
+    "clean": "node scripts/kanta.mjs clean",
+    "clean:all": "node scripts/kanta.mjs clean --all"
   },
   "private": true,
   "packageManager": "npm@11.19.0",

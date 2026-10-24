@@ -3,10 +3,14 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "logs"
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen",
     "dialog:allow-open",

@@ -1,0 +1,33 @@
+<main class="logs-page">
+  <header class="logs-toolbar">
+    <span class="status" [class.online]="connected()" role="status">{{ connected() ? 'Live' : 'Reconnecting…' }}</span>
+    <label>
+      Level
+      <select [ngModel]="minLevel()" (ngModelChange)="minLevel.set($event)" aria-label="Minimum log level">
+        @for (level of levels; track level) {
+          <option [value]="level">{{ level }}</option>
+        }
+      </select>
+    </label>
+    <input type="search" placeholder="Filter logs" aria-label="Filter logs" autocomplete="off" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    <label class="check">
+      <input type="checkbox" [ngModel]="autoScroll()" (ngModelChange)="autoScroll.set($event)" /> Auto-scroll
+    </label>
+    <span class="count">{{ visible().length }} lines</span>
+    <button type="button" (click)="copy()">{{ copied() ? 'Copied' : 'Copy' }}</button>
+    <button type="button" (click)="clear()">Clear</button>
+  </header>
+
+  <div class="log-list" #list (scroll)="onScroll()">
+    @for (entry of visible(); track entry.id) {
+      <div class="log-line" [class]="'log-line level-' + entry.level.toLowerCase()">
+        <span class="time">{{ time(entry) }}</span>
+        <span class="level">{{ entry.level }}</span>
+        <span class="source">{{ entry.source }}</span>
+        <span class="message">{{ entry.message }}</span>
+      </div>
+    } @empty {
+      <p class="empty">No log lines yet.</p>
+    }
+  </div>
+</main>

@@ -35,6 +35,8 @@ export class App {
   private readonly fullscreen = inject(FullscreenService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly overlayScrollbar = inject(OverlayScrollbarService);
+  // The developer log window loads /logs directly and shows only the log viewer, without the app chrome.
+  readonly logsWindow = typeof location !== 'undefined' && location.pathname.startsWith('/logs');
 
   @HostListener('document:dragover', ['$event'])
   onDragOver(event: DragEvent): void {

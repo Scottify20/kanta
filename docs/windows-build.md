@@ -69,6 +69,9 @@ for other platforms (`aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`).
   frontend and `--port` in the sidecar launch together.
 - **Backslashes/drives:** the API always exchanges `/`-separated relative URLs; absolute paths only appear in
   settings and the folder picker, which lists drive letters on Windows.
+- **Developer mode:** Settings → Developer Mode adds an "Open log window" button that shows live backend logs
+  (Python logging, stdout/stderr, job errors) in a separate window. Logs are also written to
+  `%APPDATA%\Kanta\logs\kanta.log`. Useful for diagnosing failed songs on other machines.
 - **Auto-updates** are not configured (`tauri-plugin-updater` would be the next step).
 
 ## Linux (Ubuntu) package
@@ -91,7 +94,9 @@ Run from `frontend/`:
 | `npm run dev:all` | Backend + `tauri dev` together |
 | `npm run dev:backend` | Backend only |
 | `npm run setup:cuda` | Same, but forces CUDA PyTorch (and ONNX Runtime GPU on Windows) |
-| `npm run app:build:cuda` | Like `app:build`, but refuses to build unless the venv has CUDA PyTorch (run `setup:cuda` first). On Windows the CUDA backend is built one-folder and bundled as a resource (`tauri.bundle.windows-cuda.conf.json`), because a single exe over 2 GB breaks NSIS. `backend:build:cuda` builds only the backend |
+| `npm run app:build:cuda` | Like `app:build`, but refuses to build unless the venv has CUDA PyTorch (run `setup:cuda` first). Not available on Windows: the CUDA backend (~4 GB) is too big for an NSIS installer, so use the zip command below. `backend:build:cuda` builds only the backend |
+| `npm run app:build:cuda:zip` | Windows only. Builds the one-folder CUDA backend and the app exe, then zips `kanta.exe` + `backend/` into `dist/portable/`. Uses 7-Zip (if on PATH) to split into <1.9 GB volumes for GitHub releases, otherwise `tar` for a single zip. Users unzip and run `kanta.exe` |
+| `npm run clean` / `clean:all` | Removes build outputs (`backend/build`, `backend/dist`, `frontend/dist`, `src-tauri/binaries/*`, bundle output). `clean:all` also removes `src-tauri/target` and `.angular` (full rebuild afterwards). Never touches `backend/venv` or user data |
 | `npm run app:build` | Builds the sidecar and the installer for the current OS (nsis / deb / dmg) |
 | `npm run assets:fetch` | Downloads models + ffmpeg into the data dir |
 

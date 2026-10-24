@@ -232,6 +232,10 @@ def get_inference_device() -> str:
     return value if value in INFERENCE_DEVICES else default_inference_device()
 
 
+def get_developer_mode() -> bool:
+    return _read_settings().get("developer_mode") is True
+
+
 def find_song_directory(artist: str, album: str, title: str) -> tuple[Path, Path, int] | None:
     for index, output_root in enumerate(get_output_dirs()):
         song_dir = (output_root / artist / album / title).resolve()
@@ -256,6 +260,7 @@ def update_settings(
     output_mode: str | None = None,
     output_quality: str | None = None,
     inference_device: str | None = None,
+    developer_mode: bool | None = None,
 ) -> dict[str, Any]:
     if output_mode is not None and output_mode not in OUTPUT_MODES:
         raise ValueError(f"output_mode must be one of: {', '.join(OUTPUT_MODES)}")
@@ -303,6 +308,7 @@ def update_settings(
         ("output_mode", output_mode),
         ("output_quality", output_quality),
         ("inference_device", inference_device),
+        ("developer_mode", developer_mode),
     ):
         if value is not None:
             settings[key] = value

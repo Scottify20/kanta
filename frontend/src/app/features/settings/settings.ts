@@ -11,6 +11,7 @@ import { AudioDeviceControls } from './ui/audio-device-controls/audio-device-con
 import { StorageDevices } from './ui/storage-devices/storage-devices';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { LayoutService } from '../../shared/services/layout.service';
+import { DevLogsService } from '../../shared/services/dev-logs.service';
 import { Tooltip } from '../../shared/directives/tooltip';
 import { DeviceId, InferenceDevice, OutputDirectoryStatus, SettingsService } from '../../shared/services/settings.service';
 
@@ -34,6 +35,7 @@ import { SettingsLyrics } from '../../shared/components/settings-lyrics/settings
 })
 export class Settings {
   private readonly settingsService = inject(SettingsService);
+  private readonly devLogs = inject(DevLogsService);
   protected readonly layout = inject(LayoutService);
   private readonly audioPlayer = inject(AudioPlayerService) as AudioPlayerService & ReplayGainControls;
   readonly replayGainEnabled = computed(() => this.audioPlayer.replayGainEnabled?.() ?? false);
@@ -50,6 +52,7 @@ export class Settings {
   readonly devices = signal<InferenceDevice[]>([]);
   readonly outputDirsStatus = signal<OutputDirectoryStatus[]>([]);
   readonly loaded = signal(false);
+  readonly developerMode = signal(false);
   readonly saving = signal(false);
   readonly saved = signal(false);
   readonly error = signal('');
@@ -109,6 +112,7 @@ export class Settings {
         this.outputMode.set(settings.output_mode || 'basic');
         this.outputQuality.set(settings.output_quality || 'standard');
         this.inferenceDevice.set(settings.inference_device || 'cpu');
+        this.developerMode.set(settings.developer_mode === true);
         this.outputDirsStatus.set(settings.output_dirs_status ?? []);
         this.loaded.set(true);
       },
@@ -125,6 +129,13 @@ export class Settings {
   setOutputQuality(value: string): void { this.outputQuality.set(value as 'high' | 'standard' | 'low'); this.changed(); }
   setInferenceDevice(value: string): void { this.inferenceDevice.set(value as DeviceId); this.changed(); }
   setReplayGainEnabled(value: boolean): void { this.audioPlayer.setReplayGainEnabled?.(value); }
+  setDeveloperMode(value: boolean): void {
+    this.developerMode.set(value);
+    this.settingsService.patchSettings({ developer_mode: value }).subscribe({
+      error: () => { this.developerMode.set(!value); this.error.set('Could not save developer mode.'); },
+    });
+  }
+  openLogs(): void { void this.devLogs.openWindow(); }
   setReplayGainMode(value: 'track' | 'album'): void { this.audioPlayer.setReplayGainMode?.(value); }
   addOutputFolder(path: string): void {
     if (!path || this.outputDirs().includes(path)) return;
