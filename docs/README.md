@@ -6,8 +6,8 @@ Kanta is a desktop karaoke companion. The FastAPI backend extracts metadata, que
 
 ## Start here
 
-1. Start the backend on `http://127.0.0.1:8000`.
-2. Open the interactive API reference at [`/docs`](http://127.0.0.1:8000/docs).
+1. Start the backend on `http://127.0.0.1:8004`.
+2. Open the interactive API reference at [`/docs`](http://127.0.0.1:8004/docs).
 3. Open the Angular app at `http://localhost:4200/`.
 4. Add an external track through the [Queue API](api/queue.md); Processing Only/basic separation is the default.
 5. Poll the queue until the task is `completed`.
@@ -27,6 +27,6 @@ Kanta is a desktop karaoke companion. The FastAPI backend extracts metadata, que
 
 | Service | Default URL |
 | --- | --- |
-| FastAPI | `http://127.0.0.1:8000` |
-| Generated media | `http://127.0.0.1:8000/media/...` |
+| FastAPI | `http://127.0.0.1:8004` |
+| Generated media | `http://127.0.0.1:8004/media/...` |
 | Angular development server | Usually `http://localhost:4200` |

@@ -155,13 +155,13 @@ async def process_audio_input(file: Optional[UploadFile], url: Optional[str]) ->
     raise HTTPException(status_code=400, detail="Must provide a file with a filename or a url.")
 
 
-def _output_http_base_url(output_song_dir: Path, output_root: Path) -> Optional[str]:
+def _output_http_base_url(output_song_dir: Path, output_root: Path, base_url: str) -> Optional[str]:
     relative = output_song_dir.relative_to(output_root).as_posix()
     if output_root == get_output_dir():
-        return f"http://127.0.0.1:8000/media/{relative}"
+        return f"{base_url.rstrip('/')}/media/{relative}"
     roots = get_output_dirs()
     if output_root in roots:
-        return f"http://127.0.0.1:8000/media-roots/{roots.index(output_root)}/{relative}"
+        return f"{base_url.rstrip('/')}/media-roots/{roots.index(output_root)}/{relative}"
     return None
 
 @app.get("/health")
@@ -267,7 +267,7 @@ def cancel_task(task_id: str):
     return {"status": "cancelling", "task_id": task_id}
 
 @app.post("/api/separate-basic")
-async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
+async def separate_basic_endpoint(request: Request, file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
     active_task_id = task_id or str(uuid.uuid4())
     tasks_db[active_task_id] = {"task_id": active_task_id, "status": "pending", "progress": 0, "step": "Initializing...", "cancel_requested": False, "created_at": time.time()}
 
@@ -278,7 +278,7 @@ async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: 
         )
         library.invalidate(output_song_dir)
         output_root = input_path.parent.parent.parent
-        result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root)}
+        result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url))}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:
@@ -291,7 +291,7 @@ async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: 
         if input_path.exists(): input_path.unlink()
 
 @app.post("/api/separate-full")
-async def separate_full_endpoint(file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
+async def separate_full_endpoint(request: Request, file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
     active_task_id = task_id or str(uuid.uuid4())
     tasks_db[active_task_id] = {"task_id": active_task_id, "status": "pending", "progress": 0, "step": "Initializing...", "cancel_requested": False, "created_at": time.time()}
 
@@ -302,7 +302,7 @@ async def separate_full_endpoint(file: Optional[UploadFile] = File(None), url: O
         )
         library.invalidate(output_song_dir)
         output_root = input_path.parent.parent.parent
-        result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root)}
+        result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url))}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:

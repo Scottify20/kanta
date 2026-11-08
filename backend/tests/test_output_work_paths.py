@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from httpx import ASGITransport, AsyncClient
 
 from app import main
@@ -50,16 +50,33 @@ class OutputWorkPathTests(unittest.IsolatedAsyncioTestCase):
                      patch.object(main.queue_manager, "run_exclusive", new=AsyncMock(side_effect=run)), \
                      patch.object(main.library, "invalidate"):
                     result = await endpoint(
+                        Request({"type": "http", "scheme": "http", "server": ("127.0.0.1", 8123),
+                                 "headers": [], "path": "/api/separate", "root_path": ""}),
                         UploadFile(filename="song.mp3", file=io.BytesIO(b"audio")), None, None
                     )
-                self.assertEqual(result["http_base_url"], "http://127.0.0.1:8000/media-roots/0/Artist/Album/Song")
+                self.assertEqual(result["http_base_url"], "http://127.0.0.1:8123/media-roots/0/Artist/Album/Song")
                 self.assertEqual(list(upload_dir(first).iterdir()), [])
 
     def test_removed_root_has_no_media_url(self):
         first = Path("/first")
         with patch.object(main, "get_output_dir", return_value=Path("/second")), \
              patch.object(main, "get_output_dirs", return_value=[Path("/second")]):
-            self.assertIsNone(main._output_http_base_url(first / "Artist", first))
+            self.assertIsNone(main._output_http_base_url(first / "Artist", first, "http://localhost:8123/"))
+
+    async def test_direct_separation_responses_use_request_origin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "Artist" / "Album" / "Song"
+            with patch.object(main, "get_output_dir", return_value=root), \
+                 patch.object(main.queue_manager, "run_exclusive", new=AsyncMock(return_value=output)), \
+                 patch.object(main.library, "invalidate"):
+                async with AsyncClient(transport=ASGITransport(app=main.app), base_url="http://localhost:8123") as client:
+                    for endpoint in ("basic", "full"):
+                        response = await client.post(
+                            f"/api/separate-{endpoint}", files={"file": ("song.mp3", b"audio", "audio/mpeg")}
+                        )
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.json()["http_base_url"], "http://localhost:8123/media/Artist/Album/Song")
 
     def test_pipeline_uses_original_root_and_cleans_temp_on_failure(self):
         with tempfile.TemporaryDirectory() as temp:

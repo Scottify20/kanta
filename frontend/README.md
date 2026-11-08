@@ -12,12 +12,12 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
-The app expects the FastAPI backend at `http://127.0.0.1:8000`. Start it from the repository root with:
+The app expects the FastAPI backend at `http://127.0.0.1:8004`. Start it from the repository root with:
 
 ```bash
 cd backend
 source venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8004
 ```
 
 The main routes are `/` for now playing, `/library` for processed songs, and `/settings` for the processed output parent folder.

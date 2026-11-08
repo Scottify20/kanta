@@ -35,7 +35,7 @@ Send a multipart form with:
   It must contain timed lyrics and be no larger than 5 MiB.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/add \
+curl -X POST http://127.0.0.1:8004/api/queue/add \
   -F "file=@song.mp3" \
   -F "priority=1"
 ```
@@ -60,6 +60,10 @@ folder. Existing word-timed lyrics are retained; line-timed lyrics can be
 improved by an automatic word-timed result.
 
 The frontend uses priority `2` as its default. Priority `1` is an explicit user choice when dropping an external file into Karaoke Queue.
+In the Processing Queue, use the folder button to import audio from a folder and
+its subfolders. Non-audio files are ignored, and a TTML file is paired only with
+an audio file of the same name in the same folder. Ambiguous pairs are reported
+instead of being queued.
 
 ## Add a processed library song
 
@@ -68,7 +72,7 @@ The frontend uses priority `2` as its default. Priority `1` is an explicit user 
 Adds an already processed song as a completed Karaoke Queue entry. It does not run separation, copy the song, or delete existing generated stems. An entry with the same artist, album, and title is not added twice. It never creates a Processing Queue job.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/add-processed \
+curl -X POST http://127.0.0.1:8004/api/queue/add-processed \
   -H "Content-Type: application/json" \
   -d '{"artist":"Artist","album":"Album","title":"Song"}'
 ```
@@ -78,7 +82,7 @@ curl -X POST http://127.0.0.1:8000/api/queue/add-processed \
 `GET /api/queue`
 
 ```bash
-curl http://127.0.0.1:8000/api/queue
+curl http://127.0.0.1:8004/api/queue
 ```
 
 Response shape:
@@ -104,7 +108,7 @@ The `current_task` field contains the active worker item or `null`; it shares it
 Send every Karaoke Queue item ID exactly once in its desired playback order.
 
 ```bash
-curl -X PATCH http://127.0.0.1:8000/api/queue/reorder \
+curl -X PATCH http://127.0.0.1:8004/api/queue/reorder \
   -H "Content-Type: application/json" \
   -d '{
     "karaoke_queue": ["karaoke-task-id", "processed-song-id"]
@@ -120,13 +124,13 @@ If the payload is incomplete, contains duplicates, or includes an unknown task I
 Pause a job:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/pause/TASK_ID
+curl -X POST http://127.0.0.1:8004/api/queue/pause/TASK_ID
 ```
 
 Resume it:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/resume/TASK_ID
+curl -X POST http://127.0.0.1:8004/api/queue/resume/TASK_ID
 ```
 
 Pause is cooperative. A running separation pauses at a pipeline checkpoint instead of interrupting CUDA inference in the middle of a model operation. Pausing a pending item lets the worker skip it and run another job. Pausing the active GPU job holds the single worker until that item is resumed.
@@ -136,8 +140,8 @@ For a pending task, pause takes effect immediately. For the active task, the cur
 Pause or resume the complete worker queue:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/pause-all
-curl -X POST http://127.0.0.1:8000/api/queue/resume-all
+curl -X POST http://127.0.0.1:8004/api/queue/pause-all
+curl -X POST http://127.0.0.1:8004/api/queue/resume-all
 ```
 
 Queue-wide pause prevents pending jobs from starting and pauses the active job at its next checkpoint. Because the GPU worker is single-consumer, later jobs wait until the active job is resumed and finishes. The `processing_paused` snapshot field reports the global state.
@@ -147,7 +151,7 @@ Queue-wide pause prevents pending jobs from starting and pauses the active job a
 `DELETE /api/queue/{task_id}`
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/api/queue/TASK_ID
+curl -X DELETE http://127.0.0.1:8004/api/queue/TASK_ID
 ```
 
 Pending jobs are cancelled immediately. The active job receives a cancellation request and stops at its next pipeline checkpoint.
@@ -157,7 +161,7 @@ Cancellation is not the same as pausing: cancelled jobs cannot be resumed, and t
 Remove a task from the playback list without cancelling its processing job:
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/api/queue/karaoke/TASK_ID
+curl -X DELETE http://127.0.0.1:8004/api/queue/karaoke/TASK_ID
 ```
 
 ## Promote a track
@@ -165,7 +169,7 @@ curl -X DELETE http://127.0.0.1:8000/api/queue/karaoke/TASK_ID
 `POST /api/queue/promote/{task_id}` promotes a pending Processing Only task to Karaoke priority.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/queue/promote/TASK_ID
+curl -X POST http://127.0.0.1:8004/api/queue/promote/TASK_ID
 ```
 
 ## Clear a queue
@@ -173,8 +177,8 @@ curl -X POST http://127.0.0.1:8000/api/queue/promote/TASK_ID
 Clear Karaoke Queue membership without affecting jobs, or clear the actual Processing Queue jobs:
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/api/queue/clear/karaoke
-curl -X DELETE http://127.0.0.1:8000/api/queue/clear/processing
+curl -X DELETE http://127.0.0.1:8004/api/queue/clear/karaoke
+curl -X DELETE http://127.0.0.1:8004/api/queue/clear/processing
 ```
 
 Clearing Processing Queue requests cancellation for its active job and removes pending jobs. Karaoke entries remain visible with their resulting status. Processed-library media is never deleted by queue clearing.
@@ -190,7 +194,7 @@ addTrack(file: File, priority: 1 | 2) {
   body.append('priority', String(priority));
 
   return this.http.post<{ message: string; item: QueueItem }>(
-    'http://127.0.0.1:8000/api/queue/add',
+    'http://127.0.0.1:8004/api/queue/add',
     body
   );
 }
@@ -202,7 +206,7 @@ addTrack(file: File, priority: 1 | 2) {
 readonly queue$ = interval(1500).pipe(
   startWith(0),
   switchMap(() => this.http.get<QueueSnapshot>(
-    'http://127.0.0.1:8000/api/queue'
+    'http://127.0.0.1:8004/api/queue'
   )),
   shareReplay({ bufferSize: 1, refCount: true })
 );
@@ -246,7 +250,7 @@ Example JSON response:
 ```ts
 reorderKaraokeTracks(karaokeQueue: string[]) {
   return this.http.patch<{ message: string }>(
-    'http://127.0.0.1:8000/api/queue/reorder',
+    'http://127.0.0.1:8004/api/queue/reorder',
     {
       karaoke_queue: karaokeQueue
     }
@@ -261,21 +265,21 @@ The array must contain every Karaoke Queue item exactly once. This does not reor
 ```ts
 pauseTrack(taskId: string) {
   return this.http.post<{ message: string; item: QueueItem }>(
-    `http://127.0.0.1:8000/api/queue/pause/${encodeURIComponent(taskId)}`,
+    `http://127.0.0.1:8004/api/queue/pause/${encodeURIComponent(taskId)}`,
     {}
   );
 }
 
 resumeTrack(taskId: string) {
   return this.http.post<{ message: string; item: QueueItem }>(
-    `http://127.0.0.1:8000/api/queue/resume/${encodeURIComponent(taskId)}`,
+    `http://127.0.0.1:8004/api/queue/resume/${encodeURIComponent(taskId)}`,
     {}
   );
 }
 
 cancelTrack(taskId: string) {
   return this.http.delete<{ message: string; item: QueueItem }>(
-    `http://127.0.0.1:8000/api/queue/${encodeURIComponent(taskId)}`
+    `http://127.0.0.1:8004/api/queue/${encodeURIComponent(taskId)}`
   );
 }
 ```

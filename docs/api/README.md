@@ -5,7 +5,7 @@
 The FastAPI backend defaults to:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8004
 ```
 
 Interactive documentation is available at:

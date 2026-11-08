@@ -1,6 +1,6 @@
 """Entrypoint for running the Kanta backend as a desktop sidecar (PyInstaller / Tauri).
 
-    python run_server.py                  # 127.0.0.1:8000
+    python run_server.py                  # 127.0.0.1:8004
     python run_server.py --port 8123
     python run_server.py --reload         # development only, needs a source checkout
 
@@ -8,8 +8,11 @@ Environment: KANTA_HOST, KANTA_PORT, KANTA_DATA_DIR, KANTA_FFMPEG, KANTA_PARENT_
 (exit automatically when that process disappears, so the sidecar never outlives the app).
 """
 import argparse
+import errno
+import logging
 import multiprocessing
 import os
+import socket
 import sys
 import threading
 import time
@@ -82,12 +85,33 @@ def _watch_parent(pid: int) -> None:
     threading.Thread(target=watch, name="parent-watchdog", daemon=True).start()
 
 
+def _bind_desktop_socket(host: str, port: int) -> socket.socket:
+    def bind(candidate: int) -> socket.socket:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            if sys.platform == "win32":
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            sock.bind((host, candidate))
+            return sock
+        except OSError:
+            sock.close()
+            raise
+
+    try:
+        return bind(port)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        logging.warning("Backend port %s is in use; selecting an available port.", port)
+        return bind(0)
+
+
 def main() -> None:
     multiprocessing.freeze_support()  # must run before anything spawns workers when frozen
 
     parser = argparse.ArgumentParser(description="Kanta backend server")
     parser.add_argument("--host", default=os.environ.get("KANTA_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("KANTA_PORT", "8000")))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("KANTA_PORT", "8004")))
     parser.add_argument("--reload", action="store_true", help="auto-reload (development only)")
     args = parser.parse_args()
 
@@ -108,6 +132,15 @@ def main() -> None:
 
     # Import the app object directly so PyInstaller's analysis bundles it.
     from app.main import app
+
+    if os.environ.get("KANTA_DESKTOP_PORT_DISCOVERY") == "1":
+        if args.host != "127.0.0.1":
+            raise ValueError("Desktop port discovery requires host 127.0.0.1")
+        with _bind_desktop_socket(args.host, args.port) as sock:
+            print(f"KANTA_BACKEND_PORT={sock.getsockname()[1]}", flush=True)
+            config = uvicorn.Config(app, host=args.host, port=sock.getsockname()[1], log_level="info")
+            uvicorn.Server(config).run(sockets=[sock])
+        return
 
     uvicorn.run(app, host=args.host, port=args.port, reload=False, log_level="info")
 

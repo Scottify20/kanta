@@ -1,9 +1,10 @@
 import { ApplicationRef, Component, DestroyRef, ElementRef, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LucideChevronDown, LucideFilePlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
+import { LucideChevronDown, LucideFilePlus, LucideFolderPlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ScrollingModule } from '@angular/cdk/scrolling';
+import { EMPTY, catchError, from, mergeMap, tap } from 'rxjs';
 
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { LibraryService, SongRef, songCover, songKey } from '../../../../shared/services/library.service';
@@ -16,6 +17,7 @@ import { QueueItemActions } from '../queue-item-actions/queue-item-actions';
 import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
+import { matchImportFiles } from './import-files';
 
 const formatPlaytime = (seconds: number): string => {
   const total = Math.round(seconds);
@@ -40,6 +42,7 @@ const UPLOAD_PREFIX = 'upload:';
     Tooltip,
     LucideChevronDown,
     LucideFilePlus,
+    LucideFolderPlus,
     LucidePause,
     LucidePlay,
     LucideTrash2,
@@ -51,6 +54,7 @@ const UPLOAD_PREFIX = 'upload:';
 })
 export class QueueSheet implements OnInit {
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  private readonly folderInput = viewChild<ElementRef<HTMLInputElement>>('folderInput');
   private browseTarget: QueueName = 'karaoke_queue';
   private readonly queueService = inject(QueueService);
   private readonly actions = inject(PlaybackActions);
@@ -376,46 +380,50 @@ export class QueueSheet implements OnInit {
     this.fileInput()?.nativeElement.click();
   }
 
-  onFilesChosen(input: HTMLInputElement): void {
-    if (input.files?.length) this.addFiles(input.files, this.browseTarget);
+  browseFolder(): void {
+    this.browseTarget = 'processing_queue';
+    this.folderInput()?.nativeElement.click();
+  }
+
+  onFilesChosen(input: HTMLInputElement, folder = false): void {
+    if (input.files?.length) this.addFiles(input.files, this.browseTarget, folder);
     input.value = '';
   }
 
-  private addFiles(files: FileList, targetQueue: QueueName): void {
+  private addFiles(files: FileList, targetQueue: QueueName, folder = false): void {
     const priority = targetQueue === 'karaoke_queue' ? 1 : 2;
-    const selected = Array.from(files);
-    const lyricsFiles = selected.filter((file) => /\.ttml$/i.test(file.name));
-    const audioFiles = selected.filter((file) => !/\.ttml$/i.test(file.name));
-    const stem = (file: File) => file.name.replace(/\.[^/.]+$/, '').toLocaleLowerCase();
-    const directory = (file: File) => (file.webkitRelativePath || '').split('/').slice(0, -1).join('/');
-    const usedLyrics = new Set<File>();
-    audioFiles.forEach((file) => {
-      const matches = lyricsFiles.filter((lyrics) => stem(lyrics) === stem(file) && directory(lyrics) === directory(file));
-      const matchingAudio = audioFiles.filter((audio) => stem(audio) === stem(file) && directory(audio) === directory(file));
-      if (matches.length > 1 || (matches.length && matchingAudio.length > 1)) {
+    const { matches, unmatchedLyrics } = matchImportFiles(Array.from(files), folder);
+    if (folder && !matches.length) this.toast.error('No audio files found in the selected folder.');
+    const pending = matches.flatMap(({ audio: file, lyrics, ambiguous }) => {
+      if (ambiguous) {
         this.toast.error(`Cannot match lyrics for “${file.name}”: multiple files have the same name.`);
-        matches.forEach((lyrics) => usedLyrics.add(lyrics));
-        return;
+        return [];
       }
-      const lyrics = matches[0];
-      if (lyrics) usedLyrics.add(lyrics);
       const temp = this.uploadPlaceholder(file, priority);
-      this.uploads.update((list) => [...list, temp]);
       if (priority === 1) {
         this.entering.set(temp.task_id, 0);
-        this.karaokeItems.update((items) => [...items, temp]);
+      }
+      return [{ file, lyrics, temp }];
+    });
+    const placeholders = pending.map(({ temp }) => temp);
+    if (placeholders.length) {
+      this.uploads.update((list) => [...list, ...placeholders]);
+      if (priority === 1) {
+        this.karaokeItems.update((items) => [...items, ...placeholders]);
         this.lockServerOrder(true);
       }
-      this.queueService.addTrack(file, priority, lyrics).subscribe({
-        next: ({ item }) => {
+    }
+    from(pending).pipe(
+      mergeMap(({ file, lyrics, temp }) => this.queueService.addTrack(file, priority, lyrics).pipe(
+        tap(({ item }) => {
           this.entering.delete(temp.task_id);
           this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
           if (priority === 1) {
             this.karaokeItems.update((items) => items.map((entry) => (entry === temp ? item : entry)));
             this.lockServerOrder();
           }
-        },
-        error: (error: unknown) => {
+        }),
+        catchError((error: unknown) => {
           const detail = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
             ? ` ${error.error.detail}`
             : '';
@@ -424,11 +432,14 @@ export class QueueSheet implements OnInit {
           this.uploads.update((list) => list.filter((entry) => entry !== temp));
           this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
           this.releaseServerOrder();
-        },
-      });
-    });
-    for (const lyrics of lyricsFiles) {
-      if (!usedLyrics.has(lyrics)) this.toast.error(`No matching audio selected for “${lyrics.name}”.`);
+          return EMPTY;
+        }),
+      ), 3),
+    ).subscribe();
+    if (!folder) {
+      for (const lyrics of unmatchedLyrics) {
+        this.toast.error(`No matching audio selected for “${lyrics.name}”.`);
+      }
     }
   }
 

@@ -65,8 +65,10 @@ for other platforms (`aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`).
 - **GPU:** CUDA (NVIDIA), DirectML (any DX12 GPU on Windows), MPS (Apple Silicon), CPU fallback. Vulkan is Linux only.
 - **Code signing:** unsigned installers trigger SmartScreen; configure `bundle.windows.signCommand`/certificate for releases.
 - **Identifier** is now `com.scottify20.kanta`; change it before shipping if you prefer another reverse-DNS name.
-- **Ports:** the app talks to `http://127.0.0.1:8000`. If a different port is needed, change `API_URL` in the
-  frontend and `--port` in the sidecar launch together.
+- **Ports:** packaged desktop builds prefer `http://127.0.0.1:8004`. If that port is in
+  use, the backend reserves another available local port and tells the app which one
+  to use. Standalone development servers still use the configured `KANTA_PORT` or
+  `--port` (default 8004); the browser frontend must be configured to match.
 - **Backslashes/drives:** the API always exchanges `/`-separated relative URLs; absolute paths only appear in
   settings and the folder picker, which lists drive letters on Windows.
 - **Developer mode:** Settings → Developer Mode adds an "Open log window" button that shows live backend logs

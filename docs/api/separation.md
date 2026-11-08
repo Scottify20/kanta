@@ -19,7 +19,7 @@ The normal frontend workflow uses the queue API with Processing Only/basic separ
 Send either an uploaded file or a URL form field.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/separate-basic \
+curl -X POST http://127.0.0.1:8004/api/separate-basic \
   -F "file=@song.mp3"
 ```
 
@@ -30,7 +30,7 @@ The basic pipeline creates instrumental and vocal stems, an original MP3 copy, e
 `POST /api/separate-full`
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/separate-full \
+curl -X POST http://127.0.0.1:8004/api/separate-full \
   -F "file=@song.mp3"
 ```
 
@@ -43,7 +43,7 @@ Full separation generates the additional karaoke stems configured by the separat
 Both endpoints accept a remote audio URL instead of a file:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/separate-basic \
+curl -X POST http://127.0.0.1:8004/api/separate-basic \
   -F "url=https://example.com/song.mp3"
 ```
 
@@ -59,13 +59,13 @@ folder. The input URL must be reachable by the backend process, not only by the 
 Poll progress with:
 
 ```bash
-curl http://127.0.0.1:8000/api/status/TASK_ID
+curl http://127.0.0.1:8004/api/status/TASK_ID
 ```
 
 Request cancellation with:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/cancel/TASK_ID
+curl -X POST http://127.0.0.1:8004/api/cancel/TASK_ID
 ```
 
 The separation result includes the generated task ID and the HTTP base URL for its output directory.
@@ -80,7 +80,7 @@ the output remains there but `http_base_url` is `null` until the folder is added
   "task_id": "9b2f...",
   "type": "basic",
   "folder_path": "/home/user/kanta/backend/separated/Artist/Album/Song",
-  "http_base_url": "http://127.0.0.1:8000/media/Artist/Album/Song"
+  "http_base_url": "http://127.0.0.1:8004/media/Artist/Album/Song"
 }
 ```
 
@@ -91,7 +91,7 @@ const body = new FormData();
 body.append('file', file, file.name);
 
 this.http.post<SeparationResult>(
-  'http://127.0.0.1:8000/api/separate-basic',
+  'http://127.0.0.1:8004/api/separate-basic',
   body
 ).subscribe(result => console.log(result));
 ```
@@ -103,7 +103,7 @@ For full karaoke separation, use the same code with `/api/separate-full`. The qu
 Before submitting a request, verify the backend is available:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8004/health
 ```
 
 Expected response:
