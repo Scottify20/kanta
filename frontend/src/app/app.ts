@@ -19,7 +19,7 @@ import { autoScrollDuringDrag } from './shared/util/drag-autoscroll';
 import { EntryActionsService } from './shared/services/entry-actions.service';
 import { LibraryService } from './shared/services/library.service';
 import { SetupService } from './shared/services/setup.service';
-import { SongsService } from './shared/services/songs.service';
+import { SongManifest, SongsService } from './shared/services/songs.service';
 import { QueueItem } from './features/queue/interfaces/queue.models';
 import { PopupStateService } from './shared/services/popup-state.service';
 import { ToastService } from './shared/services/toast.service';
@@ -205,5 +205,20 @@ export class App {
   selectQueueTrack(item: QueueItem): void {
     this.songs.requestQueueTrack(item);
     void this.router.navigateByUrl('/');
+  }
+
+  onMetadataSaved(song: SongManifest): void {
+    const previous = this.entryActions.editingSong();
+    if (previous) {
+      this.library.songs.update((songs) => songs.map((entry) =>
+        entry.artist === previous.artist && entry.album === previous.album && entry.title === previous.title
+          ? song : entry,
+      ));
+    }
+    this.entryActions.editingSong.set(song);
+    this.library.load(true).catch((error: unknown) => {
+      console.error('Could not refresh library after saving metadata:', error);
+      this.toast.error('Metadata saved, but the library could not be refreshed.');
+    });
   }
 }

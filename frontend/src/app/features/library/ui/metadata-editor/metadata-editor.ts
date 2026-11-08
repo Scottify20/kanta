@@ -31,6 +31,7 @@ export class MetadataEditor {
   readonly baseline = signal<MetadataDraft>(this.emptyDraft());
   readonly saving = signal(false);
   readonly error = signal('');
+  readonly saveStatus = signal('');
   readonly confirmClose = signal(false);
   readonly leaving = signal(false);
   private readonly songs = inject(SongsService);
@@ -48,8 +49,8 @@ export class MetadataEditor {
   }
 
   dirty(): boolean { return JSON.stringify(this.draft()) !== JSON.stringify(this.baseline()); }
-  setText(field: keyof MetadataDraft, value: string): void { this.draft.update((draft) => ({ ...draft, [field]: value })); }
-  setNumber(field: 'track_number' | 'disc_number' | 'bpm', value: number | null): void { this.draft.update((draft) => ({ ...draft, [field]: value })); }
+  setText(field: keyof MetadataDraft, value: string): void { this.saveStatus.set(''); this.draft.update((draft) => ({ ...draft, [field]: value })); }
+  setNumber(field: 'track_number' | 'disc_number' | 'bpm', value: number | null): void { this.saveStatus.set(''); this.draft.update((draft) => ({ ...draft, [field]: value })); }
 
   saveMetadata(): void {
     const song = this.manifest();
@@ -69,6 +70,7 @@ export class MetadataEditor {
       return;
     }
     this.error.set('');
+    this.saveStatus.set('');
     this.saving.set(true);
     const metadata = {
       artist: draft.artist.trim(), album: draft.album.trim(), title: draft.title.trim(),
@@ -82,10 +84,7 @@ export class MetadataEditor {
     };
     this.songs.updateSongMetadata(song, metadata).subscribe({
       next: (updated) => {
-        const renamed = song.artist !== updated.artist || song.album !== updated.album || song.title !== updated.title;
-        const fresh$ = renamed ? this.songs.getManifest(updated.artist, updated.album, updated.title) : null;
-        if (fresh$) fresh$.subscribe({ next: (manifest) => this.finishSave(manifest), error: (err: unknown) => this.fail(err) });
-        else this.finishSave(updated);
+        this.finishSave(updated);
       },
       error: (err: unknown) => this.fail(err),
     });
@@ -109,6 +108,7 @@ export class MetadataEditor {
         this.baseline.set(freshDraft);
         this.draft.set(merged);
         this.saving.set(false);
+        this.saveStatus.set('Changes saved.');
         this.saved.emit(fresh);
       },
       error: (err: unknown) => this.fail(err),
@@ -134,6 +134,7 @@ export class MetadataEditor {
     this.manifest.set(manifest);
     this.resetDraft(manifest);
     this.saving.set(false);
+    this.saveStatus.set('Changes saved.');
     this.saved.emit(manifest);
   }
 
@@ -166,8 +167,8 @@ export class MetadataEditor {
       artist: songArtist(song), album: songAlbum(song), title: songTitle(song), album_artist: song.album_artist ?? '',
       year: song.year == null ? '' : String(song.year), genre: song.genre ?? '', track_number: song.track_number ?? null,
       disc_number: song.disc_number ?? null, composer: song.composer ?? '', bpm: song.bpm ?? null, comment: song.comment ?? '',
-      replaygain_track_gain: song.replaygain_track_gain ?? '', replaygain_track_peak: song.replaygain_track_peak ?? '',
-      replaygain_album_gain: song.replaygain_album_gain ?? '', replaygain_album_peak: song.replaygain_album_peak ?? '',
+      replaygain_track_gain: String(song.replaygain_track_gain ?? ''), replaygain_track_peak: String(song.replaygain_track_peak ?? ''),
+      replaygain_album_gain: String(song.replaygain_album_gain ?? ''), replaygain_album_peak: String(song.replaygain_album_peak ?? ''),
     };
   }
 

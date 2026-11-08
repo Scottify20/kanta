@@ -83,6 +83,7 @@
       [layout]="effectiveLayout()"
       [selected]="isSelected(entry)"
       [current]="isCurrent(entry)"
+      [disabled]="entryUnavailable(entry)"
       [progress]="progressOf(entry)"
       [playlists]="playlists()"
       [inPlaylist]="!!detail()?.playlistId"

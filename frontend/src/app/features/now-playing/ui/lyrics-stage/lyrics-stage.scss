@@ -64,7 +64,7 @@
   text-align: center;
 
   &.colored braccato-lyrics {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   braccato-lyrics {
@@ -115,6 +115,42 @@
   &.automatic braccato-lyrics::ng-deep .blyrics--line {
     --blyrics-lyric-inactive-color: color-mix(in srgb, var(--kanta-inactive-color) calc(var(--kanta-inactive-opacity) * 100%), transparent);
   }
+
+  /*
+   * Uncomment this block for a fixed inactive opacity in every color mode.
+   * Adjust 35% as desired; this replaces automatic readability adjustments.
+   */
+  // braccato-lyrics::ng-deep .blyrics--line,
+  // &.colored braccato-lyrics::ng-deep .blyrics--line,
+  // &.automatic braccato-lyrics::ng-deep .blyrics--line {
+  //   --blyrics-lyric-inactive-color: color-mix(
+  //     in srgb, var(--blyrics-lyric-active-color) 30%, transparent
+  //   );
+  // }
+
+
+  /* White mode: uncomment to set its inactive opacity separately.
+  &:not(.colored) braccato-lyrics::ng-deep .blyrics--line {
+    --blyrics-lyric-inactive-color: color-mix(
+      in srgb, var(--blyrics-lyric-active-color) 35%, transparent
+    );
+  }
+  */
+
+  /* Custom mode (including automatic fallback): uncomment to set its opacity. */
+  &.colored:not(.automatic) braccato-lyrics::ng-deep .blyrics--line {
+    --blyrics-lyric-inactive-color: color-mix(
+      in srgb, var(--blyrics-lyric-active-color) 32%, transparent
+    );
+  }
+
+  //  Automatic mode: uncomment to replace its calculated inactive opacity.
+  &.automatic braccato-lyrics::ng-deep .blyrics--line {
+    --blyrics-lyric-inactive-color: color-mix(
+      in srgb, var(--blyrics-lyric-active-color) 32%, transparent
+    );
+  }
+
 
   &.colored braccato-lyrics::ng-deep .blyrics-background-lyric {
     --blyrics-lyric-inactive-color: inherit;

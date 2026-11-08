@@ -1,12 +1,13 @@
 <div
   class="item"
   role="option"
-  tabindex="0"
-  draggable="true"
+  [attr.tabindex]="disabled() ? -1 : 0"
+  [attr.draggable]="!disabled()"
+  [attr.aria-disabled]="disabled()"
   [attr.aria-selected]="selected()"
-  (click)="activate.emit($event)"
-  (keydown.enter)="activate.emit($any($event))"
-  (contextmenu)="menu.openAt($event)"
+  (click)="!disabled() && activate.emit($event)"
+  (keydown.enter)="!disabled() && activate.emit($any($event))"
+  (contextmenu)="!disabled() && menu.openAt($event)"
   (dragstart)="dragStarted.emit($event)"
   (dragend)="dragEnded.emit()"
 >
@@ -39,6 +40,7 @@
   </div>
   <app-entry-menu #menu
     class="menu"
+    [style.display]="disabled() ? 'none' : null"
     [kind]="entry().kind"
     [popupId]="'lib:' + entry().key"
     group="library"

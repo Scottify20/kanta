@@ -16,6 +16,7 @@ export type { EntryAction };
     '[class.selected]': 'selected()',
     '[class.current]': 'current()',
     '[class.processing]': 'progress() !== null',
+    '[class.unavailable]': 'disabled()',
   },
 })
 export class LibraryItem {
@@ -23,6 +24,7 @@ export class LibraryItem {
   readonly layout = input<'grid' | 'list'>('grid');
   readonly selected = input(false);
   readonly current = input(false);
+  readonly disabled = input(false);
   readonly playlists = input<Playlist[]>([]);
   readonly inPlaylist = input(false);
   // Percent complete while this entry's songs are still being processed; null otherwise.

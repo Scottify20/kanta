@@ -82,6 +82,23 @@ export class Library {
     return new Map([...sums].map(([name, { total, count }]) => [name, Math.round(total / count)]));
   });
 
+  readonly processingSongs = computed(() => {
+    const active = new Map<string, number>();
+    for (const item of this.queueSnapshot()?.processing_queue ?? []) {
+      if (!['pending', 'processing', 'paused', 'cancelling'].includes(item.status)) continue;
+      active.set(songKey(item), item.status === 'pending' ? 0 : Number(item.progress) || 0);
+    }
+    return active;
+  });
+
+  songUnavailable(song: SongManifest): boolean {
+    return !isPlayable(song) || this.processingSongs().has(songKey(song));
+  }
+
+  entryUnavailable(entry: LibraryEntry): boolean {
+    return entry.kind === 'song' && this.songUnavailable(entry.songs[0]);
+  }
+
   private withPhoto(entry: LibraryEntry): LibraryEntry {
     const photo = entry.kind === 'artist' ? this.artistInfo.info(entry.title)?.photo_url : null;
     return photo ? { ...entry, covers: [photo] } : entry;
@@ -98,6 +115,7 @@ export class Library {
   });
 
   progressOf(entry: LibraryEntry): number | null {
+    if (entry.kind === 'song') return this.processingSongs().get(songKey(entry.songs[0])) ?? null;
     if (entry.kind !== 'artist') return null;
     return this.artistProgress().get(entry.title.trim().toLowerCase()) ?? null;
   }
@@ -115,7 +133,7 @@ export class Library {
   readonly currentTaskId = this.songsService.currentQueueTaskId;
   private anchorIndex = -1;
   private skipTabReset = false;
-  private prevActive = 0;
+  private previousProcessing = new Set<string>();
 
   private readonly songIndex = computed(
     () => new Map(this.library.songs().map((song) => [songKey(song), song])),
@@ -204,9 +222,14 @@ export class Library {
     });
     effect(() => {
       // New songs land in the library as processing finishes.
-      const active = this.artistProgress().size;
-      if (untracked(() => this.prevActive) > active) void this.library.load(true);
-      this.prevActive = active;
+      const active = new Set(this.processingSongs().keys());
+      if (untracked(() => [...this.previousProcessing].some((key) => !active.has(key)))) {
+        void this.library.load(true).catch((error: unknown) => {
+          console.error('Could not refresh library after processing:', error);
+          this.actionError.set('Could not refresh the library after processing.');
+        });
+      }
+      this.previousProcessing = active;
     });
     effect(() => {
       // Switching tabs resets the drill-down and the selection.
@@ -269,6 +292,7 @@ export class Library {
   }
 
   activate(entry: LibraryEntry, index: number, event: MouseEvent | KeyboardEvent): void {
+    if (this.entryUnavailable(entry)) return;
     const additive = event.ctrlKey || event.metaKey;
     if (event.shiftKey && this.anchorIndex >= 0) {
       const [from, to] = [this.anchorIndex, index].sort((a, b) => a - b);
@@ -276,6 +300,7 @@ export class Library {
         new Set(
           this.visibleEntries()
             .slice(from, to + 1)
+            .filter((e) => !this.entryUnavailable(e))
             .map((e) => e.key),
         ),
       );
@@ -311,7 +336,7 @@ export class Library {
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault();
-      this.selection.set(new Set(this.visibleEntries().map((e) => e.key)));
+      this.selection.set(new Set(this.visibleEntries().filter((e) => !this.entryUnavailable(e)).map((e) => e.key)));
     } else if (event.key === 'Escape') {
       if (this.selection().size) this.selection.set(new Set());
       else if (this.detail()) this.back();
@@ -322,12 +347,13 @@ export class Library {
   }
 
   onDragStart(event: DragEvent, entry: LibraryEntry): void {
+    if (this.entryUnavailable(entry)) { event.preventDefault(); return; }
     let dragged = this.entries().filter((e) => this.selection().has(e.key));
     if (!this.selection().has(entry.key)) {
       dragged = [entry];
       this.selection.set(new Set([entry.key]));
     }
-    const songs = this.uniqueSongs(dragged).filter(isPlayable);
+    const songs = this.playable(this.uniqueSongs(dragged));
     if (!songs.length) {
       event.preventDefault();
       return;
@@ -349,12 +375,13 @@ export class Library {
   }
 
   onAction(entry: LibraryEntry, action: EntryAction): void {
+    if (this.entryUnavailable(entry)) return;
     if (action === 'rename-playlist' && entry.playlistId) {
       this.playlistDraft.set({ id: entry.playlistId, name: entry.title });
     } else if (action === 'remove-from-playlist') this.removeFromPlaylist(entry);
     else {
       const ownSongsOnly = ['edit', 'open', 'go-album', 'go-artist'].includes(action);
-      const songs = ownSongsOnly ? entry.songs : this.actionSongs(entry);
+      const songs = ownSongsOnly ? entry.songs : this.playable(this.actionSongs(entry));
       const target = { kind: entry.kind, title: entry.title, songs, playlistId: entry.playlistId };
       void this.run(async () => {
         await this.entryActions.perform(target, action);
@@ -421,7 +448,8 @@ export class Library {
   }
 
   private detailSongs(detail: LibraryEntry): LibraryEntry[] {
-    const songs = detail.kind === 'artist' ? sortArtistSongs(detail.songs) : [...detail.songs];
+    const current = detail.songs.map((song) => this.songIndex().get(songKey(song))).filter((song): song is SongManifest => !!song);
+    const songs = detail.kind === 'artist' ? sortArtistSongs(current) : current;
     if (detail.kind === 'album') {
       songs.sort(
         (a, b) =>
@@ -433,7 +461,7 @@ export class Library {
   }
 
   private selectedSongs(): SongManifest[] {
-    return this.uniqueSongs(this.entries().filter((e) => this.selection().has(e.key)));
+    return this.playable(this.uniqueSongs(this.entries().filter((e) => this.selection().has(e.key))));
   }
 
   private actionSongs(entry: LibraryEntry): SongManifest[] {
@@ -447,7 +475,7 @@ export class Library {
   }
 
   private playable(songs: SongManifest[]): SongManifest[] {
-    return songs.filter(isPlayable);
+    return songs.filter((song) => !this.songUnavailable(song));
   }
 
   private async run(task: () => Promise<void>): Promise<void> {

@@ -34,6 +34,14 @@ The response contains:
 
 Each media entry has a display `name` and a ready-to-request `url`. The manifest can contain an empty array when lyrics or cover art were not found; that does not mean separation failed.
 
+## Edit metadata
+
+`PATCH /api/songs/{artist}/{album}/{title}/metadata` updates tags in the master
+and stems. Changing artist, album, or title moves the song into the corresponding
+sanitized folder, creating or reusing its artist and album folders. An existing
+destination song is never overwritten. Empty old album and artist folders are
+removed; folders containing other files or songs are retained.
+
 Example shape:
 
 ```json

@@ -35,7 +35,7 @@
       @if (error()) { <p class="error-message" role="alert">{{ error() }}</p> }
     </main>
     <footer class="editor-footer">
-      <span class="save-hint">{{ dirty() ? 'Unsaved changes' : 'Changes save to your library' }} · Ctrl/⌘ S</span>
+      <span class="save-hint" role="status">{{ saveStatus() || (dirty() ? 'Unsaved changes' : 'Changes save to your library') }} · Ctrl/⌘ S</span>
       <button class="secondary-button" type="button" (click)="requestClose()">Cancel</button>
       <button class="primary-button" type="button" [disabled]="saving() || !dirty()" (click)="saveMetadata()">
         <svg lucideCheck [size]="17"></svg>{{ saving() ? 'Saving…' : 'Save changes' }}

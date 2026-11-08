@@ -27,6 +27,12 @@
 
 }
 
+.minimized {
+  border-radius: 999px;
+
+  .mini-header { border-bottom: 0; height: 100%; }
+}
+
 .header-actions {
   display: flex;
   align-items: center;

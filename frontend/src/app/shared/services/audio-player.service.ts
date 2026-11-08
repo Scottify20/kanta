@@ -2,10 +2,10 @@ import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 
 export interface ReplayGainInfo {
-  trackGain?: string | null;
-  trackPeak?: string | null;
-  albumGain?: string | null;
-  albumPeak?: string | null;
+  trackGain?: string | number | null;
+  trackPeak?: string | number | null;
+  albumGain?: string | number | null;
+  albumPeak?: string | number | null;
 }
 
 export interface StemSources {
@@ -36,8 +36,8 @@ const storage = {
   },
 };
 
-const parseNumber = (value: string | null | undefined): number | null => {
-  const parsed = value ? Number.parseFloat(value) : Number.NaN;
+const parseNumber = (value: string | number | null | undefined): number | null => {
+  const parsed = value != null ? Number.parseFloat(String(value)) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : null;
 };
 

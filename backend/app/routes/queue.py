@@ -1,5 +1,6 @@
 import threading
 import asyncio
+import errno
 import io
 import json
 import logging
@@ -8,11 +9,13 @@ import re
 import shutil
 import stat
 import subprocess
+import tempfile
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 
+import mutagen
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -483,6 +486,7 @@ def _apply_metadata(
     root: Path,
     new: tuple[str, str, str],
     extended: Dict[str, Any],
+    display: tuple[str, str, str] | None = None,
 ) -> Path:
     new_song_dir = (root / new[0] / new[1] / new[2]).resolve()
     if not new_song_dir.is_relative_to(root):
@@ -496,26 +500,45 @@ def _apply_metadata(
     if new_song_dir != old_song_dir and not case_only and new_song_dir.exists():
         raise HTTPException(status_code=409, detail="A song with that metadata already exists")
 
-    if case_only:
-        # Case-insensitive filesystems (Windows/macOS) need a two-step rename.
-        staging = old_song_dir.with_name(f".{old_song_dir.name}.{uuid.uuid4().hex[:8]}")
-        old_song_dir.rename(staging)
-        staging.rename(new_song_dir)
-    elif new_song_dir != old_song_dir:
-        new_song_dir.parent.mkdir(parents=True, exist_ok=True)
-        old_song_dir.rename(new_song_dir)
-    for audio_file in audio_files(new_song_dir):
-        updates: Dict[str, Any] = dict(extended)
-        updates["artist"], updates["album"] = new[0], new[1]
-        existing_title = get_basic_tag(audio_file, "title")
-        if existing_title and existing_title.startswith(old[2]):
-            updates["title"] = new[2] + existing_title[len(old[2]):]
-        else:
-            updates["title"] = new[2]
+    files = audio_files(old_song_dir)
+    if not files:
+        raise HTTPException(status_code=400, detail="No audio files found for this song")
+    display = display or new
+    reference = library.reference_audio(old_song_dir)
+    old_title = get_basic_tag(reference, "title") if reference else old[2]
+    with tempfile.TemporaryDirectory(prefix="kanta-tags-") as temp:
+        backups = []
+        for index, audio_file in enumerate(files):
+            backup = Path(temp) / str(index)
+            shutil.copy2(audio_file, backup)
+            backups.append((audio_file, backup))
         try:
-            write_tags(audio_file, updates)
+            for audio_file in files:
+                updates: Dict[str, Any] = dict(extended)
+                updates["artist"], updates["album"] = display[0], display[1]
+                existing_title = get_basic_tag(audio_file, "title")
+                if existing_title and old_title and existing_title.startswith(old_title):
+                    updates["title"] = display[2] + existing_title[len(old_title):]
+                else:
+                    updates["title"] = display[2]
+                write_tags(audio_file, updates)
+            if case_only:
+                staging = old_song_dir.with_name(f".{old_song_dir.name}.{uuid.uuid4().hex[:8]}")
+                old_song_dir.rename(staging)
+                try:
+                    staging.rename(new_song_dir)
+                except OSError:
+                    staging.rename(old_song_dir)
+                    raise
+            elif new_song_dir != old_song_dir:
+                new_song_dir.parent.mkdir(parents=True, exist_ok=True)
+                old_song_dir.rename(new_song_dir)
         except Exception:
-            continue
+            for audio_file, backup in backups:
+                shutil.copy2(backup, audio_file)
+            raise
+    if new_song_dir != old_song_dir:
+        _remove_empty_song_parents(old_song_dir, root)
     return new_song_dir
 
 
@@ -551,6 +574,9 @@ async def update_song_metadata(
             root,
             (new_artist, new_album, new_title),
             extended,
+            (metadata.artist.strip() if metadata.artist is not None else artist,
+             metadata.album.strip() if metadata.album is not None else album,
+             metadata.title.strip() if metadata.title is not None else title),
         )
         await queue_manager.update_processed_song_metadata(
             artist,
@@ -562,7 +588,7 @@ async def update_song_metadata(
             old_song_dir,
             new_song_dir,
         )
-    except OSError as exc:
+    except (OSError, ValueError, mutagen.MutagenError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not update song metadata: {exc}") from exc
 
     if (new_artist, new_album, new_title) != (artist, album, title):
@@ -574,7 +600,9 @@ async def update_song_metadata(
     record = await asyncio.to_thread(
         library.get_song, new_artist, new_album, new_title, str(request.base_url)
     )
-    return record or {"artist": new_artist, "album": new_album, "title": new_title}
+    if record is None:
+        raise HTTPException(status_code=500, detail="Metadata saved, but the updated song could not be loaded")
+    return record
 
 
 @songs_router.post("/songs/{artist}/{album}/{title}/lyrics/auto-fetch")
@@ -666,6 +694,18 @@ async def upload_song_cover(
     return {"cover_url": record["cover_url"] if record else None}
 
 
+def _remove_empty_song_parents(song_dir: Path, root: Path) -> None:
+    for parent in (song_dir.parent, song_dir.parent.parent):
+        if parent == root or not parent.is_relative_to(root):
+            break
+        try:
+            parent.rmdir()
+        except OSError as exc:
+            if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST):
+                logger.warning("Could not remove empty song folder %s: %s", parent, exc)
+            break
+
+
 def _delete_song_files(song_dir: Path, root: Path) -> None:
     def _make_writable(func, path, _exc):
         # Windows refuses to delete read-only files (and files copied from read-only media).
@@ -673,13 +713,7 @@ def _delete_song_files(song_dir: Path, root: Path) -> None:
         func(path)
 
     shutil.rmtree(song_dir, onerror=_make_writable)
-    for parent in (song_dir.parent, song_dir.parent.parent):
-        if parent == root or not parent.is_relative_to(root):
-            break
-        try:
-            parent.rmdir()
-        except OSError:
-            break
+    _remove_empty_song_parents(song_dir, root)
 
 
 @songs_router.delete("/songs/{artist}/{album}/{title}")

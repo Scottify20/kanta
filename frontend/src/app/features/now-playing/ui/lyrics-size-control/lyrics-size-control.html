@@ -24,7 +24,7 @@
       <strong>Lyrics color</strong>
       <div class="color-modes" role="group" aria-label="Lyrics color">
         <button type="button" [class.active]="colors.mode() === 'white'" [attr.aria-pressed]="colors.mode() === 'white'" (click)="colors.setMode('white')">White</button>
-        <button type="button" [class.active]="colors.mode() === 'automatic'" [attr.aria-pressed]="colors.mode() === 'automatic'" (click)="colors.setMode('automatic')">Album</button>
+        <button type="button" [class.active]="colors.mode() === 'automatic'" [attr.aria-pressed]="colors.mode() === 'automatic'" (click)="colors.setMode('automatic')">Auto</button>
         <button type="button" [class.active]="colors.mode() === 'custom'" [attr.aria-pressed]="colors.mode() === 'custom'" (click)="colors.setMode('custom')">Custom</button>
       </div>
       @if (colors.mode() === 'automatic' && colors.automaticUsesCustom()) {

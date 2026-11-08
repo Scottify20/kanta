@@ -50,10 +50,10 @@ export interface SongManifest {
   comment?: string | null;
   composer?: string | null;
   bpm?: number | null;
-  replaygain_track_gain?: string | null;
-  replaygain_track_peak?: string | null;
-  replaygain_album_gain?: string | null;
-  replaygain_album_peak?: string | null;
+  replaygain_track_gain?: string | number | null;
+  replaygain_track_peak?: string | number | null;
+  replaygain_album_gain?: string | number | null;
+  replaygain_album_peak?: string | number | null;
   duration_seconds?: number | null;
   date_added?: string | null;
   max_offset_ms?: number | null;

@@ -1,7 +1,7 @@
 @if (visible()) {
-  <section class="mini-lyrics" aria-label="Mini lyrics"
+  <section class="mini-lyrics" [class.minimized]="minimized()" aria-label="Mini lyrics"
     [style.left.px]="bounds().x" [style.top.px]="bounds().y"
-    [style.width.px]="bounds().width" [style.height.px]="bounds().height">
+    [style.width.px]="bounds().width" [style.height.px]="minimized() ? 48 : bounds().height">
     <header class="mini-header">
       <div class="drag-handle" role="button" tabindex="0"
         aria-label="Move mini lyrics. Use arrow keys to move."
@@ -12,6 +12,7 @@
         <span class="title">{{ title() }}</span>
       </div>
       <div class="header-actions">
+        @if (!minimized()) {
         <app-popup-panel popupId="mini-lyrics-size" group="mini-lyrics" label="Mini lyrics size">
           <button popup-trigger class="header-button" type="button" aria-label="Adjust mini lyrics size" appTooltip="Lyrics size">
             <svg lucideALargeSmall [size]="18"></svg>
@@ -31,8 +32,15 @@
         <a class="header-button" routerLink="/" aria-label="Open now playing" appTooltip="Open player">
           <svg lucideExternalLink [size]="18"></svg>
         </a>
+        }
+        <button class="header-button" type="button" [attr.aria-label]="minimized() ? 'Expand mini lyrics' : 'Minimize mini lyrics'"
+          [appTooltip]="minimized() ? 'Expand lyrics' : 'Minimize lyrics'" [attr.aria-expanded]="!minimized()" (click)="toggleMinimized()">
+          @if (minimized()) { <svg lucideChevronUp [size]="18"></svg> }
+          @else { <svg lucideChevronDown [size]="18"></svg> }
+        </button>
       </div>
     </header>
+    @if (!minimized()) {
     <div class="mini-content">
       @if (lyrics.lyrics()?.length) {
         <app-lyrics-stage [compact]="true" [coverUrl]="cover()" [songKey]="key()"
@@ -47,5 +55,6 @@
       (keydown)="onKeyboard($event, 'resize')">
       <span aria-hidden="true"></span>
     </button>
+    }
   </section>
 }

@@ -108,7 +108,7 @@ export class LibraryService {
 
   load(force = false): Promise<void> {
     if (this.loaded() && !force) return Promise.resolve();
-    if (this.inflight) return this.inflight;
+    if (this.inflight) return force ? this.inflight.then(() => this.load(true)) : this.inflight;
     this.loading.set(true);
     const collected: SongManifest[] = [];
     this.inflight = this.songsService

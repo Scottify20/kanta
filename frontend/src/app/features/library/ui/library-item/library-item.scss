@@ -178,3 +178,7 @@
   background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
   pointer-events: none;
 }
+:host(.unavailable) .item {
+  opacity: 0.5;
+  cursor: default;
+}

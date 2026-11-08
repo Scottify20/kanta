@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
-import { LucideALargeSmall, LucideExternalLink, LucideRotateCcw } from '@lucide/angular';
+import { LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucideRotateCcw } from '@lucide/angular';
 import { filter, map, startWith } from 'rxjs';
 
 import { AudioPlayerService } from '../../../../shared/services/audio-player.service';
@@ -32,7 +32,7 @@ const MIN_HEIGHT = 160;
 
 @Component({
   selector: 'app-mini-lyrics',
-  imports: [DecimalPipe, LyricsStage, RouterLink, PopupPanel, Tooltip, LucideALargeSmall, LucideExternalLink, LucideRotateCcw],
+  imports: [DecimalPipe, LyricsStage, RouterLink, PopupPanel, Tooltip, LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucideRotateCcw],
   templateUrl: './mini-lyrics.html',
   styleUrl: './mini-lyrics.scss',
 })
@@ -40,6 +40,7 @@ export class MiniLyrics {
   readonly audio = inject(AudioPlayerService);
   readonly lyrics = inject(LyricsService);
   readonly size = inject(LyricsSizeService);
+  readonly minimized = signal(false);
   private readonly popups = inject(PopupStateService);
   private readonly songs = inject(SongsService);
   private readonly router = inject(Router);
@@ -92,6 +93,11 @@ export class MiniLyrics {
 
   updateSize(event: Event): void {
     this.size.setMini(Number((event.target as HTMLInputElement).value));
+  }
+
+  toggleMinimized(): void {
+    this.closeSizePopup();
+    this.minimized.update((value) => !value);
   }
 
   private closeSizePopup(): void {

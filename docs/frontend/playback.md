@@ -11,11 +11,13 @@ resize it; its position and size are saved across app launches. The move and
 resize handles also support the arrow keys (hold Shift for larger steps).
 Use the panel header's lyrics size button to adjust its text independently of
 the main player; the mini lyrics text size is saved across launches.
+Use the minimize button to collapse the panel into a pill; expand it to restore
+the previous panel size and position.
 
 ## Recommended flow
 
 1. Add an external audio file with `QueueService.addTrack()`; priority `2` is the default.
-   To include local lyrics, select or drop the audio and its same-named `.ttml`
+   To include local lyrics, select or drop the audio and its same-named `.ttml` or `.lrc`
    file together. Individual file selection does not grant access to other files
    in the original folder.
 2. Subscribe to `QueueService.queue$`.
