@@ -28,9 +28,12 @@
 }
 
 .minimized {
+  width: max-content;
+  max-width: calc(100vw - 32px);
   border-radius: 999px;
 
   .mini-header { border-bottom: 0; height: 100%; }
+  .drag-handle { flex: 1 1 auto; }
 }
 
 .header-actions {
@@ -54,6 +57,7 @@
   cursor: pointer;
 
   &:hover { background: rgba(255, 255, 255, 0.12); }
+  &:disabled { opacity: 0.4; cursor: default; }
 }
 
 .mini-size-popover {
@@ -105,6 +109,7 @@
 .title { overflow: hidden; font-size: 0.8rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 
 .mini-content {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -117,6 +122,17 @@
     font-size: 0.85rem;
     text-align: center;
   }
+}
+
+.paused-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.9rem;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .resize-handle {

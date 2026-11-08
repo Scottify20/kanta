@@ -28,7 +28,7 @@
   </aside>
 </div>
 
-<app-mini-lyrics />
+<app-mini-lyrics [playerVisible]="playerVisible()" />
 
 @if (setup.needsSetup()) {
   <app-setup-modal />

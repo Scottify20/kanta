@@ -585,7 +585,7 @@ export class NowPlaying implements OnDestroy {
 
   private async playQueueItem(track: QueueItem): Promise<void> {
     this.manifestRequest++;
-    this.audioPlayer.pause();
+    this.audioPlayer.release();
     this.lyricsService.clearLyrics();
     this.selectedTrack.set(track);
     this.songsService.setNowPlaying(null, track.task_id);
@@ -611,7 +611,7 @@ export class NowPlaying implements OnDestroy {
 
   private selectLibrarySong(song: SongManifest, queueTaskId: string | null = null): void {
     this.manifestRequest++;
-    this.audioPlayer.pause();
+    this.audioPlayer.release();
     this.lyricsService.clearLyrics();
     this.selectedTrack.set(
       queueTaskId

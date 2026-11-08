@@ -57,6 +57,7 @@ export const replayGainFactor = (
 @Injectable({ providedIn: 'root' })
 export class AudioPlayerService {
   readonly isPlaying = signal(false);
+  readonly playbackStarted = signal(false);
   readonly currentTime = signal(0);
   readonly duration = signal(0);
   readonly vocalsVolume = signal(1);
@@ -111,6 +112,11 @@ export class AudioPlayerService {
     return !!this.vocalsAudio && !!this.instrumentalAudio;
   }
 
+  hasLoadedSources(sources: Pick<StemSources, 'vocals' | 'instrumental'>): boolean {
+    return this.vocalsAudio?.getAttribute('src') === sources.vocals
+      && this.instrumentalAudio?.getAttribute('src') === sources.instrumental;
+  }
+
   async loadStems(sources: StemSources): Promise<void> {
     this.release();
     const context = this.getContext();
@@ -147,11 +153,16 @@ export class AudioPlayerService {
   }
 
   async play(): Promise<void> {
-    if (!this.vocalsAudio || !this.instrumentalAudio) {
+    const vocals = this.vocalsAudio;
+    const instrumental = this.instrumentalAudio;
+    if (!vocals || !instrumental) {
       return;
     }
     await this.getContext().resume();
-    await Promise.all([this.vocalsAudio.play(), this.instrumentalAudio.play()]);
+    if (this.vocalsAudio !== vocals || this.instrumentalAudio !== instrumental) return;
+    await Promise.all([vocals.play(), instrumental.play()]);
+    if (this.vocalsAudio !== vocals || this.instrumentalAudio !== instrumental) return;
+    this.playbackStarted.set(true);
     this.isPlaying.set(true);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     void this.acquireWakeLock();
@@ -241,6 +252,7 @@ export class AudioPlayerService {
 
   release(): void {
     this.pause();
+    this.playbackStarted.set(false);
     this.vocalsAudio?.remove();
     this.instrumentalAudio?.remove();
     this.vocalsAudio = null;

@@ -1,10 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink } from '@angular/router';
-import { LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucideRotateCcw } from '@lucide/angular';
-import { filter, map, startWith } from 'rxjs';
+import { RouterLink } from '@angular/router';
+import { LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucidePause, LucidePlay, LucideRotateCcw } from '@lucide/angular';
 
+import { QueueService } from '../../../queue/data-access/queue.service';
 import { AudioPlayerService } from '../../../../shared/services/audio-player.service';
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { Tooltip } from '../../../../shared/directives/tooltip';
@@ -12,6 +12,7 @@ import { songCover, songKey } from '../../../../shared/services/library.service'
 import { LyricsService } from '../../../../shared/services/lyrics';
 import { LyricsSizeService } from '../../../../shared/services/lyrics-size.service';
 import { PopupStateService } from '../../../../shared/services/popup-state.service';
+import { findPlaybackStems } from '../../../../shared/services/playback-actions.service';
 import { SongsService, songTitle } from '../../../../shared/services/songs.service';
 import { ToastService } from '../../../../shared/services/toast.service';
 import { LyricsStage } from '../lyrics-stage/lyrics-stage';
@@ -23,39 +24,42 @@ interface Bounds {
   height: number;
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 const STORAGE_KEY = 'kanta.miniLyrics.bounds';
 const MARGIN = 16;
 const DEFAULT_WIDTH = 360;
 const DEFAULT_HEIGHT = 240;
 const MIN_WIDTH = 240;
 const MIN_HEIGHT = 160;
+const PILL_HEIGHT = 48;
 
 @Component({
   selector: 'app-mini-lyrics',
-  imports: [DecimalPipe, LyricsStage, RouterLink, PopupPanel, Tooltip, LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucideRotateCcw],
+  imports: [DecimalPipe, LyricsStage, RouterLink, PopupPanel, Tooltip, LucideALargeSmall, LucideChevronDown, LucideChevronUp, LucideExternalLink, LucidePause, LucidePlay, LucideRotateCcw],
   templateUrl: './mini-lyrics.html',
   styleUrl: './mini-lyrics.scss',
 })
 export class MiniLyrics {
+  readonly playerVisible = input(false);
   readonly audio = inject(AudioPlayerService);
   readonly lyrics = inject(LyricsService);
   readonly size = inject(LyricsSizeService);
   readonly minimized = signal(false);
   private readonly popups = inject(PopupStateService);
   private readonly songs = inject(SongsService);
-  private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
-  private readonly route = toSignal(
-    this.router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map((event) => event.urlAfterRedirects),
-      startWith(this.router.url),
-    ),
-    { initialValue: this.router.url },
-  );
+  private readonly queue = toSignal(inject(QueueService).queue$, { initialValue: null });
   private readonly viewport = signal({ width: window.innerWidth, height: window.innerHeight });
   private readonly savedBounds = signal<Bounds | null>(this.loadBounds());
-  private gesture: { pointerId: number; kind: 'move' | 'resize'; x: number; y: number; bounds: Bounds } | null = null;
+  private readonly pillAnchor = signal<Point | null>(null);
+  private gesture: {
+    pointerId: number; kind: 'move' | 'resize'; x: number; y: number; bounds: Bounds;
+    pill: { anchor: Point; width: number; height: number } | null;
+  } | null = null;
 
   readonly song = this.songs.currentSong;
   readonly cover = computed(() => {
@@ -71,9 +75,22 @@ export class MiniLyrics {
     return song ? songKey(song) : '';
   });
   readonly time = computed(() => Math.max(0, this.audio.currentTime() - this.lyrics.offsetMs() / 1000));
-  readonly visible = computed(() =>
-    this.audio.isPlaying() && (this.router.parseUrl(this.route()).root.children['primary']?.segments.length ?? 0) > 0,
-  );
+  readonly visible = computed(() => this.isVisible());
+
+  private isVisible(): boolean {
+    const taskId = this.songs.currentQueueTaskId();
+    const song = this.song();
+    const stems = song ? findPlaybackStems(song.stems) : null;
+    return !this.playerVisible() && !!taskId && !!stems && this.audio.playbackStarted()
+      && (this.queue()?.karaoke_queue.some((item) => item.task_id === taskId && item.status === 'completed') ?? false)
+      && this.audio.hasLoadedSources({ vocals: stems.vocals.url, instrumental: stems.instrumental.url });
+  }
+  readonly selectedTrack = computed(() => {
+    const items = this.queue()?.karaoke_queue ?? [];
+    const taskId = this.songs.currentQueueTaskId();
+    return taskId ? items.find((item) => item.task_id === taskId) ?? null : items[0] ?? null;
+  });
+  readonly canResume = computed(() => this.selectedTrack()?.status === 'completed');
   readonly bounds = computed(() => {
     const { width, height } = this.viewport();
     const saved = this.savedBounds();
@@ -83,6 +100,15 @@ export class MiniLyrics {
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
     });
+  });
+  readonly minimizedAnchor = computed(() => {
+    const bounds = this.bounds();
+    const anchor = this.pillAnchor() ?? { x: bounds.x + bounds.width, y: bounds.y + bounds.height };
+    const viewport = this.viewport();
+    return {
+      x: Math.max(MARGIN, Math.min(anchor.x, viewport.width - MARGIN)),
+      y: Math.max(MARGIN + PILL_HEIGHT, Math.min(anchor.y, viewport.height - MARGIN)),
+    };
   });
 
   constructor() {
@@ -97,7 +123,34 @@ export class MiniLyrics {
 
   toggleMinimized(): void {
     this.closeSizePopup();
-    this.minimized.update((value) => !value);
+    if (this.minimized()) {
+      this.savePillPosition(this.minimizedAnchor());
+      this.pillAnchor.set(null);
+      this.minimized.set(false);
+      this.saveBounds();
+    } else {
+      const bounds = this.bounds();
+      this.pillAnchor.set({ x: bounds.x + bounds.width, y: bounds.y + bounds.height });
+      this.minimized.set(true);
+    }
+  }
+
+  async resume(): Promise<void> {
+    const track = this.selectedTrack();
+    if (!track || track.status !== 'completed' || this.audio.isPlaying()) return;
+    try {
+      const song = this.song();
+      const stems = song ? findPlaybackStems(song.stems) : null;
+      if (this.songs.currentQueueTaskId() === track.task_id && stems
+          && this.audio.hasLoadedSources({ vocals: stems.vocals.url, instrumental: stems.instrumental.url })) {
+        await this.audio.play();
+      } else {
+        this.songs.requestQueueTrack(track);
+      }
+    } catch (error) {
+      console.error('Could not resume playback:', error);
+      this.toast.error('Could not resume playback.');
+    }
   }
 
   private closeSizePopup(): void {
@@ -113,8 +166,10 @@ export class MiniLyrics {
     if (event.button !== 0 || this.gesture) return;
     this.closeSizePopup();
     event.preventDefault();
+    const rect = this.minimized() ? (event.currentTarget as HTMLElement).closest('.mini-lyrics')?.getBoundingClientRect() : null;
     this.gesture = {
       pointerId: event.pointerId, kind, x: event.clientX, y: event.clientY, bounds: this.bounds(),
+      pill: rect ? { anchor: this.minimizedAnchor(), width: rect.width, height: rect.height } : null,
     };
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
@@ -124,6 +179,10 @@ export class MiniLyrics {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
+    if (gesture.pill) {
+      this.movePill(gesture.pill.anchor, dx, dy, gesture.pill.width, gesture.pill.height);
+      return;
+    }
     const original = gesture.bounds;
     this.savedBounds.set(this.constrain(gesture.kind === 'move'
       ? { ...original, x: original.x + dx, y: original.y + dy }
@@ -141,6 +200,7 @@ export class MiniLyrics {
   cancelGesture(event: PointerEvent): void {
     if (this.gesture?.pointerId !== event.pointerId) return;
     this.savedBounds.set(this.gesture.bounds);
+    if (this.gesture.pill) this.pillAnchor.set(this.gesture.pill.anchor);
     this.gesture = null;
   }
 
@@ -151,11 +211,34 @@ export class MiniLyrics {
     if (!dx && !dy) return;
     this.closeSizePopup();
     event.preventDefault();
+    if (kind === 'move' && this.minimized()) {
+      const rect = (event.currentTarget as HTMLElement).closest('.mini-lyrics')?.getBoundingClientRect();
+      if (rect) {
+        this.movePill(this.minimizedAnchor(), dx, dy, rect.width, rect.height);
+        this.saveBounds();
+      }
+      return;
+    }
     const bounds = this.bounds();
     this.savedBounds.set(this.constrain(kind === 'move'
       ? { ...bounds, x: bounds.x + dx, y: bounds.y + dy }
       : { ...bounds, width: bounds.width + dx, height: bounds.height + dy }));
     this.saveBounds();
+  }
+
+  private movePill(anchor: Point, dx: number, dy: number, width: number, height: number): void {
+    const viewport = this.viewport();
+    const next = {
+      x: Math.max(Math.min(viewport.width - MARGIN, MARGIN + width), Math.min(anchor.x + dx, viewport.width - MARGIN)),
+      y: Math.max(Math.min(viewport.height - MARGIN, MARGIN + height), Math.min(anchor.y + dy, viewport.height - MARGIN)),
+    };
+    this.pillAnchor.set(next);
+    this.savePillPosition(next);
+  }
+
+  private savePillPosition(anchor: Point): void {
+    const bounds = this.bounds();
+    this.savedBounds.set(this.constrain({ ...bounds, x: anchor.x - bounds.width, y: anchor.y - bounds.height }));
   }
 
   private constrain(bounds: Bounds): Bounds {

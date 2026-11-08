@@ -5,14 +5,17 @@
 Playback is handled by Angular in the frontend. The backend only generates and serves the audio files.
 The navigation sidebar and queue sheet overlay the current page without resizing
 it. Click outside an open panel to dismiss it.
-While a song is playing on another page, a mini lyrics panel appears at the
-bottom right. Drag its header to move it or drag its bottom-right corner to
+While a queued song is playing or paused, a mini lyrics panel appears outside
+the Now Playing page. It remains hidden before playback starts and when the
+queue is empty. Use the header's pause and resume buttons to control playback.
+Drag its header to move it or drag its bottom-right corner to
 resize it; its position and size are saved across app launches. The move and
 resize handles also support the arrow keys (hold Shift for larger steps).
 Use the panel header's lyrics size button to adjust its text independently of
 the main player; the mini lyrics text size is saved across launches.
-Use the minimize button to collapse the panel into a pill; expand it to restore
-the previous panel size and position.
+Use the minimize button to collapse the panel into a pill with the song title
+and playback control, anchored at the panel's bottom-right corner. Drag the pill
+to reposition it; expanding restores the panel size at the new position.
 
 ## Recommended flow
 

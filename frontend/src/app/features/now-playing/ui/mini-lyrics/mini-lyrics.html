@@ -1,7 +1,10 @@
 @if (visible()) {
   <section class="mini-lyrics" [class.minimized]="minimized()" aria-label="Mini lyrics"
-    [style.left.px]="bounds().x" [style.top.px]="bounds().y"
-    [style.width.px]="bounds().width" [style.height.px]="minimized() ? 48 : bounds().height">
+    [style.left.px]="minimized() ? null : bounds().x" [style.top.px]="minimized() ? null : bounds().y"
+    [style.right]="minimized() ? 'calc(100vw - ' + minimizedAnchor().x + 'px)' : null"
+    [style.bottom]="minimized() ? 'calc(100vh - ' + minimizedAnchor().y + 'px)' : null"
+    [style.max-width.px]="minimized() ? minimizedAnchor().x - 16 : null"
+    [style.width.px]="minimized() ? null : bounds().width" [style.height.px]="minimized() ? 48 : bounds().height">
     <header class="mini-header">
       <div class="drag-handle" role="button" tabindex="0"
         aria-label="Move mini lyrics. Use arrow keys to move."
@@ -9,9 +12,20 @@
         (pointerup)="finishGesture($event)" (pointercancel)="cancelGesture($event)"
         (keydown)="onKeyboard($event, 'move')">
         <span class="grip" aria-hidden="true">⠿</span>
-        <span class="title">{{ title() }}</span>
+        <span class="title" [attr.title]="title()">{{ title() }}</span>
       </div>
       <div class="header-actions">
+        @if (audio.isPlaying()) {
+          <button class="header-button" type="button" aria-label="Pause playback" appTooltip="Pause"
+            (click)="audio.pause()">
+            <svg lucidePause [size]="18"></svg>
+          </button>
+        } @else {
+          <button class="header-button" type="button" aria-label="Resume playback" appTooltip="Resume"
+            [disabled]="!canResume()" (click)="resume()">
+            <svg lucidePlay [size]="18"></svg>
+          </button>
+        }
         @if (!minimized()) {
         <app-popup-panel popupId="mini-lyrics-size" group="mini-lyrics" label="Mini lyrics size">
           <button popup-trigger class="header-button" type="button" aria-label="Adjust mini lyrics size" appTooltip="Lyrics size">
@@ -47,6 +61,9 @@
           [lyrics]="lyrics.lyrics()" [currentTime]="time()" [playing]="audio.isPlaying()" />
       } @else {
         <p>{{ lyrics.isLoading() ? 'Loading lyrics…' : 'No synchronized lyrics available.' }}</p>
+      }
+      @if (!audio.isPlaying()) {
+        <div class="paused-overlay" role="status">Paused</div>
       }
     </div>
     <button class="resize-handle" type="button" aria-label="Resize mini lyrics. Use arrow keys to resize."

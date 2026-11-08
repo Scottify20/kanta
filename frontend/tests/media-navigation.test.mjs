@@ -116,6 +116,22 @@ describe('player queue navigation', () => {
     expect(player.songsService.setNowPlaying).not.toHaveBeenCalled();
   });
 
+  it('releases the previous playback before selecting another queue track', async () => {
+    const player = Object.create(NowPlaying.prototype);
+    player.manifestRequest = 0;
+    player.audioPlayer = { release: vi.fn() };
+    player.lyricsService = { clearLyrics: vi.fn() };
+    player.selectedTrack = signal(null);
+    player.selectedManifest = signal(null);
+    player.coverUrl = signal(null);
+    player.songsService = { setNowPlaying: vi.fn() };
+    player.loadManifest = vi.fn().mockResolvedValue(null);
+    await player.playQueueItem(completed('2'));
+    expect(player.audioPlayer.release).toHaveBeenCalledOnce();
+    expect(player.songsService.setNowPlaying).toHaveBeenCalledWith(null, '2');
+    expect(player.loadManifest).toHaveBeenCalledWith(completed('2'));
+  });
+
   it('serializes repeated media and automatic navigation commands', async () => {
     const player = Object.create(NowPlaying.prototype);
     let finish;
