@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
-import { API_URL } from './settings.service';
+import { API_URL } from '../../app.config';
 import type { SongRef } from './library.service';
 
 export interface Playlist {

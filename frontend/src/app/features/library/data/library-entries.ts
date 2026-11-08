@@ -3,6 +3,7 @@ import { Playlist } from '../../../shared/services/playlists.service';
 import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
 
 export type LibraryTab = 'songs' | 'albums' | 'artists' | 'playlists';
+export type LyricsFilter = 'all' | 'word' | 'line' | 'duet' | 'none';
 export type SortMode =
   | 'az'
   | 'za'
@@ -144,6 +145,17 @@ export function sortEntries(entries: LibraryEntry[], mode: SortMode): LibraryEnt
     'most-songs': byNumber((e) => e.count, true),
   };
   return [...entries].sort(compare[mode]);
+}
+
+export function sortArtistSongs(songs: SongManifest[]): SongManifest[] {
+  return [...songs].sort(
+    (a, b) =>
+      songAlbum(a).localeCompare(songAlbum(b), undefined, { sensitivity: 'base', numeric: true }) ||
+      a.album.localeCompare(b.album, undefined, { sensitivity: 'variant', numeric: true }) ||
+      (a.disc_number ?? 1) - (b.disc_number ?? 1) ||
+      (a.track_number ?? 0) - (b.track_number ?? 0) ||
+      songTitle(a).localeCompare(songTitle(b), undefined, { sensitivity: 'base', numeric: true }),
+  );
 }
 
 export const formatRuntime = (seconds: number): string => {

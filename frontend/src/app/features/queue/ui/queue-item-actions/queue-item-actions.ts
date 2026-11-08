@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, viewChild } from '@angular/core';
 import { LucideMoreHorizontal, LucidePause, LucidePlay } from '@lucide/angular';
 
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
@@ -20,4 +20,10 @@ export class QueueItemActions {
   readonly pause = output<void>();
   readonly resume = output<void>();
   readonly remove = output<void>();
+  readonly select = output<void>();
+  private readonly popup = viewChild.required(PopupPanel);
+
+  openAt(event: MouseEvent): void {
+    this.popup().openAt(event);
+  }
 }

@@ -27,11 +27,35 @@
   </aside>
 </div>
 
+<app-mini-lyrics />
+
 @if (setup.needsSetup()) {
   <app-setup-modal />
 }
 @if (entryActions.editingSong(); as song) {
   <app-metadata-editor [song]="song" (closed)="entryActions.editingSong.set(null)" (saved)="library.load(true)" />
 }
-<app-toast-host />
 }
+@if (contextMenu(); as menu) {
+  <div class="context-menu" role="menu" aria-label="Context options" [style.left.px]="menu.x" [style.top.px]="menu.y" (mousedown)="$event.preventDefault()" (click)="$event.stopPropagation()">
+    @if (menu.selection) {
+      <button type="button" role="menuitem" (click)="clipboardAction('copy')">Copy</button>
+      @if (menu.input && !menu.input.readOnly && !menu.input.disabled) {
+        <button type="button" role="menuitem" (click)="clipboardAction('cut')">Cut</button>
+      }
+    }
+    @if (menu.input) {
+      @if (!menu.input.readOnly && !menu.input.disabled) {
+        <button type="button" role="menuitem" (click)="clipboardAction('paste')">Paste</button>
+      }
+      <button type="button" role="menuitem" (click)="selectContextInput()">Select all</button>
+    }
+    @if (!logsWindow) {
+      <button type="button" role="menuitem" (click)="openContextLibrary()">Open library</button>
+      <button type="button" role="menuitem" (click)="openContextQueue()">Toggle queue</button>
+    } @else if (!menu.selection && !menu.input) {
+      <span>No actions available</span>
+    }
+  </div>
+}
+<app-toast-host />

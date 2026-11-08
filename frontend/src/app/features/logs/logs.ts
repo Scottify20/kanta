@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild }
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
-import { API_URL } from '../../shared/services/settings.service';
+import { API_URL } from '../../app.config';
 
 interface LogEntry {
   id: number;

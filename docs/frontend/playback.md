@@ -3,10 +3,21 @@
 **Navigation:** [Home](../README.md) | [API guide](../api/README.md) | [Queue API](../api/queue.md) | [Separation API](../api/separation.md) | [Songs and media](../api/songs.md) | **Frontend playback**
 
 Playback is handled by Angular in the frontend. The backend only generates and serves the audio files.
+The navigation sidebar and queue sheet overlay the current page without resizing
+it. Click outside an open panel to dismiss it.
+While a song is playing on another page, a mini lyrics panel appears at the
+bottom right. Drag its header to move it or drag its bottom-right corner to
+resize it; its position and size are saved across app launches. The move and
+resize handles also support the arrow keys (hold Shift for larger steps).
+Use the panel header's lyrics size button to adjust its text independently of
+the main player; the mini lyrics text size is saved across launches.
 
 ## Recommended flow
 
 1. Add an external audio file with `QueueService.addTrack()`; priority `2` is the default.
+   To include local lyrics, select or drop the audio and its same-named `.ttml`
+   file together. Individual file selection does not grant access to other files
+   in the original folder.
 2. Subscribe to `QueueService.queue$`.
 3. Wait for the item to become `completed`.
 4. Request its song manifest.
@@ -15,12 +26,20 @@ Playback is handled by Angular in the frontend. The backend only generates and s
 7. Start playback from a user gesture.
 
 Processed songs from the Library skip separation. The player loads their existing manifest and stems directly. Library clicks play the song after clearing the queues; the card menu can add it to Karaoke Queue without reprocessing.
+On an artist page, each album heading expands or collapses its songs. Playing or
+queueing the whole artist still includes songs in collapsed albums.
+In the Library's Songs tab, select one filter: Word synced, Line synced, Duet
+Lyrics, or No lyrics. Select the active filter again to show all songs. Duets
+are identified from saved lyrics containing a second singer or group vocal line.
+The filter and each tab's sort remain selected while the app is running and
+reset on relaunch; other library tabs are not filtered.
 
 ## Queue service
 
-`QueueService` polls `GET /api/queue` every 1.5 seconds and provides methods for:
+`QueueService` receives queue snapshots from `GET /api/queue/stream`, falling
+back to polling `GET /api/queue` every 1.5 seconds, and provides methods for:
 
-- `addTrack(file, priority)`
+- `addTrack(file, priority, lyrics?)`
 - `addProcessedTrack(song)`
 - `promoteTrack(taskId)`
 - `pauseTrack(taskId)`
@@ -30,9 +49,9 @@ Processed songs from the Library skip separation. The player loads their existin
 - `clearQueue(priority)`
 - `clearAllQueue()`
 
-The API base URL is currently `http://127.0.0.1:8000` in `queue.service.ts`.
-
-The service uses `switchMap`, so a slow poll is replaced by the next interval request. `shareReplay` allows multiple components to observe one polling stream.
+The API base URL is configured in `app.config.ts`. Polls do not overlap, and
+failures retain the last snapshot. `shareReplay` allows multiple components to
+observe one queue stream.
 
 ## Stem player
 
@@ -52,6 +71,11 @@ audioPlayer.pause();
 ```
 
 Each stem has a separate `GainNode`, so vocal and instrumental volume can be controlled independently.
+
+The Space bar toggles playback when focus is not in an editable or interactive
+control. Supported webviews also expose play/pause through the Media Session API
+and request a screen wake lock while playing. Bluetooth media controls and wake
+locks depend on the operating system and webview support.
 
 The player exposes signals for `isPlaying`, `currentTime`, `duration`, `vocalsVolume`, and `instrumentalVolume`. It also emits `trackEnded`, which the now-playing component uses to advance through the Karaoke Queue. Vocal and instrumental controls are separate vertical popup sliders.
 
@@ -122,3 +146,25 @@ onInstrumentalVolume(event: Event): void {
 ## Saved lyrics
 
 Song manifests include generated `.ttml` or `.lrc` URLs. Load the first saved lyric file before falling back to remote lookup. The backend lyrics proxy is available at `/api/blyrics/getLyrics` and serves local saved lyrics when they exist.
+
+The lyrics appearance popup in Now Playing controls size and color. White is the
+default; album accents sample the current cover, and custom mode offers separate
+colors for two singers. Duet coloring requires singer identifiers in the lyrics.
+Inactive and backing vocals use a translucent version of their line's singer
+color; album mode adjusts their opacity using the sampled backdrop and brightens
+active colors separately for greater distinction. The glow follows each singer's color. Lines marked
+as a vocal group use a blend of the two singer colors. Album mode
+automatically adjusts saturation and lightness using the cover and an estimate of
+the darkened backdrop. When a duet cover cannot provide two sufficiently
+distinct singer colors, album mode uses the saved custom colors for both singers.
+Custom colors use the selected values without automatic
+lightening. Both color modes use a subtle text shadow rather than a gradient;
+readability depends on the background.
+Appearance preferences are saved locally. If a cover cannot be sampled, the
+automatic colors fall back to white for solo lyrics and to the custom colors for
+duets. Color Thief extracts accents from the cover; monochrome covers use the
+same fallback.
+
+Right-click a library, search, or queue item for its available actions. Other
+areas show application navigation or text-editing actions instead of the webview
+menu. Clipboard actions depend on webview permissions.

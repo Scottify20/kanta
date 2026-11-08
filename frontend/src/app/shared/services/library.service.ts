@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { PlaylistsService } from './playlists.service';
 import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
+import type { LibraryTab, LyricsFilter, SortMode } from '../../features/library/data/library-entries';
 
 export interface SongRef {
   artist: string;
@@ -45,7 +46,8 @@ const normalize = (value: string): string =>
     .toLowerCase();
 
 export const songKey = (song: SongRef): string => `${song.artist}\u0000${song.album}\u0000${song.title}`;
-export const songCover = (song: SongManifest): string | null => song.covers[0]?.url ?? null;
+export const songCover = (song: SongManifest): string | null =>
+  (song.covers.find((cover) => /\.(?:jpe?g|png|webp|gif|bmp|avif|svg)$/i.test(cover.name)) ?? song.covers[0])?.url ?? null;
 
 @Injectable({ providedIn: 'root' })
 export class LibraryService {
@@ -55,6 +57,10 @@ export class LibraryService {
   readonly songs = signal<SongManifest[]>([]);
   readonly loaded = signal(false);
   readonly loading = signal(false);
+  readonly sorts = signal<Record<LibraryTab, SortMode>>({
+    songs: 'az', albums: 'az', artists: 'az', playlists: 'az',
+  });
+  readonly lyricsFilter = signal<LyricsFilter>('all');
   private inflight: Promise<void> | null = null;
   // Entry key (album:/artist:/playlist:) the library page should open as soon as it is shown.
   readonly pendingOpen = signal<string | null>(null);
@@ -104,16 +110,13 @@ export class LibraryService {
     if (this.loaded() && !force) return Promise.resolve();
     if (this.inflight) return this.inflight;
     this.loading.set(true);
-    // A first load shows songs as each batch arrives; a refresh swaps the list once, avoiding flicker.
-    const progressive = !this.loaded();
     const collected: SongManifest[] = [];
     this.inflight = this.songsService
       .streamSongs((batch) => {
         collected.push(...batch);
-        if (progressive) this.songs.update((songs) => [...songs, ...batch]);
-      }, progressive ? () => this.songs.set([]) : undefined)
+      })
       .then(() => {
-        if (!progressive) this.songs.set(collected);
+        this.songs.set(collected);
         this.loaded.set(true);
       })
       .finally(() => {

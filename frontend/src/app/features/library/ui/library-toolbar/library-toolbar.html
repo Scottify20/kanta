@@ -18,6 +18,21 @@
       <svg lucidePlus [size]="18"></svg>
     </button>
   }
+  @if (tab() === 'songs') {
+    <app-popup-panel popupId="library-filter" group="library-toolbar" placement="below" [closeOnContentClick]="true" label="Song filters">
+      <button popup-trigger class="sort filter" type="button" [class.active]="lyricsFilter() !== 'all'">
+        <span>Filter: {{ filterLabel() }}</span>
+        <svg lucideChevronDown [size]="16"></svg>
+      </button>
+      <div popup-content class="sort-list" role="group" aria-label="Song filters">
+        @for (option of lyricsFilters; track option.value) {
+          <button type="button" [class.active]="lyricsFilter() === option.value" [attr.aria-pressed]="lyricsFilter() === option.value" (click)="selectFilter(option.value)">
+            {{ option.label }}
+          </button>
+        }
+      </div>
+    </app-popup-panel>
+  }
   <app-popup-panel popupId="library-sort" group="library-toolbar" placement="below" [closeOnContentClick]="true" label="Sort">
     <button popup-trigger class="sort" type="button">
       <span>Sort by: {{ sortLabel() }}</span>
@@ -25,7 +40,7 @@
     </button>
     <div popup-content class="sort-list" role="menu">
       @for (mode of sortModes(); track mode) {
-        <button type="button" role="menuitemradio" [class.active]="sort() === mode" (click)="sort.set(mode)">
+        <button type="button" role="menuitemradio" [attr.aria-checked]="sort() === mode" [class.active]="sort() === mode" (click)="sort.set(mode)">
           {{ labelOf(mode) }}
         </button>
       }

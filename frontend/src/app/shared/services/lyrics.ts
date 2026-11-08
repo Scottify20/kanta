@@ -8,6 +8,7 @@ import { parseLRC, parseTTMLContent } from '@braccato/parsers';
 import type { Lyric } from '@braccato/parsers';
 import { stripLyricMetadata } from '../util/lyrics-metadata';
 import type { LyricsLevel } from './songs.service';
+import { API_URL } from '../../app.config';
 
 export interface SongQuery {
   artistName: string;
@@ -31,6 +32,7 @@ export class LyricsService {
 
   // Reactive state for components to consume
   readonly lyrics = signal<Lyric[] | null>(null);
+  readonly offsetMs = signal(0);
   readonly lyricsLevel = signal<LyricsLevel>('none');
   readonly previewUrl = signal<string | null>(null);
   readonly audioUrl = signal<string | null>(null);
@@ -45,7 +47,7 @@ export class LyricsService {
       displayName: 'Better Lyrics',
       syncType: 'word',
       fetch: createBLyricsProvider({
-        apiUrl: 'http://127.0.0.1:8000/api/blyrics/getLyrics',
+        apiUrl: `${API_URL}/api/blyrics/getLyrics`,
       }),
     });
     this.chain.register({

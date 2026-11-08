@@ -1,4 +1,6 @@
 import shutil
+import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 import mutagen
@@ -25,6 +27,7 @@ from app.services.settings import (
 )
 
 
+logger = logging.getLogger(__name__)
 
 class TaskProgressTqdm(tqdm.tqdm):
     """Interception wrapper for tqdm to update tasks_db during audio-separator inference."""
@@ -32,6 +35,7 @@ class TaskProgressTqdm(tqdm.tqdm):
     _start_pct: int = 0
     _end_pct: int = 100
     _step_prefix: str = "Processing"
+    _last_log: float = 0.0
 
     @classmethod
     def set_task_context(cls, task_id: Optional[str], start_pct: int, end_pct: int, prefix: str):
@@ -39,6 +43,7 @@ class TaskProgressTqdm(tqdm.tqdm):
         cls._start_pct = start_pct
         cls._end_pct = end_pct
         cls._step_prefix = prefix
+        cls._last_log = 0.0
 
     def update(self, n=1):
         displayed = super().update(n)
@@ -53,6 +58,13 @@ class TaskProgressTqdm(tqdm.tqdm):
             
             step_text = f"{self._step_prefix} [{self.n}/{self.total} chunks]{eta_str}"
             check_cancellation_and_update(self._current_task_id, step_text, scaled_pct)
+            now = time.monotonic()
+            if rate and (now - self._last_log >= 5 or self.n >= self.total):
+                logger.info(
+                    "Task %s: %s, %.2f s/it",
+                    self._current_task_id, step_text, 1 / rate,
+                )
+                type(self)._last_log = now
         return displayed
 
 
@@ -85,7 +97,10 @@ def _patch_librosa_compat() -> None:
 
 def _separate(separator: "Separator", input_path: Path, expected: int) -> list[Path]:
     """Run a separation and return absolute stem paths, failing loudly if nothing was written."""
-    names = separator.separate(str(input_path))
+    try:
+        names = separator.separate(str(input_path))
+    finally:
+        TaskProgressTqdm.set_task_context(None, 0, 100, "Processing")
     paths = [
         Path(n) if Path(n).is_absolute() else TEMP_DIR / n for n in (names or [])
     ]
@@ -149,6 +164,14 @@ def _preserve_existing_lyrics(existing_song_dir: Path, temp_song_dir: Path) -> N
             shutil.copy2(source, target_lyrics_dir / source.name)
 
 
+def _copy_input_lyrics(input_file_path: Path, song_dir: Path) -> None:
+    source = input_file_path.with_suffix(".ttml")
+    if source.is_file():
+        lyrics_dir = song_dir / "lyrics"
+        lyrics_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, lyrics_dir / "uploaded.ttml")
+
+
 def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> Path:
     ext = audio_extension()
     check_cancellation_and_update(task_id, "Extracting audio metadata...", 5)
@@ -175,6 +198,7 @@ def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> 
         _preserve_existing_lyrics(final_song_dir, temp_song_dir)
         shutil.rmtree(final_song_dir)
     temp_song_dir.rename(final_song_dir)
+    _copy_input_lyrics(input_file_path, final_song_dir)
 
     stems_dir = final_song_dir / "stems"
     cover_path = final_song_dir / "covers" / "cover.jpg"
@@ -256,6 +280,7 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
         _preserve_existing_lyrics(final_song_dir, temp_song_dir)
         shutil.rmtree(final_song_dir)
     temp_song_dir.rename(final_song_dir)
+    _copy_input_lyrics(input_file_path, final_song_dir)
 
     stems_dir = final_song_dir / "stems"
     cover_path = final_song_dir / "covers" / "cover.jpg"

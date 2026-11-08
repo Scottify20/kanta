@@ -17,8 +17,8 @@ export class QueueTrackSummary {
   private readonly lyrics = inject(LyricsService);
   private readonly songs = inject(SongsService);
 
-  private readonly libraryLevels = computed(
-    () => new Map(this.library.songs().map((song) => [songKey(song), song.lyrics_level])),
+  private readonly librarySongs = computed(
+    () => new Map(this.library.songs().map((song) => [songKey(song), song])),
   );
 
   // Prefer the server value, then the library listing, then what the player actually loaded.
@@ -26,10 +26,19 @@ export class QueueTrackSummary {
     const item = this.item();
     const own = item.lyrics_level;
     if (own && own !== 'none') return own;
-    const fromLibrary = this.libraryLevels().get(songKey(item));
+    const fromLibrary = this.librarySongs().get(songKey(item))?.lyrics_level;
     if (fromLibrary && fromLibrary !== 'none') return fromLibrary;
     if (item.task_id === this.songs.currentQueueTaskId()) return this.lyrics.lyricsLevel();
     return 'none';
+  });
+
+  readonly isDuet = computed(() => {
+    const item = this.item();
+    if (item.is_duet !== undefined) return item.is_duet;
+    const song = this.librarySongs().get(songKey(item));
+    if (song?.is_duet !== undefined) return song.is_duet;
+    return item.task_id === this.songs.currentQueueTaskId() &&
+      (this.lyrics.lyrics()?.some((line) => line.agent === 'v2' || line.agent === 'v3' || line.agent === 'v1000') ?? false);
   });
 
   readonly lyricsLevelLabel = computed(() => {

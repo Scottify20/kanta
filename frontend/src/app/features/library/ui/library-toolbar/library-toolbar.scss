@@ -40,6 +40,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .sort {
@@ -59,6 +60,11 @@
   &:hover {
     background: rgba(255, 255, 255, 0.18);
   }
+}
+
+.filter.active {
+  color: #1e1e1e;
+  background: #fff;
 }
 
 .sort-list {

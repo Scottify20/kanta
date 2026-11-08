@@ -1,5 +1,5 @@
-<app-popup-panel popupId="lyrics-size" label="Lyrics size">
-  <button popup-trigger class="circle-button" type="button" aria-label="Adjust lyrics size">
+<app-popup-panel popupId="lyrics-size" label="Lyrics appearance">
+  <button popup-trigger class="circle-button" type="button" aria-label="Adjust lyrics appearance">
     <svg lucideALargeSmall [size]="20"></svg>
   </button>
   <section popup-content class="lyrics-size-popover">
@@ -20,5 +20,22 @@
       <svg lucideRotateCcw [size]="14"></svg>
       Reset size
     </button>
+    <div class="color-settings">
+      <strong>Lyrics color</strong>
+      <div class="color-modes" role="group" aria-label="Lyrics color">
+        <button type="button" [class.active]="colors.mode() === 'white'" [attr.aria-pressed]="colors.mode() === 'white'" (click)="colors.setMode('white')">White</button>
+        <button type="button" [class.active]="colors.mode() === 'automatic'" [attr.aria-pressed]="colors.mode() === 'automatic'" (click)="colors.setMode('automatic')">Album</button>
+        <button type="button" [class.active]="colors.mode() === 'custom'" [attr.aria-pressed]="colors.mode() === 'custom'" (click)="colors.setMode('custom')">Custom</button>
+      </div>
+      @if (colors.mode() === 'automatic' && colors.automaticUsesCustom()) {
+        <p>Using custom duet colors when album colors are unavailable or not distinct enough.</p>
+      }
+      @if (colors.mode() === 'custom') {
+        <div class="color-pickers">
+          <label><span>Singer 1</span><input type="color" [value]="colors.custom()[0]" (input)="setColor(0, $event)" /></label>
+          <label><span>Singer 2</span><input type="color" [value]="colors.custom()[1]" (input)="setColor(1, $event)" /></label>
+        </div>
+      }
+    </div>
   </section>
 </app-popup-panel>

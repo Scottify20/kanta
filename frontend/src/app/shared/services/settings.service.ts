@@ -1,8 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
-
-export const API_URL = 'http://127.0.0.1:8000';
+import { API_URL } from '../../app.config';
 
 export type DeviceId = 'cuda' | 'mps' | 'directml' | 'vulkan' | 'cpu';
 

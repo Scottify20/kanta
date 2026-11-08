@@ -43,6 +43,7 @@
         [attr.aria-selected]="i === activeIndex()"
         (mouseenter)="activeIndex.set(i)"
         (click)="play(hit)"
+        (contextmenu)="menu.openAt($event)"
         (dragstart)="dragStart($event, hit)"
         (dragend)="dragEnd()"
       >
@@ -51,7 +52,7 @@
           <strong>{{ hit.title }}</strong>
           <small>{{ hit.subtitle }}</small>
         </span>
-        <app-entry-menu
+        <app-entry-menu #menu
           [kind]="hit.kind"
           [popupId]="'search:' + hit.key"
           group="search"

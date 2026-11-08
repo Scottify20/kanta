@@ -53,6 +53,7 @@
 }
 
 .lyrics-stage {
+  position: relative;
   display: grid;
   align-content: center;
   justify-items: center;
@@ -61,14 +62,10 @@
   gap: clamp(1.5rem, 5vh, 3.5rem);
   overflow-x: hidden;
   text-align: center;
-  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 15%,
-    black 85%,
-    transparent 100%
-  );
+
+  &.colored braccato-lyrics {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
 
   braccato-lyrics {
     display: block;
@@ -82,13 +79,18 @@
     padding-left: 3rem;
     text-align: left;
     pointer-events: auto;
+    position: relative;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
     --blyrics-font-size: calc(clamp(2.75rem, 2.75vw, 3rem) * var(--lyrics-scale, 1));
     --blyrics-line-height: 1.25;
     --blyrics-font-family: Inter, sans-serif;
     --blyrics-font-weight: 600;
-    --blyrics-lyric-active-color: rgb(248, 248, 248);
+    --blyrics-lyric-active-color: var(--kanta-lyric-primary, rgb(248, 248, 248));
     --blyrics-lyric-inactive-color: rgba(247, 244, 243, 0.22);
     --blyrics-glow-color: rgba(247, 244, 243, 0.7);
+    --kanta-inactive-opacity: var(--kanta-inactive-primary, 0.4);
+    --kanta-inactive-color: var(--kanta-inactive-color-primary, rgb(248, 248, 248));
     --blyrics-word-wobble-transform-from: scaleX(1) !important;
     --blyrics-word-wobble-transform-peak: scaleX(1) !important;
     --blyrics-word-wobble-transform-settle: scaleX(1) !important;
@@ -103,6 +105,31 @@
 
   braccato-lyrics::ng-deep .blyrics-background-lyric {
     --blyrics-lyric-inactive-color: oklch(0.97 0.003 40 / 0.14);
+  }
+
+  &.colored braccato-lyrics::ng-deep .blyrics--line {
+    --blyrics-lyric-inactive-color: color-mix(in srgb, var(--blyrics-lyric-active-color) 45%, transparent);
+    --blyrics-glow-color: color-mix(in srgb, var(--blyrics-lyric-active-color) 70%, transparent);
+  }
+
+  &.automatic braccato-lyrics::ng-deep .blyrics--line {
+    --blyrics-lyric-inactive-color: color-mix(in srgb, var(--kanta-inactive-color) calc(var(--kanta-inactive-opacity) * 100%), transparent);
+  }
+
+  &.colored braccato-lyrics::ng-deep .blyrics-background-lyric {
+    --blyrics-lyric-inactive-color: inherit;
+  }
+
+  braccato-lyrics::ng-deep .blyrics--line:is([data-agent="v2"], [data-agent="v3"]) {
+    --blyrics-lyric-active-color: var(--kanta-lyric-secondary, rgb(248, 248, 248));
+    --kanta-inactive-opacity: var(--kanta-inactive-secondary, 0.4);
+    --kanta-inactive-color: var(--kanta-inactive-color-secondary, rgb(248, 248, 248));
+  }
+
+  braccato-lyrics::ng-deep .blyrics--line[data-agent="v1000"] {
+    --blyrics-lyric-active-color: var(--kanta-lyric-combined, rgb(248, 248, 248));
+    --kanta-inactive-opacity: var(--kanta-inactive-combined, 0.4);
+    --kanta-inactive-color: var(--kanta-inactive-color-combined, rgb(248, 248, 248));
   }
 }
 
@@ -119,5 +146,27 @@
 
   .album-art {
     width: 7rem;
+  }
+}
+
+.cover-and-lyrics-container.compact {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  container-type: inline-size;
+
+  .lyrics-stage {
+    height: 100%;
+    padding: 0;
+  }
+
+  braccato-lyrics {
+    height: 100%;
+    max-height: none;
+    padding: 0 0.75rem;
+    pointer-events: none;
+    --blyrics-font-size: calc(clamp(1rem, 5cqw, 1.6rem) * var(--lyrics-scale, 1));
+    --blyrics-line-height: 1.3;
   }
 }

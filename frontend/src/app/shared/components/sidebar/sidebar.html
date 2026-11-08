@@ -11,15 +11,16 @@
       routerLink="/"
       routerLinkActive="is-active"
       [routerLinkActiveOptions]="{ exact: true }"
+      (click)="layout.closeSidebar()"
     >
       <svg lucidePlay [size]="18"></svg>
       <span>Now Playing</span>
     </a>
-    <a class="sidebar-link" routerLink="/library" routerLinkActive="is-active">
+    <a class="sidebar-link" routerLink="/library" routerLinkActive="is-active" (click)="layout.closeSidebar()">
       <svg lucideLibrary [size]="18"></svg>
       <span>Library</span>
     </a>
-    <a class="sidebar-link" routerLink="/settings" routerLinkActive="is-active">
+    <a class="sidebar-link" routerLink="/settings" routerLinkActive="is-active" (click)="layout.closeSidebar()">
       <svg lucideSettings2 [size]="18"></svg>
       <span>Settings</span>
     </a>

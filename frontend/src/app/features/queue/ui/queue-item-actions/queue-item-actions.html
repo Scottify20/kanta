@@ -38,6 +38,14 @@
       <svg lucideMoreHorizontal [size]="16"></svg>
     </button>
     <div popup-content class="queue-item-menu-content" role="menu">
+      @if (queue() === 'karaoke_queue' && item().status !== 'failed' && item().status !== 'cancelled' && item().status !== 'cancelling') {
+        <button type="button" role="menuitem" (click)="select.emit()">Play</button>
+      }
+      @if (item().status === 'pending' || item().status === 'processing') {
+        <button type="button" role="menuitem" (click)="pause.emit()">Pause processing</button>
+      } @else if (item().status === 'paused') {
+        <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
+      }
       @if (queue() === 'karaoke_queue') {
         <button type="button" role="menuitem" (click)="remove.emit()">
           Remove from Karaoke Queue

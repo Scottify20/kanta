@@ -43,6 +43,7 @@ export class PopupPanel {
 
   private overlayRef: OverlayRef | null = null;
   private leaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private contextPoint: { x: number; y: number } | null = null;
 
   constructor() {
     effect(() => {
@@ -60,8 +61,18 @@ export class PopupPanel {
     event.stopPropagation();
     const target = event.target;
     if (target instanceof Element && target.closest('[popup-trigger]')) {
+      this.contextPoint = null;
       this.popupState.toggle(this.group(), this.popupId());
     }
+  }
+
+  openAt(event: MouseEvent): void {
+    event.preventDefault();
+    this.contextPoint = { x: event.clientX, y: event.clientY };
+    const alreadyOpen = this.isOpen();
+    this.popupState.closeAll();
+    this.popupState.open(this.group(), this.popupId());
+    if (alreadyOpen) this.attach();
   }
 
   onContentClick(event: MouseEvent): void {
@@ -96,18 +107,18 @@ export class PopupPanel {
       this.leaveTimer = null;
     }
     this.leaving.set(false);
-    if (this.overlayRef?.hasAttached()) {
-      return;
-    }
     const above = this.placement() === 'above';
     const anchor = this.host.nativeElement.querySelector('.popup-anchor') ?? this.host.nativeElement;
     const strategy = this.overlay
       .position()
-      .flexibleConnectedTo(anchor as HTMLElement)
+      .flexibleConnectedTo(this.contextPoint ?? anchor)
       .withFlexibleDimensions(false)
       .withPush(true)
       .withViewportMargin(12)
-      .withPositions([
+      .withPositions(this.contextPoint ? [
+        { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top' },
+        { originX: 'start', originY: 'top', overlayX: 'end', overlayY: 'bottom' },
+      ] : [
         { originX: 'end', originY: above ? 'top' : 'bottom', overlayX: 'end', overlayY: above ? 'bottom' : 'top', offsetY: above ? -10 : 10 },
         { originX: 'end', originY: above ? 'bottom' : 'top', overlayX: 'end', overlayY: above ? 'top' : 'bottom', offsetY: above ? 10 : -10 },
         { originX: 'start', originY: above ? 'top' : 'bottom', overlayX: 'start', overlayY: above ? 'bottom' : 'top', offsetY: above ? -10 : 10 },
@@ -119,7 +130,11 @@ export class PopupPanel {
       panelClass: 'kanta-popup-pane',
     });
     this.overlayRef.updatePositionStrategy(strategy);
-    this.overlayRef.attach(new TemplatePortal(this.panel(), this.viewContainer));
+    if (!this.overlayRef.hasAttached()) {
+      this.overlayRef.attach(new TemplatePortal(this.panel(), this.viewContainer));
+    } else {
+      this.overlayRef.updatePosition();
+    }
   }
 
   private detach(): void {

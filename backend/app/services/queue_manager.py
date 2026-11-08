@@ -530,6 +530,7 @@ class QueueManager:
         input_path = Path(item.file_path)
         if input_path.exists():
             input_path.unlink()
+        input_path.with_suffix(".ttml").unlink(missing_ok=True)
 
     def _restore_state(self) -> None:
         if self.queue or self.karaoke_queue or not QUEUE_STATE_FILE.exists():

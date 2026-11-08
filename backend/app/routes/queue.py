@@ -2,6 +2,7 @@ import threading
 import asyncio
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ from app.services.lyrics import (
     fetch_and_save_lyrics,
     find_lyrics_candidate,
     classify_lyrics_file,
+    classify_ttml_content,
     convert_subtitles_to_lrc,
     lyrics_locked,
     max_offset_ms_for_duration,
@@ -55,6 +57,7 @@ MAX_LYRICS_BYTES = 5 * 1024 * 1024
 HEARTBEAT_SECONDS = 15.0
 STREAM_POLL_SECONDS = 0.5
 REFERENCE_LUFS = -18.0
+logger = logging.getLogger("uvicorn")
 
 
 class QueueReorderRequest(BaseModel):
@@ -95,6 +98,7 @@ class LyricsTimingRequest(BaseModel):
 async def add_to_queue(
     file: UploadFile = File(...),
     priority: int = Form(QueuePriority.PROCESSING_ONLY.value),
+    lyrics: UploadFile | None = File(None),
 ) -> Dict[str, Any]:
     if priority not in (QueuePriority.KARAOKE.value, QueuePriority.PROCESSING_ONLY.value):
         raise HTTPException(status_code=400, detail="priority must be 1 or 2")
@@ -102,14 +106,35 @@ async def add_to_queue(
     task_id = str(uuid.uuid4())
     safe_name = safe_upload_name(file.filename, "track.audio")
     input_path = UPLOADS_DIR / f"{task_id}_{safe_name}"
+    lyrics_path = input_path.with_suffix(".ttml")
+
+    if lyrics is not None:
+        lyrics_name = safe_upload_name(lyrics.filename)
+        if (
+            Path(lyrics_name).suffix.lower() != ".ttml"
+            or Path(lyrics_name).stem.casefold() != Path(safe_name).stem.casefold()
+        ):
+            raise HTTPException(status_code=400, detail="TTML filename must match the audio filename")
+        raw = await lyrics.read(MAX_LYRICS_BYTES + 1)
+        if len(raw) > MAX_LYRICS_BYTES:
+            raise HTTPException(status_code=413, detail="Lyrics file too large")
+        try:
+            content = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="Lyrics file must be UTF-8 text") from exc
+        if classify_ttml_content(content) == "none":
+            raise HTTPException(status_code=422, detail="No timed lyrics found in file")
 
     try:
         with input_path.open("wb") as buffer:
             while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                 await asyncio.to_thread(buffer.write, chunk)
         metadata = await asyncio.to_thread(extract_raw_metadata, input_path)
+        if lyrics is not None:
+            await asyncio.to_thread(lyrics_path.write_text, content, encoding="utf-8")
     except Exception as exc:
         input_path.unlink(missing_ok=True)
+        lyrics_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Could not read audio metadata: {exc}") from exc
 
     duration = await asyncio.to_thread(read_duration, input_path)
@@ -204,16 +229,20 @@ async def build_queue_snapshot(base_url: str) -> Dict[str, Any]:
     def attach_assets(item: Dict[str, Any] | None) -> None:
         if item is None:
             return
-        level, offset, cover = library.queue_assets(
+        level, offset, cover, is_duet = library.queue_assets(
             item["artist"], item["album"], item["title"], item.get("output_dir")
         )
         item["lyrics_level"] = level
+        item["is_duet"] = is_duet
         item["lyrics_offset_ms"] = offset
         item["cover_url"] = base + cover if cover else None
 
-    for item in snapshot["karaoke_queue"] + snapshot["processing_queue"]:
-        attach_assets(item)
-    attach_assets(snapshot["current_task"])
+    def attach_all_assets() -> None:
+        for item in snapshot["karaoke_queue"] + snapshot["processing_queue"]:
+            attach_assets(item)
+        attach_assets(snapshot["current_task"])
+
+    await asyncio.to_thread(attach_all_assets)
     return snapshot
 
 
@@ -367,14 +396,29 @@ async def stream_songs(request: Request) -> StreamingResponse:
     batches = library.stream_songs(base_url)
 
     async def body():
+        pending: asyncio.Task | None = None
+
+        def close_after_batch(task: asyncio.Task) -> None:
+            try:
+                task.result()
+            except Exception:
+                logger.exception("Library scan failed after the client disconnected")
+            finally:
+                batches.close()
+
         try:
             while True:
-                batch = await asyncio.to_thread(next, batches, None)
+                pending = asyncio.create_task(asyncio.to_thread(next, batches, None))
+                batch = await asyncio.shield(pending)
+                pending = None
                 if batch is None:
                     return
                 yield json.dumps(batch) + "\n"
         finally:
-            batches.close()
+            if pending is not None:
+                pending.add_done_callback(close_after_batch)
+            else:
+                batches.close()
 
     return StreamingResponse(body(), media_type="application/x-ndjson")
 

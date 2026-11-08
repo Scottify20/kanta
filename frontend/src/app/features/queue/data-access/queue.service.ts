@@ -18,8 +18,8 @@ import {
 } from 'rxjs';
 
 import { QueueItem, QueuePriority, QueueSnapshot } from '../interfaces/queue.models';
+import { API_URL } from '../../../app.config';
 
-export const QUEUE_API_URL = 'http://127.0.0.1:8000';
 
 const POLL_INTERVAL_MS = 1500;
 const REQUEST_TIMEOUT_MS = 20000;
@@ -42,7 +42,7 @@ export class QueueService {
   // Failed or slow requests never replace the last known snapshot with an empty one.
   readonly queue$: Observable<QueueSnapshot> = new Observable<QueueSnapshot>((subscriber) => {
     let streaming = false;
-    const source = typeof EventSource === 'undefined' ? null : new EventSource(`${QUEUE_API_URL}/api/queue/stream`);
+    const source = typeof EventSource === 'undefined' ? null : new EventSource(`${API_URL}/api/queue/stream`);
     if (source) {
       source.onopen = () => (streaming = true);
       source.onmessage = (event) => {
@@ -57,7 +57,7 @@ export class QueueService {
     const polling = merge(timer(0, POLL_INTERVAL_MS).pipe(filter(() => !streaming)), this.refresh$)
       .pipe(
         exhaustMap(() =>
-          this.http.get<QueueSnapshot>(`${QUEUE_API_URL}/api/queue`).pipe(
+          this.http.get<QueueSnapshot>(`${API_URL}/api/queue`).pipe(
             timeout(REQUEST_TIMEOUT_MS),
             catchError(() => EMPTY),
           ),
@@ -77,12 +77,13 @@ export class QueueService {
     this.refresh$.next();
   }
 
-  addTrack(file: File, priority: QueuePriority = 2): Observable<{ item: QueueItem }> {
+  addTrack(file: File, priority: QueuePriority = 2, lyrics?: File): Observable<{ item: QueueItem }> {
     const formData = new FormData();
     formData.append('file', file, file.name);
     formData.append('priority', String(priority));
+    if (lyrics) formData.append('lyrics', lyrics, lyrics.name);
     return this.http
-      .post<{ item: QueueItem }>(`${QUEUE_API_URL}/api/queue/add`, formData)
+      .post<{ item: QueueItem }>(`${API_URL}/api/queue/add`, formData)
       .pipe(tap(() => this.refresh()));
   }
 
@@ -92,7 +93,7 @@ export class QueueService {
     afterTaskId: string | null = null,
   ): Observable<{ item: QueueItem }> {
     return this.http
-      .post<{ item: QueueItem }>(`${QUEUE_API_URL}/api/queue/add-processed`, {
+      .post<{ item: QueueItem }>(`${API_URL}/api/queue/add-processed`, {
         ...song,
         play_next: playNext,
         after_task_id: afterTaskId,
@@ -103,7 +104,7 @@ export class QueueService {
   promoteTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
       .post<{ item: QueueItem }>(
-        `${QUEUE_API_URL}/api/queue/promote/${encodeURIComponent(taskId)}`,
+        `${API_URL}/api/queue/promote/${encodeURIComponent(taskId)}`,
         {},
       )
       .pipe(tap(() => this.refresh()));
@@ -111,7 +112,7 @@ export class QueueService {
 
   removeTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
-      .delete<{ item: QueueItem }>(`${QUEUE_API_URL}/api/queue/${encodeURIComponent(taskId)}`)
+      .delete<{ item: QueueItem }>(`${API_URL}/api/queue/${encodeURIComponent(taskId)}`)
       .pipe(
         tap(() => {
           this.karaokeRemoved$.next(taskId);
@@ -123,7 +124,7 @@ export class QueueService {
   clearQueue(priority: QueuePriority): Observable<{ message: string }> {
     const queueName = priority === 1 ? 'karaoke' : 'processing';
     return this.http
-      .delete<{ message: string }>(`${QUEUE_API_URL}/api/queue/clear/${queueName}`)
+      .delete<{ message: string }>(`${API_URL}/api/queue/clear/${queueName}`)
       .pipe(
         tap(() => {
           if (priority === 1) this.karaokeRemoved$.next(null);
@@ -135,7 +136,7 @@ export class QueueService {
   removeKaraokeTrack(taskId: string): Observable<{ message: string }> {
     return this.http
       .delete<{ message: string }>(
-        `${QUEUE_API_URL}/api/queue/karaoke/${encodeURIComponent(taskId)}`,
+        `${API_URL}/api/queue/karaoke/${encodeURIComponent(taskId)}`,
       )
       .pipe(
         tap(() => {
@@ -152,7 +153,7 @@ export class QueueService {
   pauseTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
       .post<{ item: QueueItem }>(
-        `${QUEUE_API_URL}/api/queue/pause/${encodeURIComponent(taskId)}`,
+        `${API_URL}/api/queue/pause/${encodeURIComponent(taskId)}`,
         {},
       )
       .pipe(tap(() => this.refresh()));
@@ -161,7 +162,7 @@ export class QueueService {
   resumeTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
       .post<{ item: QueueItem }>(
-        `${QUEUE_API_URL}/api/queue/resume/${encodeURIComponent(taskId)}`,
+        `${API_URL}/api/queue/resume/${encodeURIComponent(taskId)}`,
         {},
       )
       .pipe(tap(() => this.refresh()));
@@ -169,24 +170,24 @@ export class QueueService {
 
   pauseAll(): Observable<{ message: string }> {
     return this.http
-      .post<{ message: string }>(`${QUEUE_API_URL}/api/queue/pause-all`, {})
+      .post<{ message: string }>(`${API_URL}/api/queue/pause-all`, {})
       .pipe(tap(() => this.refresh()));
   }
 
   resumeAll(): Observable<{ message: string }> {
     return this.http
-      .post<{ message: string }>(`${QUEUE_API_URL}/api/queue/resume-all`, {})
+      .post<{ message: string }>(`${API_URL}/api/queue/resume-all`, {})
       .pipe(tap(() => this.refresh()));
   }
 
   reorderProcessingTracks(processingQueue: string[]): Observable<{ message: string }> {
-    return this.http.patch<{ message: string }>(`${QUEUE_API_URL}/api/queue/reorder-processing`, {
+    return this.http.patch<{ message: string }>(`${API_URL}/api/queue/reorder-processing`, {
       processing_queue: processingQueue,
     });
   }
 
   reorderKaraokeTracks(karaokeQueue: string[]): Observable<{ message: string }> {
-    return this.http.patch<{ message: string }>(`${QUEUE_API_URL}/api/queue/reorder`, {
+    return this.http.patch<{ message: string }>(`${API_URL}/api/queue/reorder`, {
       karaoke_queue: karaokeQueue,
     });
   }

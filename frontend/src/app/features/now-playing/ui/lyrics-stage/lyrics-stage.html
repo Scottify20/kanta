@@ -2,23 +2,35 @@
   class="cover-and-lyrics-container"
   [class.fullscreen]="fullscreen()"
   [class.collapsed]="collapsed()"
-  [style.--lyrics-scale]="size.scale()"
+  [class.compact]="compact()"
+  [style.--lyrics-scale]="compact() ? size.miniScale() : size.scale()"
 >
-  <section>
-    @if (coverUrl(); as cover) {
-      <img class="album-art" [src]="cover" [alt]="coverAlt()" />
-    } @else {
-      <div class="album-art album-art-placeholder" aria-label="No album cover"></div>
-    }
-  </section>
+  @if (!compact()) {
+    <section>
+      @if (coverUrl(); as cover) {
+        <img class="album-art" [src]="cover" [alt]="coverAlt()" />
+      } @else {
+        <div class="album-art album-art-placeholder" aria-label="No album cover"></div>
+      }
+    </section>
+  }
 
-  <section class="lyrics-stage" aria-label="Lyrics">
+  <section class="lyrics-stage" [class.colored]="colors.mode() !== 'white'" [class.automatic]="colors.mode() === 'automatic' && !colors.automaticUsesCustom()" aria-label="Lyrics">
     <!-- The web component keeps rendered lines when lyrics become empty, so recreate it per lyrics set. -->
     @for (key of [lyricsKey()]; track key) {
       <braccato-lyrics
         [lyrics]="lyrics() ?? []"
         [currentTime]="currentTime()"
         [playing]="playing()"
+        [style.--kanta-lyric-primary]="colors.colors()[0]"
+        [style.--kanta-lyric-secondary]="colors.colors()[1]"
+        [style.--kanta-lyric-combined]="colors.combined()"
+        [style.--kanta-inactive-color-primary]="colors.automaticInactiveColors()[0]"
+        [style.--kanta-inactive-color-secondary]="colors.automaticInactiveColors()[1]"
+        [style.--kanta-inactive-color-combined]="colors.automaticInactiveCombined()"
+        [style.--kanta-inactive-primary]="colors.automaticInactiveOpacities()[0]"
+        [style.--kanta-inactive-secondary]="colors.automaticInactiveOpacities()[1]"
+        [style.--kanta-inactive-combined]="colors.automaticInactiveOpacities()[2]"
         (click)="lyricClick.emit($event)"
       >
       </braccato-lyrics>

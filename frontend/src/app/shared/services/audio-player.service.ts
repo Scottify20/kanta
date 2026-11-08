@@ -77,6 +77,31 @@ export class AudioPlayerService {
   private vocalsSource: MediaElementAudioSourceNode | null = null;
   private instrumentalSource: MediaElementAudioSourceNode | null = null;
   private outputDeviceId = '';
+  private wakeLock: WakeLockSentinel | null = null;
+  private wakeLockPending = false;
+
+  constructor() {
+    if (typeof navigator === 'undefined') return;
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', () => {
+          void this.play().catch((error) => console.error('Media playback failed:', error));
+        });
+        navigator.mediaSession.setActionHandler('pause', () => this.pause());
+      } catch (error) {
+        console.warn('Media controls are unavailable:', error);
+      }
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.isPlaying()) void this.acquireWakeLock();
+      });
+    }
+  }
+
+  get hasStems(): boolean {
+    return !!this.vocalsAudio && !!this.instrumentalAudio;
+  }
 
   async loadStems(sources: StemSources): Promise<void> {
     this.release();
@@ -100,7 +125,7 @@ export class AudioPlayerService {
     this.vocalsSource.connect(this.vocalsGain).connect(this.masterGain);
     this.instrumentalSource.connect(this.instrumentalGain).connect(this.masterGain);
     this.instrumentalAudio.addEventListener('ended', () => {
-      this.isPlaying.set(false);
+      this.pause();
       this.trackEnded.next();
     }, { once: true });
 
@@ -120,12 +145,40 @@ export class AudioPlayerService {
     await this.getContext().resume();
     await Promise.all([this.vocalsAudio.play(), this.instrumentalAudio.play()]);
     this.isPlaying.set(true);
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    void this.acquireWakeLock();
   }
 
   pause(): void {
     this.vocalsAudio?.pause();
     this.instrumentalAudio?.pause();
     this.isPlaying.set(false);
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'paused';
+    }
+    const lock = this.wakeLock;
+    this.wakeLock = null;
+    if (lock) void lock.release().catch((error) => console.warn('Could not release screen wake lock:', error));
+  }
+
+  private async acquireWakeLock(): Promise<void> {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator) || this.wakeLock || this.wakeLockPending) return;
+    this.wakeLockPending = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      if (!this.isPlaying()) {
+        await lock.release();
+        return;
+      }
+      this.wakeLock = lock;
+      lock.addEventListener('release', () => {
+        if (this.wakeLock === lock) this.wakeLock = null;
+      });
+    } catch (error) {
+      console.warn('Could not keep the screen awake:', error);
+    } finally {
+      this.wakeLockPending = false;
+    }
   }
 
   seek(seconds: number): void {

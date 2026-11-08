@@ -25,6 +25,8 @@ Send a multipart form with:
 
 - `file`: audio file.
 - `priority`: `1` for Karaoke or `2` for Processing Only. Defaults to `2`.
+- `lyrics`: optional UTF-8 TTML file with the same filename stem as `file`.
+  It must contain timed lyrics and be no larger than 5 MiB.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/queue/add \
@@ -46,6 +48,10 @@ Important response fields:
 | `position` | Position within its priority queue. |
 
 An unreadable or unsupported audio upload returns `400` and is not added to the queue.
+Invalid TTML is rejected instead of queuing the track. The TTML is retained with
+the temporary upload across restarts and copied into the processed song's lyrics
+folder. Existing word-timed lyrics are retained; line-timed lyrics can be
+improved by an automatic word-timed result.
 
 The frontend uses priority `2` as its default. Priority `1` is an explicit user choice when dropping an external file into Karaoke Queue.
 
@@ -80,6 +86,8 @@ Response shape:
 ```
 
 The Karaoke Queue is ordered for playback and may contain pending, processing, completed, or failed entries. The Processing Queue contains each active worker job once, including karaoke uploads mirrored in the Karaoke Queue. It contains pending, processing, paused, and cancelling jobs; terminal jobs leave this queue. Each item includes `status`, `progress`, `step`, and `priority`.
+
+Queue snapshots also include `lyrics_level` and `is_duet`, derived from the song's saved lyrics, for the frontend's lyrics and duet labels.
 
 The `current_task` field contains the active worker item or `null`; it shares its ID with its Processing Queue entry. Poll this endpoint every 1.5 seconds in the frontend.
 

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { API_URL } from './settings.service';
+import { API_URL } from '../../app.config';
 import { ToastService } from './toast.service';
 
 export interface SetupJob {

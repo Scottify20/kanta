@@ -5,7 +5,7 @@
     </button>
     <h1>{{ detail() ? (detail()!.kind === 'artist' ? 'Artist' : detail()!.kind === 'album' ? 'Album' : 'Playlist') : 'Library' }}</h1>
     <div class="header-right">
-      @if (!layoutService.sidebarOpen()) { <app-search-bar class="header-search" /> }
+      <app-search-bar class="header-search" />
       <button class="back" type="button" aria-label="Toggle queue" appTooltip="Queue" tooltipPosition="below" [attr.aria-expanded]="layoutService.queueOpen()" (click)="layoutService.toggleQueue()">
         <svg lucideListMusic [size]="20"></svg>
       </button>
@@ -24,8 +24,10 @@
   } @else {
     <app-library-toolbar
       [(tab)]="tab"
-      [(sort)]="sort"
+      [sort]="sort()"
+      (sortChange)="setSort($event)"
       [(layout)]="layout"
+      [(lyricsFilter)]="lyricsFilter"
       (createPlaylist)="playlistDraft.set({ id: null, name: '' })"
     />
   }
@@ -45,25 +47,51 @@
     <p class="error" role="alert">{{ actionError() }}</p>
   }
 
-  <div class="entries" [class.grid]="effectiveLayout() === 'grid'" [class.list]="effectiveLayout() === 'list'" role="listbox" aria-multiselectable="true">
-    @for (entry of entries(); track entry.key; let i = $index) {
-      <app-library-item
-        [entry]="entry"
-        [layout]="effectiveLayout()"
-        [selected]="isSelected(entry)"
-        [current]="isCurrent(entry)"
-        [progress]="progressOf(entry)"
-        [playlists]="playlists()"
-        [inPlaylist]="!!detail()?.playlistId"
-        (activate)="activate(entry, i, $event)"
-        (action)="onAction(entry, $event)"
-        (dragStarted)="onDragStart($event, entry)"
-        (dragEnded)="onDragEnd()"
-      />
-    } @empty {
-      @if (!library.loading()) { <p class="empty">Nothing here yet.</p> }
-    }
-  </div>
+  @if (detail()?.kind === 'artist') {
+    <div class="entries list">
+      @for (group of artistGroups(); track group.key) {
+        @let entry = group.entries[0];
+        <h2 class="album-heading">
+          <button type="button" [attr.aria-expanded]="!isAlbumCollapsed(entry)" (click)="toggleAlbum(entry)">
+            <svg lucideChevronDown [size]="18" [class.collapsed]="isAlbumCollapsed(entry)"></svg>
+            <span>{{ entry.album }}</span>
+          </button>
+        </h2>
+        @if (!isAlbumCollapsed(entry)) {
+          <div class="album-songs" role="listbox" [attr.aria-label]="entry.album" aria-multiselectable="true">
+            @for (song of group.entries; track song.key) {
+              <ng-container [ngTemplateOutlet]="entryTemplate" [ngTemplateOutletContext]="{ $implicit: song }" />
+            }
+          </div>
+        }
+      } @empty {
+        @if (!library.loading()) { <p class="empty">Nothing here yet.</p> }
+      }
+    </div>
+  } @else {
+    <div class="entries" [class.grid]="effectiveLayout() === 'grid'" [class.list]="effectiveLayout() === 'list'" role="listbox" aria-multiselectable="true">
+      @for (entry of entries(); track entry.key) {
+        <ng-container [ngTemplateOutlet]="entryTemplate" [ngTemplateOutletContext]="{ $implicit: entry }" />
+      } @empty {
+        @if (!library.loading()) { <p class="empty">{{ !detail() && tab() === 'songs' && lyricsFilter() !== 'all' ? 'No songs match this filter.' : 'Nothing here yet.' }}</p> }
+      }
+    </div>
+  }
+  <ng-template #entryTemplate let-entry>
+    <app-library-item
+      [entry]="entry"
+      [layout]="effectiveLayout()"
+      [selected]="isSelected(entry)"
+      [current]="isCurrent(entry)"
+      [progress]="progressOf(entry)"
+      [playlists]="playlists()"
+      [inPlaylist]="!!detail()?.playlistId"
+      (activate)="activate(entry, visibleIndex(entry), $event)"
+      (action)="onAction(entry, $event)"
+      (dragStarted)="onDragStart($event, entry)"
+      (dragEnded)="onDragEnd()"
+    />
+  </ng-template>
   @if (library.loading()) {
     <p class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading songs…</p>
   }

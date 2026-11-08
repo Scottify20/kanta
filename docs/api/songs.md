@@ -27,6 +27,7 @@ The response contains:
 - `stems`: generated MP3 stem names and URLs.
 - `lyrics`: `.ttml` or `.lrc` files, URLs, and per-file `level` (`word` or `line`).
 - `lyrics_level`: the best available level, preferring `word`, then `line`, otherwise `none`.
+- `is_duet`: whether the selected saved TTML identifies a second singer or group vocal line.
 - `lyrics_offset_ms`: saved playback adjustment; positive values delay display and negative values advance it.
 - `covers`: extracted album art and URL.
 - `master`: URL for the tagged original MP3 copy, when present.
@@ -45,6 +46,7 @@ Example shape:
   ],
   "lyrics": [],
   "lyrics_level": "none",
+  "is_duet": false,
   "lyrics_offset_ms": 0,
   "covers": [
     {"name": "cover.jpg", "url": "http://127.0.0.1:8000/media/..."}
@@ -65,12 +67,18 @@ curl -L -o instrumental.mp3 \
 ## Directory layout
 
 ```text
+separated/.kanta/library.sqlite3 (rebuildable library cache)
 separated/{artist}/{album}/{title}/
 ├── stems/
 ├── lyrics/
 ├── covers/
 └── {title}.mp3 (optional master copy)
 ```
+
+Each configured output folder has its own cache. Song files remain authoritative;
+the library checks their file signatures on scans and rebuilds changed records.
+Removing the cache is safe, though the next scan must read the song metadata again.
+If the output folder is read-only, the library continues without a persistent cache.
 
 ## Angular manifest usage
 

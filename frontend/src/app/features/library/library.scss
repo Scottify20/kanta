@@ -73,6 +73,39 @@
   }
 }
 
+.album-songs {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.album-heading {
+  margin: 1rem 0 0.25rem;
+  font-size: 1rem;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: rgba(255, 255, 255, 0.85);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    &:hover { background: var(--surface-hover); }
+    &:focus-visible { outline: 2px solid var(--color-accent, #fff); }
+  }
+
+  svg {
+    flex: none;
+    transition: transform var(--motion-fast);
+    &.collapsed { transform: rotate(-90deg); }
+  }
+}
+
 .playlist-form {
   display: flex;
   gap: 0.5rem;

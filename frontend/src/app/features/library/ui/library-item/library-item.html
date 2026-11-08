@@ -6,6 +6,7 @@
   [attr.aria-selected]="selected()"
   (click)="activate.emit($event)"
   (keydown.enter)="activate.emit($any($event))"
+  (contextmenu)="menu.openAt($event)"
   (dragstart)="dragStarted.emit($event)"
   (dragend)="dragEnded.emit()"
 >
@@ -30,10 +31,13 @@
       @if (lyricsLevel(); as level) {
         <span class="lyrics-chip" [class]="'level-' + level">{{ level }}</span>
       }
+      @if (entry().kind === 'song' && entry().songs[0]?.is_duet) {
+        <span class="lyrics-chip duet">Duet</span>
+      }
     </div>
     <small>{{ entry().subtitle }}</small>
   </div>
-  <app-entry-menu
+  <app-entry-menu #menu
     class="menu"
     [kind]="entry().kind"
     [popupId]="'lib:' + entry().key"

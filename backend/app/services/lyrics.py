@@ -162,6 +162,49 @@ def saved_lyrics_level(lyrics_dir: Path) -> str:
     return "none"
 
 
+def saved_lyrics_is_duet(lyrics_dir: Path) -> bool:
+    if not lyrics_dir.is_dir():
+        return False
+    files = sorted(
+        (path for path in lyrics_dir.iterdir()
+         if path.is_file() and path.suffix.lower() in {".ttml", ".lrc"}),
+        key=lambda path: path.name,
+    )
+    classified = [(path, classify_lyrics_file(path)) for path in files]
+    selected = next((path for path, level in classified if level == "word"), None)
+    if selected is None:
+        selected = next(
+            (path for path, level in classified if level == "line" or path.suffix.lower() == ".lrc"),
+            None,
+        )
+    if selected is None or selected.suffix.lower() != ".ttml":
+        return False
+    try:
+        root = ET.parse(selected).getroot()
+    except (OSError, UnicodeError, ET.ParseError) as exc:
+        logger.warning("Could not inspect duet lyrics %s: %s", selected, exc)
+        return False
+
+    agents: dict[str, str] = {}
+    referenced: set[str] = set()
+    for element in root.iter():
+        tag = element.tag.rsplit("}", 1)[-1].lower()
+        attrs = {key.rsplit("}", 1)[-1].lower(): value for key, value in element.attrib.items()}
+        if tag == "agent" and attrs.get("id"):
+            agents[attrs["id"]] = attrs.get("type", "").lower()
+        elif tag == "p" and attrs.get("agent") and attrs.get("begin"):
+            referenced.add(attrs["agent"])
+
+    singers = [agent for agent, kind in agents.items() if kind in {"person", "character"}]
+    return any(
+        agents.get(agent) not in {None, "person", "character"}
+        or agent == "v1000"
+        or (agent in singers and singers.index(agent) > 0)
+        or (agent not in agents and agent in {"v2", "v3"})
+        for agent in referenced
+    )
+
+
 def _ttml_time_seconds(value: str) -> Optional[float]:
     value = value.strip()
     if value.endswith("s"):

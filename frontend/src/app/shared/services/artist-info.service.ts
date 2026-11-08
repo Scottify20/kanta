@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-import { API_URL } from './settings.service';
+import { API_URL } from '../../app.config';
 
 export interface ArtistInfo {
   name: string;

@@ -29,6 +29,9 @@
     >
       {{ lyricsLevelLabel() }}
     </span>
+    @if (isDuet()) {
+      <span class="lyrics-chip duet">Duet</span>
+    }
   </div>
   <small>{{ subtitle() }}</small>
 </div>

@@ -15,7 +15,7 @@ import {
 import { PlaylistPicker } from '../../shared/components/playlist-picker/playlist-picker';
 import { PopupPanel } from '../../shared/components/popup-panel/popup-panel';
 import { EntryActionsService } from '../../shared/services/entry-actions.service';
-import { LibraryService, songKey } from '../../shared/services/library.service';
+import { LibraryService, songCover, songKey } from '../../shared/services/library.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
 import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
@@ -96,7 +96,7 @@ export class NowPlaying implements OnDestroy {
     const song = this.currentSong();
     if (song) void this.entryActions.addToNewPlaylist(name, [song]);
   }
-  readonly lyricsOffsetMs = signal(0);
+  readonly lyricsOffsetMs = this.lyricsService.offsetMs;
   readonly selectedTrack = signal<QueueItem | null>(null);
 
   // Controls the collapsed state of the track-area in fullscreen mode
@@ -203,7 +203,7 @@ export class NowPlaying implements OnDestroy {
             const song = this.songsService.currentSong();
             if (song && this.sameSong(song, savedTrack)) {
               this.selectedManifest.set(song);
-              this.coverUrl.set(song.covers[0]?.url ?? null);
+              this.coverUrl.set(songCover(song));
               this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
             } else {
               void this.loadManifest(savedTrack);
@@ -513,11 +513,18 @@ export class NowPlaying implements OnDestroy {
   saveLyricsOffset(): void {
     const song = this.selectedManifest();
     if (!song) return;
-    this.songsService.saveLyricsTiming(song, this.lyricsOffsetMs()).subscribe({
+    const requestedOffset = this.lyricsOffsetMs();
+    this.songsService.saveLyricsTiming(song, requestedOffset).subscribe({
       next: ({ offset_ms }) => {
-        this.lyricsOffsetMs.set(offset_ms);
+        const current = this.songsService.currentSong();
+        if (!current || songKey(current) !== songKey(song)) return;
+        if (this.lyricsOffsetMs() === requestedOffset) this.lyricsOffsetMs.set(offset_ms);
+        this.songsService.setNowPlaying(
+          { ...current, lyrics_offset_ms: offset_ms },
+          this.songsService.currentQueueTaskId(),
+        );
         this.selectedManifest.update((manifest) =>
-          manifest ? { ...manifest, lyrics_offset_ms: offset_ms } : null,
+          manifest && songKey(manifest) === songKey(song) ? { ...manifest, lyrics_offset_ms: offset_ms } : manifest,
         );
       },
       error: () => this.playbackError.set('Could not save lyrics timing.'),
@@ -591,7 +598,7 @@ export class NowPlaying implements OnDestroy {
     this.selectedManifest.set(song);
     this.songsService.setNowPlaying(song, queueTaskId);
     this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
-    this.coverUrl.set(song.covers[0]?.url ?? null);
+    this.coverUrl.set(songCover(song));
     this.loadedTaskId = null;
     this.loadedSongKey = null;
     this.queuedAutoplayTaskId = null;
@@ -648,7 +655,7 @@ export class NowPlaying implements OnDestroy {
       );
       this.selectedManifest.set(manifest);
       this.songsService.setNowPlaying(manifest, track.task_id);
-      this.coverUrl.set(manifest.covers[0]?.url ?? null);
+      this.coverUrl.set(songCover(manifest));
       this.lyricsOffsetMs.set(manifest.lyrics_offset_ms ?? 0);
       this.loadedTaskId = null;
       this.loadedSongKey = null;
@@ -698,7 +705,7 @@ export class NowPlaying implements OnDestroy {
   private restoreCurrentSong(song: SongManifest): void {
     this.selectedTrack.set(null);
     this.selectedManifest.set(song);
-    this.coverUrl.set(song.covers[0]?.url ?? null);
+    this.coverUrl.set(songCover(song));
     this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
   }
 

@@ -1,6 +1,8 @@
 """Cached library index: song records, queue asset lookups and the search index."""
 import json
+import logging
 import re
+import sqlite3
 import threading
 import time
 import unicodedata
@@ -13,6 +15,7 @@ from app.services.lyrics import (
     classify_lyrics_file,
     get_lyrics_offset_ms,
     max_offset_ms_for_duration,
+    saved_lyrics_is_duet,
     saved_lyrics_level,
 )
 from app.services.storage import is_available
@@ -28,10 +31,12 @@ ASSET_HIT_TTL = 30.0
 ASSET_MISS_TTL = 3.0
 SIDECAR_NAME = ".kanta.json"
 MEDIA_PREFIX = "/media-roots/"
+logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
 _scan_lock = threading.Lock()
 _song_cache: dict[Path, tuple[tuple, dict[str, Any]]] = {}
+_loaded_roots: set[Path] = set()
 _state: dict[str, Any] = {
     "records": None,  # list[dict] with relative urls
     "built_at": 0.0,
@@ -41,6 +46,69 @@ _state: dict[str, Any] = {
     "search": None,
 }
 _assets: dict[Any, tuple[float, tuple]] = {}
+
+
+def _cache_path(root: Path) -> Path:
+    return root / ".kanta" / "library.sqlite3"
+
+
+def _load_root_cache(root: Path) -> None:
+    if root in _loaded_roots:
+        return
+    _loaded_roots.add(root)
+    path = _cache_path(root)
+    if not path.is_file():
+        return
+    try:
+        with sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True) as db:
+            rows = db.execute("SELECT path, signature, record FROM songs_v1").fetchall()
+        for relative, signature_json, record_json in rows:
+            song_dir = (root / relative).resolve()
+            signature = json.loads(signature_json)
+            record = json.loads(record_json)
+            if (
+                song_dir.is_relative_to(root)
+                and isinstance(signature, list)
+                and len(signature) == 7
+                and all(isinstance(value, int) for value in signature)
+                and isinstance(record, dict)
+                and record.get("path") == str(song_dir)
+                and all(key in record for key in (
+                    "_root_index", "root_index", "artist", "album", "title",
+                    "stems", "lyrics", "covers", "master", "cover_url", "is_duet",
+                ))
+                and all(isinstance(record[key], list) for key in ("stems", "lyrics", "covers"))
+            ):
+                with _lock:
+                    _song_cache.setdefault(song_dir, (tuple(signature), record))
+    except (OSError, sqlite3.Error, ValueError, TypeError) as exc:
+        logger.warning("Could not read library cache %s: %s", path, exc)
+
+
+def _save_root_cache(root: Path, records: list[dict[str, Any]]) -> None:
+    path = _cache_path(root)
+    try:
+        path.parent.mkdir(exist_ok=True)
+        with sqlite3.connect(path, timeout=0.25) as db:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS songs_v1 "
+                "(path TEXT PRIMARY KEY, signature TEXT NOT NULL, record TEXT NOT NULL)"
+            )
+            rows = []
+            with _lock:
+                for record in records:
+                    song_dir = Path(record["path"])
+                    cached = _song_cache.get(song_dir)
+                    if cached and cached[1] is record:
+                        rows.append((
+                            str(song_dir.relative_to(root)),
+                            json.dumps(cached[0]),
+                            json.dumps(record),
+                        ))
+            db.execute("DELETE FROM songs_v1")
+            db.executemany("INSERT INTO songs_v1 VALUES (?, ?, ?)", rows)
+    except (OSError, sqlite3.Error, ValueError, TypeError) as exc:
+        logger.warning("Could not write library cache %s: %s", path, exc)
 
 
 def _mtime(path: Path) -> int:
@@ -110,7 +178,7 @@ def build_song_record(
     signature = _signature(song_dir, reference)
     with _lock:
         cached = _song_cache.get(song_dir)
-        if cached and cached[0] == signature:
+        if cached and cached[0] == signature and "is_duet" in cached[1]:
             record = cached[1]
             if (record["_root_index"], record["artist"], record["album"], record["title"]) == (
                 root_index,
@@ -120,6 +188,8 @@ def build_song_record(
             ):
                 return record
 
+    date_added = _date_added(song_dir, reference)
+    signature = _signature(song_dir, reference)
     media = lambda path: _media_path(root_index, root, path)
     lyrics_dir = song_dir / "lyrics"
     covers = [{"name": f.name, "url": media(f)} for f in _files_in(song_dir / "covers")]
@@ -149,12 +219,13 @@ def build_song_record(
             if f.suffix.lower() in {".ttml", ".lrc"}
         ],
         "lyrics_level": saved_lyrics_level(lyrics_dir),
+        "is_duet": saved_lyrics_is_duet(lyrics_dir),
         "lyrics_offset_ms": get_lyrics_offset_ms(lyrics_dir),
         "covers": covers,
         "master": media(masters[0]) if masters else None,
         "cover_url": cover_url,
         "duration_seconds": duration_seconds,
-        "date_added": _date_added(song_dir, reference),
+        "date_added": date_added,
         "max_offset_ms": max_offset_ms_for_duration(duration_seconds),
         "path": str(song_dir),
         "root_index": root_index,
@@ -183,6 +254,8 @@ def _iter_scan():
     for root_index, root in enumerate(get_output_dirs()):
         if not is_available(root):
             continue
+        _load_root_cache(root)
+        root_records: list[dict[str, Any]] = []
         try:
             for artist_dir in sorted(root.iterdir(), key=lambda p: p.name.lower()):
                 if (
@@ -204,9 +277,12 @@ def _iter_scan():
                         seen.add(key)
                         resolved = song_dir.resolve()
                         live.add(resolved)
-                        yield build_song_record(resolved, root, root_index, *key)
+                        record = build_song_record(resolved, root, root_index, *key)
+                        root_records.append(record)
+                        yield record
         except OSError:
             continue  # drive removed mid-scan; it is rescanned once it is back
+        _save_root_cache(root, root_records)
     with _lock:
         for stale in set(_song_cache) - live:
             _song_cache.pop(stale, None)
@@ -326,8 +402,8 @@ def lookup(artist: str, album: str, title: str) -> Optional[dict[str, Any]]:
 
 def queue_assets(
     artist: str, album: str, title: str, output_dir: Optional[str]
-) -> tuple[str, int, Optional[str]]:
-    """(lyrics_level, lyrics_offset_ms, cover_path_url); cached to avoid per-poll disk walks."""
+) -> tuple[str, int, Optional[str], bool]:
+    """Return cached lyric level, offset, cover path and duet status."""
     key = (output_dir, artist, album, title)
     now = time.monotonic()
     with _lock:
@@ -348,7 +424,7 @@ def queue_assets(
         if location:
             song_dir, _, root_index = location
 
-    value: tuple[str, int, Optional[str]] = ("none", 0, None)
+    value: tuple[str, int, Optional[str], bool] = ("none", 0, None, False)
     ttl = ASSET_MISS_TTL
     if song_dir is not None and root_index is not None and song_dir.is_dir():
         lyrics_dir = song_dir / "lyrics"
@@ -356,7 +432,7 @@ def queue_assets(
         cover_url = None
         if cover.is_file():
             cover_url = f"{_media_path(root_index, roots[root_index], cover)}?v={_mtime(cover) // 1_000_000_000}"
-        value = (saved_lyrics_level(lyrics_dir), get_lyrics_offset_ms(lyrics_dir), cover_url)
+        value = (saved_lyrics_level(lyrics_dir), get_lyrics_offset_ms(lyrics_dir), cover_url, saved_lyrics_is_duet(lyrics_dir))
         ttl = ASSET_HIT_TTL
     with _lock:
         _assets[key] = (now + ttl, value)

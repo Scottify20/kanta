@@ -24,6 +24,7 @@ export interface QueueItem {
   output_dir?: string | null;
   cover_url?: string | null;
   lyrics_level?: LyricsLevel;
+  is_duet?: boolean;
   lyrics_offset_ms?: number;
   error?: string | null;
   duration_seconds?: number | null;

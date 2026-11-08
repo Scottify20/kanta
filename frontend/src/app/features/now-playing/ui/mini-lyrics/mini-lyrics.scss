@@ -1,0 +1,141 @@
+:host {
+  position: relative;
+  z-index: 40;
+}
+
+.mini-lyrics {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 1rem;
+  color: #fff;
+  background: rgba(25, 28, 31, 0.96);
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.5);
+}
+
+.mini-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 0.15rem;
+  padding-right: 0.5rem;
+}
+
+.header-button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  cursor: pointer;
+
+  &:hover { background: rgba(255, 255, 255, 0.12); }
+}
+
+.mini-size-popover {
+  display: grid;
+  width: min(16rem, calc(100vw - 3rem));
+  box-sizing: border-box;
+  gap: 1rem;
+  padding: 1.25rem;
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+  }
+
+  output { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+  input { width: 100%; accent-color: white; }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border: 0;
+    border-radius: 0.4rem;
+    color: inherit;
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    &:disabled { opacity: 0.4; cursor: default; }
+  }
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &:active { cursor: grabbing; }
+}
+
+.grip { opacity: 0.6; }
+.title { overflow: hidden; font-size: 0.8rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.mini-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  p {
+    margin: auto;
+    padding: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+}
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  background: transparent;
+  cursor: nwse-resize;
+  touch-action: none;
+
+  span {
+    position: absolute;
+    right: 0.45rem;
+    bottom: 0.45rem;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-right: 2px solid rgba(255, 255, 255, 0.65);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.65);
+  }
+}
+
+.drag-handle:focus-visible, .resize-handle:focus-visible, .header-button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: -2px;
+}

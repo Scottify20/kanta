@@ -23,6 +23,14 @@ export class PopupStateService {
     });
   }
 
+  open(group: string, id: string): void {
+    this.active.update((active) => [...active.filter((popup) => popup.group !== group), { group, id }]);
+  }
+
+  closeAll(): void {
+    this.active.set([]);
+  }
+
   close(group: string, id: string): void {
     if (this.isOpen(group, id)) {
       this.active.update((activePopups) =>

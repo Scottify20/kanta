@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, input, output, signal } from '@angular/core';
+import { Component, ViewEncapsulation, input, output, signal, viewChild } from '@angular/core';
 import { LucideChevronLeft, LucideChevronRight, LucideMoreHorizontal } from '@lucide/angular';
 
 import { Playlist } from '../../services/playlists.service';
@@ -44,6 +44,12 @@ export class EntryMenu {
 
   // Nested menu: "Add to playlist" swaps the list for the playlist picker in place.
   readonly view = signal<'main' | 'playlists'>('main');
+  private readonly popup = viewChild.required(PopupPanel);
+
+  openAt(event: MouseEvent): void {
+    this.view.set('main');
+    this.popup().openAt(event);
+  }
 
   pickPlaylist(id: string): void {
     this.action.emit(`playlist:${id}`);

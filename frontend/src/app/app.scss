@@ -4,6 +4,32 @@
   overflow: hidden;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 2000;
+  display: grid;
+  min-width: 11rem;
+  padding: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.7rem;
+  background: #222;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.85rem;
+
+  button, span {
+    padding: 0.6rem 0.8rem;
+    border: 0;
+    border-radius: 0.4rem;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+  }
+  button { cursor: pointer; }
+  button:hover, button:focus-visible { background: rgba(255, 255, 255, 0.14); }
+}
+
 .shell {
   position: relative;
   z-index: 1;
@@ -24,7 +50,10 @@
 }
 
 .panel {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
   width: 0;
   height: 100%;
   overflow: hidden;
@@ -39,35 +68,27 @@
 }
 
 .panel-left > * {
-  width: var(--panel-width-sidebar);
+  width: min(max(0px, 100vw - 3rem), var(--panel-width-sidebar));
 }
 
 .panel-right > * {
-  width: var(--panel-width-queue);
+  width: min(max(0px, 100vw - 3rem), var(--panel-width-queue));
+}
+
+.panel-left {
+  left: 0;
+}
+
+.panel-right {
+  right: 0;
 }
 
 .sidebar-open .panel-left {
-  width: var(--panel-width-sidebar);
+  width: min(max(0px, 100% - 3rem), var(--panel-width-sidebar));
   opacity: 1;
 }
 
 .queue-open .panel-right {
-  width: var(--panel-width-queue);
+  width: min(max(0px, 100% - 3rem), var(--panel-width-queue));
   opacity: 1;
-}
-
-// On narrow windows there is no room to split, so panels float above the content.
-@media (max-width: 900px) {
-  .panel {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    z-index: 5;
-  }
-  .panel-left {
-    left: 0;
-  }
-  .panel-right {
-    right: 0;
-  }
 }

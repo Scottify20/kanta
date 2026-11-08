@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { API_URL } from './settings.service';
+import { API_URL } from '../../app.config';
 
 export type LyricsLevel = 'word' | 'line' | 'none';
 
@@ -38,6 +38,7 @@ export interface SongManifest {
   stems: SongFile[];
   lyrics: SongFile[];
   lyrics_level?: LyricsLevel;
+  is_duet?: boolean;
   lyrics_offset_ms?: number;
   covers: SongFile[];
   master: string | null;

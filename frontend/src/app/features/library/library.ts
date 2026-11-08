@@ -8,9 +8,10 @@ import {
   untracked,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { QueueService } from '../queue/data-access/queue.service';
-import { LucideChevronLeft, LucideListMusic, LucideMenu } from '@lucide/angular';
+import { LucideChevronDown, LucideChevronLeft, LucideListMusic, LucideMenu } from '@lucide/angular';
 
 import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { Tooltip } from '../../shared/directives/tooltip';
@@ -25,12 +26,12 @@ import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-
 import {
   LibraryEntry,
   LibraryTab,
-  SORT_MODES,
   SortMode,
   albumEntry,
   artistEntry,
   playlistEntry,
   songEntry,
+  sortArtistSongs,
   sortEntries,
 } from './data/library-entries';
 import { EntryAction, LibraryItem } from './ui/library-item/library-item';
@@ -45,7 +46,9 @@ import { LibraryToolbar } from './ui/library-toolbar/library-toolbar';
     LibraryItem,
     LibraryToolbar,
     LibraryDetailHeader,
+    NgTemplateOutlet,
     LucideChevronLeft,
+    LucideChevronDown,
     LucideListMusic,
     LucideMenu,
   ],
@@ -100,10 +103,12 @@ export class Library {
   }
 
   readonly tab = signal<LibraryTab>('songs');
-  readonly sort = signal<SortMode>('az');
+  readonly sort = computed(() => this.library.sorts()[this.tab()]);
   readonly layout = signal<'grid' | 'list'>('grid');
+  readonly lyricsFilter = this.library.lyricsFilter;
   readonly detail = signal<LibraryEntry | null>(null);
   readonly selection = signal<ReadonlySet<string>>(new Set());
+  readonly collapsedAlbums = signal<ReadonlySet<string>>(new Set());
   readonly playlistDraft = signal<{ id: string | null; name: string } | null>(null);
   readonly actionError = signal('');
   readonly playlists = this.playlistsService.playlists;
@@ -130,12 +135,61 @@ export class Library {
           this.sort(),
         );
       default:
-        return sortEntries(this.library.songs().map(songEntry), this.sort());
+        return sortEntries(
+          this.library.songs().filter((song) => {
+            const level = song.lyrics_level ?? 'none';
+            const filter = this.lyricsFilter();
+            return filter === 'all' || (filter === 'duet' ? song.is_duet === true : level === filter);
+          }).map(songEntry),
+          this.sort(),
+        );
     }
   });
   readonly effectiveLayout = computed(() =>
     this.detail() || this.tab() === 'songs' ? 'list' : this.layout(),
   );
+  readonly visibleEntries = computed(() => this.detail()?.kind === 'artist'
+    ? this.entries().filter((entry) => !this.isAlbumCollapsed(entry))
+    : this.entries());
+  private readonly visibleIndices = computed(() => new Map(this.visibleEntries().map((entry, index) => [entry.key, index])));
+  readonly artistGroups = computed(() => {
+    if (this.detail()?.kind !== 'artist') return [];
+    const groups: { key: string; entries: LibraryEntry[] }[] = [];
+    for (const entry of this.entries()) {
+      const key = this.albumKey(entry);
+      const last = groups[groups.length - 1];
+      if (last?.key === key) last.entries.push(entry);
+      else groups.push({ key, entries: [entry] });
+    }
+    return groups;
+  });
+
+  albumKey(entry: LibraryEntry): string {
+    const song = entry.songs[0];
+    return `${this.detail()?.key ?? ''}\u0000${song.artist}\u0000${song.album}`;
+  }
+
+  isAlbumCollapsed(entry: LibraryEntry): boolean {
+    return this.collapsedAlbums().has(this.albumKey(entry));
+  }
+
+  toggleAlbum(entry: LibraryEntry): void {
+    const key = this.albumKey(entry);
+    const collapsed = new Set(this.collapsedAlbums());
+    if (collapsed.has(key)) {
+      collapsed.delete(key);
+    } else {
+      collapsed.add(key);
+      const hidden = new Set(this.entries().filter((item) => this.albumKey(item) === key).map((item) => item.key));
+      this.selection.update((selected) => new Set([...selected].filter((item) => !hidden.has(item))));
+    }
+    this.collapsedAlbums.set(collapsed);
+    this.anchorIndex = -1;
+  }
+
+  visibleIndex(entry: LibraryEntry): number {
+    return this.visibleIndices().get(entry.key) ?? -1;
+  }
 
   constructor() {
     void this.library.load(true);
@@ -156,14 +210,18 @@ export class Library {
     });
     effect(() => {
       // Switching tabs resets the drill-down and the selection.
-      const tab = this.tab();
-      if (!SORT_MODES[tab].includes(untracked(this.sort))) this.sort.set('az');
+      this.tab();
       if (this.skipTabReset) {
         this.skipTabReset = false;
         return;
       }
       this.detail.set(null);
       this.selection.set(new Set());
+    });
+    effect(() => {
+      this.lyricsFilter();
+      this.selection.set(new Set());
+      this.anchorIndex = -1;
     });
     effect(() => {
       // "View album / Go to artist…" from a menu or search result opens that entry here.
@@ -186,6 +244,10 @@ export class Library {
         this.library.pendingOpen.set(null);
       });
     });
+  }
+
+  setSort(mode: SortMode): void {
+    this.library.sorts.update((sorts) => ({ ...sorts, [this.tab()]: mode }));
   }
 
   back(): void {
@@ -212,7 +274,7 @@ export class Library {
       const [from, to] = [this.anchorIndex, index].sort((a, b) => a - b);
       this.selection.set(
         new Set(
-          this.entries()
+          this.visibleEntries()
             .slice(from, to + 1)
             .map((e) => e.key),
         ),
@@ -249,7 +311,7 @@ export class Library {
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault();
-      this.selection.set(new Set(this.entries().map((e) => e.key)));
+      this.selection.set(new Set(this.visibleEntries().map((e) => e.key)));
     } else if (event.key === 'Escape') {
       if (this.selection().size) this.selection.set(new Set());
       else if (this.detail()) this.back();
@@ -359,7 +421,7 @@ export class Library {
   }
 
   private detailSongs(detail: LibraryEntry): LibraryEntry[] {
-    const songs = [...detail.songs];
+    const songs = detail.kind === 'artist' ? sortArtistSongs(detail.songs) : [...detail.songs];
     if (detail.kind === 'album') {
       songs.sort(
         (a, b) =>

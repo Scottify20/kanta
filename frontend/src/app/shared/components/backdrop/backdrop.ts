@@ -3,6 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 
 import { QueueService } from '../../../features/queue/data-access/queue.service';
 import { SongsService } from '../../services/songs.service';
+import { songCover } from '../../services/library.service';
 
 @Component({
   selector: 'app-backdrop',
@@ -23,8 +24,9 @@ export class Backdrop {
     if (!queue.length) return null;
     const taskId = this.songs.currentQueueTaskId();
     const current = queue.find((item) => item.task_id === taskId);
+    const song = this.songs.currentSong();
     return (
-      this.songs.currentSong()?.covers[0]?.url ??
+      (song ? songCover(song) : null) ??
       current?.cover_url ??
       queue.find((item) => item.cover_url)?.cover_url ??
       null

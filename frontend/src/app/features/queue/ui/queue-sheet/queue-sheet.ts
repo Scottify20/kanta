@@ -1,4 +1,5 @@
 import { ApplicationRef, Component, DestroyRef, ElementRef, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideChevronDown, LucideFilePlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -382,7 +383,22 @@ export class QueueSheet implements OnInit {
 
   private addFiles(files: FileList, targetQueue: QueueName): void {
     const priority = targetQueue === 'karaoke_queue' ? 1 : 2;
-    Array.from(files).forEach((file) => {
+    const selected = Array.from(files);
+    const lyricsFiles = selected.filter((file) => /\.ttml$/i.test(file.name));
+    const audioFiles = selected.filter((file) => !/\.ttml$/i.test(file.name));
+    const stem = (file: File) => file.name.replace(/\.[^/.]+$/, '').toLocaleLowerCase();
+    const directory = (file: File) => (file.webkitRelativePath || '').split('/').slice(0, -1).join('/');
+    const usedLyrics = new Set<File>();
+    audioFiles.forEach((file) => {
+      const matches = lyricsFiles.filter((lyrics) => stem(lyrics) === stem(file) && directory(lyrics) === directory(file));
+      const matchingAudio = audioFiles.filter((audio) => stem(audio) === stem(file) && directory(audio) === directory(file));
+      if (matches.length > 1 || (matches.length && matchingAudio.length > 1)) {
+        this.toast.error(`Cannot match lyrics for “${file.name}”: multiple files have the same name.`);
+        matches.forEach((lyrics) => usedLyrics.add(lyrics));
+        return;
+      }
+      const lyrics = matches[0];
+      if (lyrics) usedLyrics.add(lyrics);
       const temp = this.uploadPlaceholder(file, priority);
       this.uploads.update((list) => [...list, temp]);
       if (priority === 1) {
@@ -390,7 +406,7 @@ export class QueueSheet implements OnInit {
         this.karaokeItems.update((items) => [...items, temp]);
         this.lockServerOrder(true);
       }
-      this.queueService.addTrack(file, priority).subscribe({
+      this.queueService.addTrack(file, priority, lyrics).subscribe({
         next: ({ item }) => {
           this.entering.delete(temp.task_id);
           this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
@@ -399,7 +415,11 @@ export class QueueSheet implements OnInit {
             this.lockServerOrder();
           }
         },
-        error: () => {
+        error: (error: unknown) => {
+          const detail = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+            ? ` ${error.error.detail}`
+            : '';
+          this.toast.error(`Could not add “${file.name}” to the queue.${detail}`);
           this.entering.delete(temp.task_id);
           this.uploads.update((list) => list.filter((entry) => entry !== temp));
           this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
@@ -407,6 +427,9 @@ export class QueueSheet implements OnInit {
         },
       });
     });
+    for (const lyrics of lyricsFiles) {
+      if (!usedLyrics.has(lyrics)) this.toast.error(`No matching audio selected for “${lyrics.name}”.`);
+    }
   }
 
   private uploadPlaceholder(file: File, priority: 1 | 2): QueueItem {
