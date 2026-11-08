@@ -14,7 +14,7 @@ export class OverlayScrollbarService {
   private target: HTMLElement | null = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
   private frame = 0;
-  private dragging = false;
+  private dragPointerId: number | null = null;
   private dragStartY = 0;
   private dragStartScroll = 0;
 
@@ -35,13 +35,18 @@ export class OverlayScrollbarService {
     this.thumb.addEventListener('pointermove', (event) => this.moveDrag(event));
     this.thumb.addEventListener('pointerup', (event) => this.endDrag(event));
     this.thumb.addEventListener('pointercancel', (event) => this.endDrag(event));
+    this.thumb.addEventListener('lostpointercapture', (event) => this.endDrag(event));
     this.thumb.addEventListener('pointerenter', () => this.cancelHide());
     this.thumb.addEventListener('pointerleave', () => this.scheduleHide());
   }
 
+  isScrollbarInside(node: Element, selector: string): boolean {
+    return !!this.layer?.contains(node) && !!this.target?.closest(selector);
+  }
+
   private onPointerOver(event: PointerEvent): void {
     const node = event.target as Node | null;
-    if (!node || (this.layer && this.layer.contains(node)) || this.dragging) return;
+    if (!node || (this.layer && this.layer.contains(node)) || this.dragPointerId !== null) return;
     const scroller = this.findScrollable(node instanceof HTMLElement ? node : node.parentElement);
     if (scroller !== this.target) {
       this.target = scroller;
@@ -53,7 +58,7 @@ export class OverlayScrollbarService {
   private onScroll(event: Event): void {
     const el = event.target;
     if (!(el instanceof HTMLElement) || (this.layer && this.layer.contains(el))) return;
-    if (this.dragging && el !== this.target) return;
+    if (this.dragPointerId !== null && el !== this.target) return;
     if (el !== this.target) {
       if (!this.isScrollable(el)) return;
       this.target = el;
@@ -81,6 +86,7 @@ export class OverlayScrollbarService {
     const { target, thumb } = this;
     if (!thumb) return;
     if (!target || !target.isConnected || target.scrollHeight <= target.clientHeight + 1) {
+      this.cancelDrag();
       this.hide();
       return;
     }
@@ -91,17 +97,18 @@ export class OverlayScrollbarService {
       rect.width < 40 || rect.height < 40 || target.closest('[inert]') ||
       (view && (rect.right <= 0 || rect.left >= view.innerWidth || rect.bottom <= 0 || rect.top >= view.innerHeight))
     ) {
+      this.cancelDrag();
       this.target = null;
       this.hide();
       return;
     }
-    const trackHeight = rect.height;
+    const trackHeight = target.clientHeight;
     const ratio = target.clientHeight / target.scrollHeight;
-    const thumbHeight = Math.max(MIN_THUMB, trackHeight * ratio);
+    const thumbHeight = Math.min(trackHeight, Math.max(MIN_THUMB, trackHeight * ratio));
     const maxScroll = target.scrollHeight - target.clientHeight;
-    const top = rect.top + (maxScroll ? (target.scrollTop / maxScroll) * (trackHeight - thumbHeight) : 0);
+    const top = rect.top + target.clientTop + (maxScroll ? (target.scrollTop / maxScroll) * (trackHeight - thumbHeight) : 0);
     thumb.style.height = `${thumbHeight}px`;
-    thumb.style.transform = `translate(${rect.right - 14}px, ${top}px)`;
+    thumb.style.transform = `translate(${rect.left + target.clientLeft + target.clientWidth - 14}px, ${top}px)`;
     thumb.classList.add('visible');
     this.track();
   }
@@ -117,14 +124,14 @@ export class OverlayScrollbarService {
 
   private hide(): void {
     this.cancelHide();
-    if (!this.dragging) this.thumb?.classList.remove('visible');
+    if (this.dragPointerId === null) this.thumb?.classList.remove('visible');
     if (this.frame) { cancelAnimationFrame(this.frame); this.frame = 0; }
   }
 
   private scheduleHide(): void {
     this.cancelHide();
     this.hideTimer = setTimeout(() => {
-      if (!this.dragging && !this.thumb?.matches(':hover')) this.hide();
+      if (this.dragPointerId === null && !this.thumb?.matches(':hover')) this.hide();
     }, IDLE_HIDE_MS);
   }
 
@@ -134,9 +141,9 @@ export class OverlayScrollbarService {
   }
 
   private startDrag(event: PointerEvent): void {
-    if (!this.target || !this.thumb) return;
+    if (!this.target || !this.thumb || this.dragPointerId !== null || event.button !== 0) return;
     event.preventDefault();
-    this.dragging = true;
+    this.dragPointerId = event.pointerId;
     this.dragStartY = event.clientY;
     this.dragStartScroll = this.target.scrollTop;
     this.thumb.classList.add('dragging');
@@ -145,7 +152,7 @@ export class OverlayScrollbarService {
 
   private moveDrag(event: PointerEvent): void {
     const { target, thumb } = this;
-    if (!this.dragging || !target || !thumb) return;
+    if (this.dragPointerId !== event.pointerId || !target || !thumb) return;
     const trackHeight = target.clientHeight;
     const thumbHeight = thumb.offsetHeight;
     const scrollable = target.scrollHeight - target.clientHeight;
@@ -155,10 +162,16 @@ export class OverlayScrollbarService {
   }
 
   private endDrag(event: PointerEvent): void {
-    if (!this.dragging) return;
-    this.dragging = false;
-    this.thumb?.classList.remove('dragging');
-    if (this.thumb?.hasPointerCapture(event.pointerId)) this.thumb.releasePointerCapture(event.pointerId);
+    if (this.dragPointerId !== event.pointerId) return;
+    this.cancelDrag();
     this.scheduleHide();
+  }
+
+  private cancelDrag(): void {
+    const pointerId = this.dragPointerId;
+    if (pointerId === null) return;
+    this.dragPointerId = null;
+    this.thumb?.classList.remove('dragging');
+    if (this.thumb?.hasPointerCapture(pointerId)) this.thumb.releasePointerCapture(pointerId);
   }
 }

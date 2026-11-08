@@ -189,6 +189,7 @@ export class App {
     const target = event.target as Element | null;
     if (!target?.isConnected) return;
     if (target.closest('.panel, .cdk-overlay-container, [aria-expanded], [role="dialog"], dialog')) return;
+    if (this.overlayScrollbar.isScrollbarInside(target, '.panel')) return;
     this.layout.closeSidebar();
     // Pressing a draggable item may be the start of a drag towards the queue, so it must not dismiss the sheet.
     if (target.closest('[draggable="true"]')) return;
