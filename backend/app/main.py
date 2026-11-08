@@ -1,8 +1,9 @@
+import asyncio
 import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -20,7 +21,7 @@ from app.routes.setup import router as setup_router
 from app.routes.settings import fs_router, router as settings_router
 from app.services import library, log_buffer
 from app.services.fsutil import safe_join, safe_upload_name
-from app.services.paths import UPLOADS_DIR, configure_environment
+from app.services.paths import configure_environment, output_work_dir, upload_dir
 from app.services.metadata import sanitize_filename
 from app.services.lyrics import (
     classify_lyrics_file,
@@ -30,6 +31,7 @@ from app.services.lyrics import (
 )
 from app.services.queue_manager import queue_manager
 from app.services.separator import run_basic_pipeline, run_karaoke_pipeline
+from app.services.storage import ensure_output_root_available
 from app.services.settings import (
     find_song_directory,
     get_output_dir,
@@ -60,13 +62,30 @@ app.add_middleware(
 )
 
 configure_environment()
-UPLOAD_DIR = UPLOADS_DIR
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+def _public_media_path(root: Path, relative: str) -> Optional[Path]:
+    parts = PurePosixPath(relative.replace("\\", "/")).parts
+    if any(part.casefold() == ".kanta" for part in parts):
+        return None
+    candidate = safe_join(root, relative)
+    if candidate is None or any(
+        part.casefold() == ".kanta" for part in candidate.relative_to(root.resolve()).parts
+    ) or candidate.is_relative_to(output_work_dir(root).resolve()):
+        return None
+    return candidate
+
+
+class PublicMediaFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        root = Path(self.directory)
+        if _public_media_path(root, path) is None:
+            raise HTTPException(status_code=404, detail="Media file not found")
+        return await super().get_response(path, scope)
 
 # check_dir=False: the default folder may live on a drive that is currently unplugged.
 app.mount(
     "/separated",
-    StaticFiles(directory=get_output_dir(), check_dir=False),
+    PublicMediaFiles(directory=get_output_dir(), check_dir=False),
     name="separated",
 )
 app.include_router(logs_router)
@@ -82,7 +101,7 @@ app.include_router(search_router)
 
 @app.get("/media/{file_path:path}")
 def get_media(file_path: str) -> FileResponse:
-    candidate = safe_join(get_output_dir(), file_path)
+    candidate = _public_media_path(get_output_dir(), file_path)
     if candidate is None or not candidate.is_file():
         raise HTTPException(status_code=404, detail="Media file not found")
     return FileResponse(candidate)
@@ -93,33 +112,57 @@ def get_media_from_root(root_index: int, file_path: str) -> FileResponse:
     roots = get_output_dirs()
     if root_index < 0 or root_index >= len(roots):
         raise HTTPException(status_code=404, detail="Media file not found")
-    candidate = safe_join(roots[root_index], file_path)
+    candidate = _public_media_path(roots[root_index], file_path)
     if candidate is None or not candidate.is_file():
         raise HTTPException(status_code=404, detail="Media file not found")
     return FileResponse(candidate)
 
 async def process_audio_input(file: Optional[UploadFile], url: Optional[str]) -> Path:
-    if not file and not url:
-        raise HTTPException(status_code=400, detail="Must provide either a file or a url.")
+    if not (file and file.filename) and not url:
+        raise HTTPException(status_code=400, detail="Must provide a file with a filename or a url.")
+
+    root = get_output_dir()
+    try:
+        await asyncio.to_thread(ensure_output_root_available, root)
+        uploads = upload_dir(root)
+        uploads.mkdir(parents=True, exist_ok=True)
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Output folder is unavailable: {exc}") from exc
 
     if file and file.filename:
-        input_path = UPLOAD_DIR / safe_upload_name(file.filename)
-        with open(input_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        input_path = uploads / f"{uuid.uuid4()}_{safe_upload_name(file.filename)}"
+        try:
+            with input_path.open("wb") as buffer:
+                await asyncio.to_thread(shutil.copyfileobj, file.file, buffer)
+        except (OSError, ValueError) as exc:
+            input_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail=f"Failed to save audio: {exc}") from exc
         return input_path
 
     if url:
+        filename = safe_upload_name(url.split("?")[0].rsplit("/", 1)[-1], "downloaded_track.flac")
+        input_path = uploads / f"{uuid.uuid4()}_{filename}"
         try:
-            filename = safe_upload_name(url.split("?")[0].rsplit("/", 1)[-1], "downloaded_track.flac")
-            input_path = UPLOAD_DIR / filename
             async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
                 with open(input_path, "wb") as f:
                     f.write(resp.content)
             return input_path
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to download audio: {str(e)}")
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            input_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail=f"Failed to download audio: {exc}") from exc
+    raise HTTPException(status_code=400, detail="Must provide a file with a filename or a url.")
+
+
+def _output_http_base_url(output_song_dir: Path, output_root: Path) -> Optional[str]:
+    relative = output_song_dir.relative_to(output_root).as_posix()
+    if output_root == get_output_dir():
+        return f"http://127.0.0.1:8000/media/{relative}"
+    roots = get_output_dirs()
+    if output_root in roots:
+        return f"http://127.0.0.1:8000/media-roots/{roots.index(output_root)}/{relative}"
+    return None
 
 @app.get("/health")
 def health_check():
@@ -234,8 +277,8 @@ async def separate_basic_endpoint(file: Optional[UploadFile] = File(None), url: 
             run_basic_pipeline, input_path, active_task_id
         )
         library.invalidate(output_song_dir)
-        relative_dir = output_song_dir.relative_to(get_output_dir()).as_posix()
-        result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
+        output_root = input_path.parent.parent.parent
+        result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root)}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:
@@ -258,8 +301,8 @@ async def separate_full_endpoint(file: Optional[UploadFile] = File(None), url: O
             run_karaoke_pipeline, input_path, active_task_id
         )
         library.invalidate(output_song_dir)
-        relative_dir = output_song_dir.relative_to(get_output_dir()).as_posix()
-        result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": f"http://127.0.0.1:8000/media/{relative_dir}"}
+        output_root = input_path.parent.parent.parent
+        result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root)}
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:

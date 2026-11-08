@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from app.services import library, playlists
 from app.services.fsutil import safe_upload_name
-from app.services.paths import UPLOADS_DIR, ffmpeg_path, subprocess_kwargs
+from app.services.paths import upload_dir, ffmpeg_path, subprocess_kwargs
 from app.services.lyrics import (
     LOCK_FILE,
     fetch_and_save_lyrics,
@@ -34,7 +34,8 @@ from app.services.lyrics import (
 )
 from app.services.metadata import extract_raw_metadata, sanitize_filename
 from app.services.queue_manager import QueueItem, QueuePriority, queue_manager
-from app.services.settings import find_song_directory, get_lyrics_auto_fetch
+from app.services.settings import find_song_directory, get_lyrics_auto_fetch, get_output_dir
+from app.services.storage import ensure_output_root_available
 from app.services.tagging import (
     EXTENDED_FIELDS,
     audio_files,
@@ -49,7 +50,6 @@ from app.services.tagging import (
 router = APIRouter(prefix="/api/queue", tags=["Queue"])
 songs_router = APIRouter(prefix="/api", tags=["Songs"])
 search_router = APIRouter(prefix="/api", tags=["Search"])
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -105,7 +105,8 @@ async def add_to_queue(
 
     task_id = str(uuid.uuid4())
     safe_name = safe_upload_name(file.filename, "track.audio")
-    input_path = UPLOADS_DIR / f"{task_id}_{safe_name}"
+    output_root = get_output_dir()
+    input_path = upload_dir(output_root) / f"{task_id}_{safe_name}"
     lyrics_path = input_path.with_suffix(".ttml")
 
     if lyrics is not None:
@@ -124,6 +125,12 @@ async def add_to_queue(
             raise HTTPException(status_code=422, detail="Lyrics file must be UTF-8 text") from exc
         if classify_ttml_content(content) == "none":
             raise HTTPException(status_code=422, detail="No timed lyrics found in file")
+
+    try:
+        await asyncio.to_thread(ensure_output_root_available, output_root)
+        input_path.parent.mkdir(parents=True, exist_ok=True)
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=f"Output folder is unavailable: {exc}") from exc
 
     try:
         with input_path.open("wb") as buffer:

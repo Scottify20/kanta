@@ -17,6 +17,12 @@ Only one item can be `processing` at once because the separator uses the GPU.
 
 Queue state is persisted in `backend/queue_state.json`. Pending and paused uploads can be restored after a backend restart when their temporary input still exists. Karaoke playback order is persisted separately from worker order.
 
+Uploads are stored temporarily in the selected output folder under
+`.kanta/uploads`, and processing intermediates use `.kanta/temp`. The library
+index for each output folder is `.kanta/library.sqlite3`. An upload continues
+to use the output folder selected when it was queued, even if the default
+changes. Existing queued uploads in older locations can still be restored.
+
 ## Add a track
 
 `POST /api/queue/add`

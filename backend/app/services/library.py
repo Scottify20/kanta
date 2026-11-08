@@ -11,6 +11,7 @@ from typing import Any, Optional
 from urllib.parse import quote
 
 from app.services.fsutil import atomic_write_json
+from app.services.paths import output_work_dir
 from app.services.lyrics import (
     classify_lyrics_file,
     get_lyrics_offset_ms,
@@ -49,7 +50,7 @@ _assets: dict[Any, tuple[float, tuple]] = {}
 
 
 def _cache_path(root: Path) -> Path:
-    return root / ".kanta" / "library.sqlite3"
+    return output_work_dir(root) / "library.sqlite3"
 
 
 def _load_root_cache(root: Path) -> None:

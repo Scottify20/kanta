@@ -25,7 +25,7 @@ def _platform_data_dir() -> Path:
 
 
 def get_data_dir() -> Path:
-    """Where settings, queue state, playlists, models, uploads and library live by default.
+    """Where settings, queue state, playlists, models and the default library live.
 
     KANTA_DATA_DIR overrides everything. A packaged (frozen) build uses the per-user
     platform data directory; a source checkout keeps using the backend folder.
@@ -43,8 +43,25 @@ def get_data_dir() -> Path:
 
 
 DATA_DIR = get_data_dir()
-UPLOADS_DIR = DATA_DIR / "uploads"
-TEMP_DIR = DATA_DIR / "temp_processing"
+
+
+def output_work_dir(output_root: Path) -> Path:
+    return output_root / ".kanta"
+
+
+def upload_dir(output_root: Path) -> Path:
+    return output_work_dir(output_root) / "uploads"
+
+
+def processing_dir(output_root: Path) -> Path:
+    return output_work_dir(output_root) / "temp"
+
+
+def output_root_for_input(input_path: Path, default_root: Path) -> Path:
+    parent = input_path.parent
+    if parent.name == "uploads" and parent.parent.name == ".kanta":
+        return parent.parent.parent
+    return default_root
 
 
 def _bundle_dirs() -> list[Path]:

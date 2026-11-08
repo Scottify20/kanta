@@ -49,7 +49,10 @@ curl -X POST http://127.0.0.1:8000/api/separate-basic \
 
 Optional `task_id` can be supplied to associate the request with an existing task record.
 
-For uploads, the file is stored temporarily while the pipeline runs and is removed afterward. The input URL must be reachable by the backend process, not only by the browser.
+For uploads, the file is stored temporarily under the selected output folder's
+`.kanta/uploads` directory while the pipeline runs and is removed afterward.
+Processing intermediates are stored under `.kanta/temp` in that same output
+folder. The input URL must be reachable by the backend process, not only by the browser.
 
 ## Progress and cancellation
 
@@ -66,6 +69,8 @@ curl -X POST http://127.0.0.1:8000/api/cancel/TASK_ID
 ```
 
 The separation result includes the generated task ID and the HTTP base URL for its output directory.
+If the output folder is removed from the configured library folders while processing,
+the output remains there but `http_base_url` is `null` until the folder is added again.
 
 ## JSON response example
 
