@@ -23,7 +23,13 @@ curl -X POST http://127.0.0.1:8004/api/separate-basic \
   -F "file=@song.mp3"
 ```
 
-The basic pipeline creates instrumental and vocal stems, an original MP3 copy, extracted cover art when available, and lyrics when the lyrics provider returns them.
+The basic pipeline creates instrumental and vocal stems, a converted master (MP3
+or FLAC depending on quality), extracted cover art when available, and lyrics
+when the lyrics provider returns them.
+The master and stems retain compatible source metadata, including multi-value
+tags and embedded artwork; stems use their own descriptive titles. Conversion
+between formats cannot preserve metadata fields that the destination format
+does not support, and Kanta does not keep an untouched copy of the input.
 
 ## Full karaoke separation
 

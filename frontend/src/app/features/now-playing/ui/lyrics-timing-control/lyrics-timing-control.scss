@@ -1,3 +1,5 @@
+@use '../popover-range';
+
 .circle-button {
   display: inline-grid;
   place-items: center;
@@ -69,6 +71,10 @@
       outline: 1px solid var(--color-accent);
     }
   }
+}
+
+.lyrics-timing-range {
+  @include popover-range.slider;
 }
 
 .lyrics-timing-reset {
