@@ -13,6 +13,7 @@
   </aside>
 
   <div class="content">
+    <app-now-playing [active]="playerVisible()" [style.display]="playerVisible() ? 'block' : 'none'" />
     <router-outlet></router-outlet>
   </div>
 

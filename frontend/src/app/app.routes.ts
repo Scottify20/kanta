@@ -1,8 +1,7 @@
 import { Routes } from '@angular/router';
-import { NowPlaying } from './features/now-playing/now-playing';
 
 export const routes: Routes = [
-  { path: '', component: NowPlaying },
+  { path: '', pathMatch: 'full', children: [] },
   {
     path: 'library',
     loadComponent: () => import('./features/library/library').then((module) => module.Library),

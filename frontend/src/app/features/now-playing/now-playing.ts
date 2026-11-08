@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, signal, untracked, DOCUMENT } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, input, signal, untracked, DOCUMENT } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -58,6 +58,7 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
   styleUrl: './ui/now-playing.scss',
 })
 export class NowPlaying implements OnDestroy {
+  readonly active = input(true);
   readonly lyricsService = inject(LyricsService);
   readonly audioPlayer = inject(AudioPlayerService);
   private readonly queueService = inject(QueueService);
@@ -146,12 +147,18 @@ export class NowPlaying implements OnDestroy {
   private queuedAutoplayTaskId: string | null = null;
   private resumeAfterSeek = false;
   private seekPointerId: number | null = null;
+  private mediaNavigation = Promise.resolve();
+  private manifestRequest = 0;
 
   constructor() {
     const savedSong = this.songsService.currentSong();
     if (savedSong) {
       this.restoreCurrentSong(savedSong);
     }
+
+    effect(() => {
+      if (!this.active()) this.popupState.closeGroup('player');
+    });
 
     effect(() => {
       if (this.fullscreen.active()) {
@@ -225,6 +232,7 @@ export class NowPlaying implements OnDestroy {
       }
       this.selectedTrack.set(updated);
       if (updated.status !== 'completed') {
+        this.manifestRequest++;
         this.audioPlayer.pause();
         if (this.selectedManifest()) {
           this.lyricsService.clearLyrics();
@@ -248,7 +256,19 @@ export class NowPlaying implements OnDestroy {
     });
 
     this.audioPlayer.trackEnded.pipe(takeUntilDestroyed()).subscribe(() => {
-      void this.playNext();
+      this.queueMediaNavigation('next');
+    });
+    this.audioPlayer.trackNavigation.pipe(takeUntilDestroyed()).subscribe((direction) => {
+      this.queueMediaNavigation(direction);
+    });
+  }
+
+  private queueMediaNavigation(direction: 'next' | 'previous'): void {
+    this.mediaNavigation = this.mediaNavigation.then(() =>
+      direction === 'next' ? this.playNext() : this.playPrevious(),
+    ).catch((error: unknown) => {
+      console.error('Media track navigation failed:', error);
+      this.playbackError.set('Could not change tracks.');
     });
   }
 
@@ -474,6 +494,7 @@ export class NowPlaying implements OnDestroy {
   }
 
   private stopPlayback(): void {
+    this.manifestRequest++;
     this.audioPlayer.release();
     this.lyricsService.clearLyrics();
     this.selectedTrack.set(null);
@@ -563,6 +584,7 @@ export class NowPlaying implements OnDestroy {
   }
 
   private async playQueueItem(track: QueueItem): Promise<void> {
+    this.manifestRequest++;
     this.audioPlayer.pause();
     this.lyricsService.clearLyrics();
     this.selectedTrack.set(track);
@@ -588,6 +610,7 @@ export class NowPlaying implements OnDestroy {
   }
 
   private selectLibrarySong(song: SongManifest, queueTaskId: string | null = null): void {
+    this.manifestRequest++;
     this.audioPlayer.pause();
     this.lyricsService.clearLyrics();
     this.selectedTrack.set(
@@ -649,10 +672,12 @@ export class NowPlaying implements OnDestroy {
   }
 
   private async loadManifest(track: QueueItem): Promise<SongManifest | null> {
+    const request = ++this.manifestRequest;
     try {
       const manifest = await firstValueFrom(
         this.songsService.getManifest(track.artist, track.album, track.title),
       );
+      if (this.manifestRequest !== request || this.selectedTrack()?.task_id !== track.task_id) return null;
       this.selectedManifest.set(manifest);
       this.songsService.setNowPlaying(manifest, track.task_id);
       this.coverUrl.set(songCover(manifest));
@@ -660,9 +685,12 @@ export class NowPlaying implements OnDestroy {
       this.loadedTaskId = null;
       this.loadedSongKey = null;
       await this.loadLyrics(manifest);
-      return manifest;
+      return this.manifestRequest === request && this.selectedTrack()?.task_id === track.task_id
+        ? manifest : null;
     } catch (error) {
-      this.playbackError.set(error instanceof Error ? error.message : 'Could not load this song.');
+      if (this.manifestRequest === request && this.selectedTrack()?.task_id === track.task_id) {
+        this.playbackError.set(error instanceof Error ? error.message : 'Could not load this song.');
+      }
       return null;
     }
   }

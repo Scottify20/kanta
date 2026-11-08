@@ -3,6 +3,7 @@ import { LyricsSizeService } from '../../../../shared/services/lyrics-size.servi
 import { LyricsColorService, paletteFromCanvas } from '../../../../shared/services/lyrics-color.service';
 import type { BraccatoLyricsElement } from '@braccato/core/element';
 import type { Lyric } from '@braccato/parsers';
+import { stabilizeLyricsLayout } from './lyrics-layout';
 
 @Component({
   selector: 'app-lyrics-stage',
@@ -27,6 +28,8 @@ export class LyricsStage {
 
   constructor() {
     const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    let observed: BraccatoLyricsElement | null = null;
+    let stopObserving: (() => void) | null = null;
     const onLyricsLoaded = (event: Event): void => {
       if (!(event.target instanceof HTMLElement) || event.target.tagName !== 'BRACCATO-LYRICS') return;
       const element = event.target as BraccatoLyricsElement;
@@ -35,9 +38,17 @@ export class LyricsStage {
       element.tickOptions = { ...options, smoothScroll: false };
       element.currentTime = this.currentTime();
       element.tickOptions = options;
+      if (element !== observed) {
+        stopObserving?.();
+        observed = element;
+        stopObserving = stabilizeLyricsLayout(element);
+      }
     };
     host.addEventListener('braccato:lyrics-loaded', onLyricsLoaded);
-    inject(DestroyRef).onDestroy(() => host.removeEventListener('braccato:lyrics-loaded', onLyricsLoaded));
+    inject(DestroyRef).onDestroy(() => {
+      host.removeEventListener('braccato:lyrics-loaded', onLyricsLoaded);
+      stopObserving?.();
+    });
 
     effect((onCleanup) => {
       const cover = this.coverUrl();

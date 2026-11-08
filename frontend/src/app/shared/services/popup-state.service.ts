@@ -31,6 +31,10 @@ export class PopupStateService {
     this.active.set([]);
   }
 
+  closeGroup(group: string): void {
+    this.active.update((active) => active.filter((popup) => popup.group !== group));
+  }
+
   close(group: string, id: string): void {
     if (this.isOpen(group, id)) {
       this.active.update((activePopups) =>

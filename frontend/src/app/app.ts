@@ -1,9 +1,12 @@
-import { Component, ElementRef, HostListener, inject, signal } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 
 import { MetadataEditor } from './features/library/ui/metadata-editor/metadata-editor';
 import { QueueSheet } from './features/queue/ui/queue-sheet/queue-sheet';
 import { MiniLyrics } from './features/now-playing/ui/mini-lyrics/mini-lyrics';
+import { NowPlaying } from './features/now-playing/now-playing';
 import { Backdrop } from './shared/components/backdrop/backdrop';
 import { ToastHost } from './shared/components/toast-host/toast-host';
 import { SetupModal } from './shared/components/setup-modal/setup-modal';
@@ -23,7 +26,7 @@ import { ToastService } from './shared/services/toast.service';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal, ToastHost, MetadataEditor, MiniLyrics],
+  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal, ToastHost, MetadataEditor, MiniLyrics, NowPlaying],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -35,6 +38,17 @@ export class App {
   readonly entryActions = inject(EntryActionsService);
   readonly library = inject(LibraryService);
   private readonly router = inject(Router);
+  private readonly route = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  readonly playerVisible = computed(() =>
+    (this.router.parseUrl(this.route()).root.children['primary']?.segments.length ?? 0) === 0,
+  );
   private readonly fullscreen = inject(FullscreenService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly overlayScrollbar = inject(OverlayScrollbarService);

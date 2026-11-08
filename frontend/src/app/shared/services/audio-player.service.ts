@@ -62,6 +62,7 @@ export class AudioPlayerService {
   readonly vocalsVolume = signal(1);
   readonly instrumentalVolume = signal(1);
   readonly trackEnded = new Subject<void>();
+  readonly trackNavigation = new Subject<'next' | 'previous'>();
   readonly replayGainEnabled = signal(storage.get(RG_ENABLED_KEY) !== 'false');
   readonly replayGainMode = signal<ReplayGainMode>(
     storage.get(RG_MODE_KEY) === 'album' ? 'album' : 'track',
@@ -83,13 +84,20 @@ export class AudioPlayerService {
   constructor() {
     if (typeof navigator === 'undefined') return;
     if ('mediaSession' in navigator) {
-      try {
-        navigator.mediaSession.setActionHandler('play', () => {
+      const actions: [MediaSessionAction, MediaSessionActionHandler][] = [
+        ['play', () => {
           void this.play().catch((error) => console.error('Media playback failed:', error));
-        });
-        navigator.mediaSession.setActionHandler('pause', () => this.pause());
-      } catch (error) {
-        console.warn('Media controls are unavailable:', error);
+        }],
+        ['pause', () => this.pause()],
+        ['nexttrack', () => this.trackNavigation.next('next')],
+        ['previoustrack', () => this.trackNavigation.next('previous')],
+      ];
+      for (const [action, handler] of actions) {
+        try {
+          navigator.mediaSession.setActionHandler(action, handler);
+        } catch (error) {
+          console.warn(`Media control ${action} is unavailable:`, error);
+        }
       }
     }
     if (typeof document !== 'undefined') {
