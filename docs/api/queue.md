@@ -31,7 +31,7 @@ Send a multipart form with:
 
 - `file`: audio file.
 - `priority`: `1` for Karaoke or `2` for Processing Only. Defaults to `2`.
-- `lyrics`: optional UTF-8 TTML file with the same filename stem as `file`.
+- `lyrics`: optional UTF-8 TTML or LRC file with the same filename stem as `file`.
   It must contain timed lyrics and be no larger than 5 MiB.
 
 ```bash
@@ -54,16 +54,19 @@ Important response fields:
 | `position` | Position within its priority queue. |
 
 An unreadable or unsupported audio upload returns `400` and is not added to the queue.
-Invalid TTML is rejected instead of queuing the track. The TTML is retained with
+Invalid or untimed lyrics are rejected instead of queuing the track. The lyrics are retained with
 the temporary upload across restarts and copied into the processed song's lyrics
 folder. Existing word-timed lyrics are retained; line-timed lyrics can be
 improved by an automatic word-timed result.
 
 The frontend uses priority `2` as its default. Priority `1` is an explicit user choice when dropping an external file into Karaoke Queue.
 In the Processing Queue, use the folder button to import audio from a folder and
-its subfolders. Non-audio files are ignored, and a TTML file is paired only with
-an audio file of the same name in the same folder. Ambiguous pairs are reported
-instead of being queued.
+its subfolders. Folder imports, file selections, and file drops ignore files
+other than audio and TTML or LRC lyrics. Files containing video streams are
+skipped; audio files that cannot be inspected are reported and skipped. Lyrics
+are paired only with audio files of the same name in the same folder. TTML is
+preferred when both TTML and LRC exist. Multiple matching audio files or multiple
+files of the preferred lyrics format are reported as ambiguous instead of being queued.
 
 ## Add a processed library song
 

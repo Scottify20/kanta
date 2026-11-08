@@ -166,11 +166,12 @@ def _preserve_existing_lyrics(existing_song_dir: Path, temp_song_dir: Path) -> N
 
 
 def _copy_input_lyrics(input_file_path: Path, song_dir: Path) -> None:
-    source = input_file_path.with_suffix(".ttml")
-    if source.is_file():
-        lyrics_dir = song_dir / "lyrics"
-        lyrics_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, lyrics_dir / "uploaded.ttml")
+    for suffix in (".ttml", ".lrc"):
+        source = input_file_path.with_suffix(suffix)
+        if source.is_file():
+            lyrics_dir = song_dir / "lyrics"
+            lyrics_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, lyrics_dir / f"uploaded{suffix}")
 
 
 def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> Path:

@@ -122,16 +122,20 @@ def classify_ttml_content(content: str) -> str:
     return "line" if timed_paragraphs else "none"
 
 
+def classify_lyrics_content(content: str, suffix: str) -> str:
+    if suffix.lower() == ".ttml":
+        return classify_ttml_content(content)
+    if suffix.lower() == ".lrc" and re.search(r"(?m)^\s*\[\d{1,3}:\d{2}(?:\.\d+)?\]", content):
+        return "line"
+    return "none"
+
+
 def classify_lyrics_file(path: Path) -> str:
     try:
         content = path.read_text(encoding="utf-8")
     except OSError:
         return "none"
-    if path.suffix.lower() == ".ttml":
-        return classify_ttml_content(content)
-    if path.suffix.lower() == ".lrc" and re.search(r"(?m)^\s*\[\d{1,3}:\d{2}(?:\.\d+)?\]", content):
-        return "line"
-    return "none"
+    return classify_lyrics_content(content, path.suffix)
 
 
 def saved_lyrics_files(lyrics_dir: Path) -> list[Path]:

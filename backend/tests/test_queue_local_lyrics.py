@@ -13,6 +13,7 @@ from app.services.separator import _copy_input_lyrics
 from app.services import lyrics
 
 TTML = b'<tt><body><div><p begin="00:00:01.000">Hello</p></div></body></tt>'
+LRC = b"[00:01.00]Hello"
 METADATA = {
     "raw_title": "Song", "raw_artist": "Artist", "raw_album": "Album",
     "title": "Song", "artist": "Artist", "album": "Album",
@@ -62,8 +63,37 @@ class QueueLocalLyricsTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(audio.exists())
             self.assertFalse(audio.with_suffix(".ttml").exists())
 
+    async def test_uploaded_lrc_is_preserved_and_cleaned_up(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            add = AsyncMock()
+            with (
+                patch.object(queue, "get_output_dir", return_value=root),
+                patch.object(queue, "extract_raw_metadata", return_value=METADATA),
+                patch.object(queue, "read_duration", return_value=10),
+                patch.object(queue.queue_manager, "add_item", new=add),
+            ):
+                result = await queue.add_to_queue(
+                    UploadFile(filename="Song.mp3", file=io.BytesIO(b"audio")),
+                    2,
+                    UploadFile(filename="Song.LRC", file=io.BytesIO(LRC)),
+                )
+            item = add.await_args.args[0]
+            audio = Path(result["item"]["file_path"])
+            self.assertEqual(audio.with_suffix(".lrc").read_bytes(), LRC)
+            output = root / "song"
+            _copy_input_lyrics(audio, output)
+            self.assertEqual((output / "lyrics" / "uploaded.lrc").read_bytes(), LRC)
+            self.assertEqual(lyrics.saved_lyrics_level(output / "lyrics"), "line")
+            QueueManager._delete_input(item)
+            self.assertFalse(audio.exists())
+            self.assertFalse(audio.with_suffix(".lrc").exists())
+
     async def test_rejects_mismatched_or_invalid_lyrics(self):
-        for name, content in [("Other.ttml", TTML), ("Song.ttml", b"invalid")]:
+        for name, content in [
+            ("Other.ttml", TTML), ("Song.ttml", b"invalid"),
+            ("Other.lrc", LRC), ("Song.lrc", b"invalid"),
+        ]:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
                 with patch.object(queue, "get_output_dir", return_value=Path(temp)):
                     with self.assertRaises(HTTPException):

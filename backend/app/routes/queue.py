@@ -24,8 +24,8 @@ from app.services.lyrics import (
     LOCK_FILE,
     fetch_and_save_lyrics,
     find_lyrics_candidate,
+    classify_lyrics_content,
     classify_lyrics_file,
-    classify_ttml_content,
     convert_subtitles_to_lrc,
     lyrics_locked,
     max_offset_ms_for_duration,
@@ -111,11 +111,13 @@ async def add_to_queue(
 
     if lyrics is not None:
         lyrics_name = safe_upload_name(lyrics.filename)
+        lyrics_suffix = Path(lyrics_name).suffix.lower()
         if (
-            Path(lyrics_name).suffix.lower() != ".ttml"
+            lyrics_suffix not in {".ttml", ".lrc"}
             or Path(lyrics_name).stem.casefold() != Path(safe_name).stem.casefold()
         ):
-            raise HTTPException(status_code=400, detail="TTML filename must match the audio filename")
+            raise HTTPException(status_code=400, detail="TTML or LRC filename must match the audio filename")
+        lyrics_path = input_path.with_suffix(lyrics_suffix)
         raw = await lyrics.read(MAX_LYRICS_BYTES + 1)
         if len(raw) > MAX_LYRICS_BYTES:
             raise HTTPException(status_code=413, detail="Lyrics file too large")
@@ -123,7 +125,7 @@ async def add_to_queue(
             content = raw.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
             raise HTTPException(status_code=422, detail="Lyrics file must be UTF-8 text") from exc
-        if classify_ttml_content(content) == "none":
+        if classify_lyrics_content(content, lyrics_suffix) == "none":
             raise HTTPException(status_code=422, detail="No timed lyrics found in file")
 
     try:

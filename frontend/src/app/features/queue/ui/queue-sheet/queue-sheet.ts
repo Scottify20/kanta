@@ -17,7 +17,7 @@ import { QueueItemActions } from '../queue-item-actions/queue-item-actions';
 import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
-import { matchImportFiles } from './import-files';
+import { filterImportFiles, matchImportFiles } from './import-files';
 
 const formatPlaytime = (seconds: number): string => {
   const total = Math.round(seconds);
@@ -279,7 +279,7 @@ export class QueueSheet implements OnInit {
     }
 
     if (event.dataTransfer?.files.length) {
-      this.addFiles(event.dataTransfer.files, targetQueue);
+      void this.addFiles(Array.from(event.dataTransfer.files), targetQueue);
     }
   }
 
@@ -386,13 +386,20 @@ export class QueueSheet implements OnInit {
   }
 
   onFilesChosen(input: HTMLInputElement, folder = false): void {
-    if (input.files?.length) this.addFiles(input.files, this.browseTarget, folder);
+    if (input.files?.length) void this.addFiles(Array.from(input.files), this.browseTarget, folder);
     input.value = '';
   }
 
-  private addFiles(files: FileList, targetQueue: QueueName, folder = false): void {
+  private async addFiles(files: File[], targetQueue: QueueName, folder = false): Promise<void> {
     const priority = targetQueue === 'karaoke_queue' ? 1 : 2;
-    const { matches, unmatchedLyrics } = matchImportFiles(Array.from(files), folder);
+    const filtered = await filterImportFiles(files);
+    if (filtered.skipped.length) {
+      this.toast.show(`Skipped ${filtered.skipped.length} non-audio file${filtered.skipped.length === 1 ? '' : 's'}.`);
+    }
+    for (const { file, message } of filtered.errors) {
+      this.toast.error(`Could not inspect “${file.name}”: ${message}`);
+    }
+    const { matches, unmatchedLyrics } = matchImportFiles(filtered.files);
     if (folder && !matches.length) this.toast.error('No audio files found in the selected folder.');
     const pending = matches.flatMap(({ audio: file, lyrics, ambiguous }) => {
       if (ambiguous) {
