@@ -34,7 +34,8 @@ Processed songs from the Library skip separation. The player loads their existin
 On an artist page, each album heading expands or collapses its songs. Playing or
 queueing the whole artist still includes songs in collapsed albums.
 In the Library's Songs tab, select one filter: Word synced, Line synced, Duet
-Lyrics, or No lyrics. Select the active filter again to show all songs. Duets
+Lyrics, or No lyrics. Select All songs or select the active filter again to reset
+the filter. Duets
 are identified from saved lyrics containing a second singer or group vocal line.
 The filter and each tab's sort remain selected while the app is running and
 reset on relaunch; other library tabs are not filtered.

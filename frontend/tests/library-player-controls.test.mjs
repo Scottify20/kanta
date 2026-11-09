@@ -1,9 +1,10 @@
 import '@angular/compiler';
-import { computed, signal } from '@angular/core';
+import { computed, createEnvironmentInjector, Injector, runInInjectionContext, signal } from '@angular/core';
 import { describe, expect, it, vi } from 'vitest';
 import { of } from 'rxjs';
 import { Library } from '../src/app/features/library/library.ts';
 import { MetadataEditor } from '../src/app/features/library/ui/metadata-editor/metadata-editor.ts';
+import { LibraryToolbar } from '../src/app/features/library/ui/library-toolbar/library-toolbar.ts';
 import { MiniLyrics } from '../src/app/features/now-playing/ui/mini-lyrics/mini-lyrics.ts';
 import { AudioPlayerService, replayGainFactor } from '../src/app/shared/services/audio-player.service.ts';
 import { songEntry } from '../src/app/features/library/data/library-entries.ts';
@@ -13,6 +14,28 @@ const song = {
   stems: [{ name: 'Title (Vocals).mp3', url: '/vocals' }, { name: 'Title (Instrumental).mp3', url: '/instrumental' }],
   covers: [], lyrics: [], replaygain_track_gain: -3.2, replaygain_track_peak: 0.9,
 };
+
+describe('library song filters', () => {
+  it('offers All songs to reset any filter and preserves the active-filter toggle', () => {
+    const injector = createEnvironmentInjector([], Injector.NULL);
+    const toolbar = runInInjectionContext(injector, () => new LibraryToolbar());
+    expect(toolbar.lyricsFilters).toContainEqual({ value: 'all', label: 'All songs' });
+    toolbar.lyricsFilter.set('all');
+    expect(toolbar.filterLabel()).toBe('All songs');
+    for (const value of ['word', 'line', 'duet', 'none']) {
+      toolbar.selectFilter(value);
+      expect(toolbar.lyricsFilter()).toBe(value);
+      toolbar.selectFilter('all');
+      expect(toolbar.lyricsFilter()).toBe('all');
+    }
+    toolbar.selectFilter('word');
+    toolbar.selectFilter('word');
+    expect(toolbar.lyricsFilter()).toBe('all');
+    toolbar.selectFilter('all');
+    expect(toolbar.lyricsFilter()).toBe('all');
+    injector.destroy();
+  });
+});
 
 describe('metadata editor', () => {
   it('accepts numeric ReplayGain values returned by the library', () => {

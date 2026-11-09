@@ -28,7 +28,8 @@ export class LibraryToolbar {
   readonly sortLabel = computed(() => SORT_LABELS[this.sort()]);
   readonly labelOf = (mode: SortMode): string => SORT_LABELS[mode];
   readonly showLayoutToggle = computed(() => this.tab() !== 'songs');
-  readonly lyricsFilters: { value: Exclude<LyricsFilter, 'all'>; label: string }[] = [
+  readonly lyricsFilters: { value: LyricsFilter; label: string }[] = [
+    { value: 'all', label: 'All songs' },
     { value: 'word', label: 'Word synced' },
     { value: 'line', label: 'Line synced' },
     { value: 'duet', label: 'Duet Lyrics' },
@@ -38,7 +39,7 @@ export class LibraryToolbar {
     this.lyricsFilters.find((option) => option.value === this.lyricsFilter())?.label ?? 'All songs',
   );
 
-  selectFilter(value: Exclude<LyricsFilter, 'all'>): void {
+  selectFilter(value: LyricsFilter): void {
     this.lyricsFilter.set(this.lyricsFilter() === value ? 'all' : value);
   }
 }
