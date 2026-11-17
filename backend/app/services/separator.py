@@ -1,28 +1,39 @@
-import shutil
+import json
 import logging
+import shutil
+import subprocess
 import time
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
-import mutagen
 import tqdm
 
 if TYPE_CHECKING:
     from audio_separator.separator import Separator
 
 from app.tasks import check_cancellation_and_update
+from app.services.audio_file import read_audio_file
 from app.services.metadata import (
     extract_metadata_and_setup_dirs,
     create_compressed_original_with_cover,
     convert_and_tag_stem,
 )
 from app.services.lyrics import fetch_and_save_lyrics
-from app.services.paths import configure_environment, output_root_for_input, processing_dir, seed_bundled_models
+from app.services.paths import (
+    configure_environment,
+    ffprobe_path,
+    output_root_for_input,
+    processing_dir,
+    run_ffmpeg,
+    seed_bundled_models,
+    subprocess_kwargs,
+)
 from app.services.storage import ensure_output_root_available
 from app.services.settings import (
     audio_extension,
     device_availability,
     get_inference_device,
+    get_keep_original,
     get_model_dir,
     get_output_dir,
 )
@@ -114,6 +125,73 @@ def _separate(separator: "Separator", input_path: Path, expected: int, temp_dir:
     return paths
 
 
+def _separator_input_path(input_path: Path, temp_dir: Path) -> Path:
+    """Normalize formats that librosa/libsndfile cannot reliably decode for separation."""
+    try:
+        probe = subprocess.run(
+            [
+                ffprobe_path(),
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "json",
+                str(input_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            **subprocess_kwargs(),
+        )
+        streams = json.loads(probe.stdout).get("streams", [])
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        detail = getattr(exc, "stderr", None) or str(exc)
+        raise RuntimeError(f"Could not inspect audio file {input_path.name}: {detail.strip()}") from exc
+
+    codec = streams[0].get("codec_name") if streams else None
+    if not codec:
+        raise RuntimeError(f"No readable audio stream was found in {input_path.name}.")
+
+    suffix = input_path.suffix.casefold()
+    if (
+        (suffix == ".flac" and codec == "flac")
+        or (suffix == ".mp3" and codec == "mp3")
+        or (suffix == ".wav" and codec.startswith("pcm_"))
+    ):
+        return input_path
+
+    normalized = temp_dir / "separator_input.wav"
+    try:
+        run_ffmpeg(
+            [
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(input_path),
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-c:a",
+                "pcm_s16le",
+                "-ar",
+                "44100",
+                str(normalized),
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", None) or str(exc)
+        raise RuntimeError(f"Could not decode audio file {input_path.name}: {detail.strip()}") from exc
+    if not normalized.is_file() or normalized.stat().st_size == 0:
+        raise RuntimeError(f"FFmpeg produced no decoded audio for {input_path.name}.")
+    return normalized
+
+
 def _create_separator(temp_dir: Path) -> "Separator":
     # Imported lazily: audio_separator pulls in torch, which would delay API startup by many seconds.
     from audio_separator.separator import Separator
@@ -186,7 +264,8 @@ def run_basic_pipeline(input_file_path: Path, task_id: Optional[str] = None) -> 
 def _run_basic_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path, task_id: Optional[str]) -> Path:
     ext = audio_extension()
     check_cancellation_and_update(task_id, "Extracting audio metadata...", 5)
-    audio_info = mutagen.File(input_file_path)
+    separator_input = _separator_input_path(input_file_path, temp_dir)
+    audio_info = read_audio_file(input_file_path)
 
     temp_song_dir = temp_dir / "song"
     (
@@ -223,21 +302,22 @@ def _run_basic_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path
     )
 
     check_cancellation_and_update(task_id, "Creating original audio...", 25)
-    create_compressed_original_with_cover(
-        input_file_path,
-        final_song_dir / f"{title}{ext}",
-        cover_path,
-        raw_artist,
-        raw_album,
-        raw_title,
-    )
+    if get_keep_original():
+        create_compressed_original_with_cover(
+            input_file_path,
+            final_song_dir / f"{title}{ext}",
+            cover_path,
+            raw_artist,
+            raw_album,
+            raw_title,
+        )
 
     # Attach task context for live tqdm progress (25% -> 80%)
     TaskProgressTqdm.set_task_context(task_id, 25, 80, "BS-RoFormer Separating")
 
     separator = _create_separator(temp_dir)
     separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = _separate(separator, input_file_path, 2, temp_dir)
+    pass1_files = _separate(separator, separator_input, 2, temp_dir)
 
     check_cancellation_and_update(task_id, "Converting stems...", 85)
     convert_and_tag_stem(
@@ -275,7 +355,8 @@ def run_karaoke_pipeline(input_file_path: Path, task_id: Optional[str] = None) -
 def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path, task_id: Optional[str]) -> Path:
     ext = audio_extension()
     check_cancellation_and_update(task_id, "Extracting metadata...", 5)
-    audio_info = mutagen.File(input_file_path)
+    separator_input = _separator_input_path(input_file_path, temp_dir)
+    audio_info = read_audio_file(input_file_path)
 
     temp_song_dir = temp_dir / "song"
     (
@@ -312,21 +393,22 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
     )
 
     check_cancellation_and_update(task_id, "Creating master original...", 15)
-    create_compressed_original_with_cover(
-        input_file_path,
-        final_song_dir / f"{title}{ext}",
-        cover_path,
-        raw_artist,
-        raw_album,
-        raw_title,
-    )
+    if get_keep_original():
+        create_compressed_original_with_cover(
+            input_file_path,
+            final_song_dir / f"{title}{ext}",
+            cover_path,
+            raw_artist,
+            raw_album,
+            raw_title,
+        )
 
     separator = _create_separator(temp_dir)
 
     # Pass 1: BS-RoFormer (15% -> 40%)
     TaskProgressTqdm.set_task_context(task_id, 15, 40, "Pass 1/3 (BS-RoFormer)")
     separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = _separate(separator, input_file_path, 2, temp_dir)
+    pass1_files = _separate(separator, separator_input, 2, temp_dir)
     vocal_pass2_input = temp_dir / "vocal_temp.wav"
     shutil.copy(pass1_files[1], vocal_pass2_input)
 
@@ -377,7 +459,7 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
     # Pass 3: Multi-Instruments (65% -> 90%)
     TaskProgressTqdm.set_task_context(task_id, 65, 90, "Pass 3/3 (Demucs 6s)")
     separator.load_model("htdemucs_6s.yaml")
-    pass3_files = _separate(separator, input_file_path, 1, temp_dir)
+    pass3_files = _separate(separator, separator_input, 1, temp_dir)
     for wav_file in pass3_files:
         stem_type = wav_file.name.split("_(")[-1].split(")")[0].title()
         if stem_type.lower() in ["vocals", "instrumental"]:

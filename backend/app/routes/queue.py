@@ -40,6 +40,7 @@ from app.services.queue_manager import QueueItem, QueuePriority, queue_manager
 from app.services.settings import find_song_directory, get_lyrics_auto_fetch, get_output_dir
 from app.services.storage import ensure_output_root_available
 from app.services.tagging import (
+    AUDIO_SUFFIXES,
     EXTENDED_FIELDS,
     audio_files,
     embed_cover,
@@ -61,6 +62,21 @@ HEARTBEAT_SECONDS = 15.0
 STREAM_POLL_SECONDS = 0.5
 REFERENCE_LUFS = -18.0
 logger = logging.getLogger("uvicorn")
+
+
+def _has_playable_stems(song_dir: Path) -> bool:
+    stems_dir = song_dir / "stems"
+    if not stems_dir.is_dir():
+        return False
+    names = {
+        path.name.casefold()
+        for path in stems_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in AUDIO_SUFFIXES
+    }
+    return all(
+        any(name.endswith(f"({kind}){suffix}") for name in names for suffix in AUDIO_SUFFIXES)
+        for kind in ("vocals", "instrumental")
+    )
 
 
 class QueueReorderRequest(BaseModel):
@@ -158,8 +174,23 @@ async def add_to_queue(
         status="pending",
         **metadata,
     )
-    await queue_manager.add_item(item)
-    return {"message": "Added to queue", "item": item.model_dump()}
+    location = find_song_directory(item.artist, item.album, item.title)
+    if location and _has_playable_stems(location[0]):
+        input_path.unlink(missing_ok=True)
+        lyrics_path.unlink(missing_ok=True)
+        return {
+            "message": "Skipped; this song is already in the library.",
+            "item": None,
+            "skipped": "already_in_library",
+        }
+    duplicate = await queue_manager.add_item(item)
+    if duplicate is not None:
+        return {
+            "message": "Skipped; this song is already queued.",
+            "item": None,
+            "skipped": "already_queued",
+        }
+    return {"message": "Added to queue", "item": item.model_dump(), "skipped": None}
 
 
 _lyrics_locks: dict[str, threading.Lock] = {}

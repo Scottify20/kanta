@@ -22,6 +22,7 @@ from mutagen.id3 import (
     TRCK,
     TXXX,
 )
+from app.services.audio_file import read_audio_file
 
 AUDIO_SUFFIXES = {".mp3", ".flac"}
 
@@ -129,7 +130,7 @@ def read_display_names(path: Path) -> dict[str, Optional[str]]:
     """Return the real title/artist/album tags (not the sanitized folder names)."""
     names: dict[str, Optional[str]] = {"title": None, "artist": None, "album": None}
     try:
-        audio = mutagen.File(path, easy=True)
+        audio = read_audio_file(path, easy=True)
         tags = audio.tags if audio else None
         if tags:
             for key in names:
@@ -143,7 +144,7 @@ def read_display_names(path: Path) -> dict[str, Optional[str]]:
 
 def read_duration(path: Path) -> Optional[float]:
     try:
-        audio = mutagen.File(path)
+        audio = read_audio_file(path)
         return float(audio.info.length) if audio and audio.info else None
     except Exception:
         return None

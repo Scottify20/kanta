@@ -54,13 +54,19 @@ describe('lyrics display', () => {
     });
   });
 
-  it('uses the translated text as the same line when transliteration is unavailable', () => {
+  it('uses a romanization fallback without replacing it with an English translation', () => {
     const lyrics = [{ startTimeMs: 0, durationMs: 500, words: '안녕' }];
 
-    const displayed = lyricsForDisplay(lyrics, 'transliteration', ['Hello']);
+    const displayed = lyricsForDisplay(lyrics, 'transliteration', ['annyeong']);
 
     expect(displayed).toHaveLength(1);
-    expect(displayed[0]).toMatchObject({ words: 'Hello', parts: undefined });
+    expect(displayed[0]).toMatchObject({ words: 'annyeong', parts: undefined });
+  });
+
+  it('leaves the original line intact when no romanization is available', () => {
+    const lyrics = [{ startTimeMs: 0, durationMs: 500, words: '안녕' }];
+
+    expect(lyricsForDisplay(lyrics, 'transliteration', [null])[0]).toBe(lyrics[0]);
   });
 
   it('keeps already-English lines and their word timing', () => {

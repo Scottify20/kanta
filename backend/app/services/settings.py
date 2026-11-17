@@ -16,6 +16,8 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 OUTPUT_MODES = ("basic", "full")
 OUTPUT_QUALITIES = ("high", "standard", "low")
 INFERENCE_DEVICES = ("cuda", "mps", "directml", "vulkan", "cpu")
+DEFAULT_ARTIST_DELIMITERS = ["&", ",", ";", "/", "+", "feat.", "ft."]
+DEFAULT_GENRE_DELIMITERS = [",", ";", "/", "|"]
 
 _cache_lock = threading.RLock()
 _cache: dict[str, Any] = {"sig": None, "data": {}, "derived": {}}
@@ -111,6 +113,29 @@ def get_output_mode() -> str:
 def get_output_quality() -> str:
     value = _read_settings().get("output_quality")
     return value if value in OUTPUT_QUALITIES else "standard"
+
+
+def get_keep_original() -> bool:
+    return _read_settings().get("keep_original") is not False
+
+
+def _metadata_delimiters(key: str, default: list[str]) -> list[str]:
+    value = _read_settings().get(key)
+    if isinstance(value, list):
+        return list(dict.fromkeys(item.strip() for item in value if isinstance(item, str) and item.strip()))
+    if isinstance(value, str):
+        if "\n" in value:
+            return list(dict.fromkeys(item.strip() for item in value.splitlines() if item.strip()))
+        return list(dict.fromkeys(value))
+    return default.copy()
+
+
+def get_artist_delimiters() -> list[str]:
+    return _metadata_delimiters("artist_delimiters", DEFAULT_ARTIST_DELIMITERS)
+
+
+def get_genre_delimiters() -> list[str]:
+    return _metadata_delimiters("genre_delimiters", DEFAULT_GENRE_DELIMITERS)
 
 
 def audio_extension(quality: str | None = None) -> str:
@@ -277,6 +302,9 @@ def update_settings(
     output_quality: str | None = None,
     inference_device: str | None = None,
     developer_mode: bool | None = None,
+    keep_original: bool | None = None,
+    artist_delimiters: list[str] | None = None,
+    genre_delimiters: list[str] | None = None,
 ) -> dict[str, Any]:
     if output_mode is not None and output_mode not in OUTPUT_MODES:
         raise ValueError(f"output_mode must be one of: {', '.join(OUTPUT_MODES)}")
@@ -286,6 +314,15 @@ def update_settings(
         raise ValueError(f"inference_device must be one of: {', '.join(INFERENCE_DEVICES)}")
     if inference_device is not None and not device_availability().get(inference_device):
         raise ValueError(f"Inference device '{inference_device}' is not available on this machine")
+    for label, delimiters in (
+        ("artist_delimiters", artist_delimiters),
+        ("genre_delimiters", genre_delimiters),
+    ):
+        if delimiters is not None and (
+            len(delimiters) > 32
+            or any(not isinstance(item, str) or not item.strip() or len(item) > 128 for item in delimiters)
+        ):
+            raise ValueError(f"{label} must contain at most 32 non-empty separators of at most 128 characters")
 
     known = {str(p) for p in get_output_dirs()}
     normalized_dirs = []
@@ -325,6 +362,9 @@ def update_settings(
         ("output_quality", output_quality),
         ("inference_device", inference_device),
         ("developer_mode", developer_mode),
+        ("keep_original", keep_original),
+        ("artist_delimiters", artist_delimiters),
+        ("genre_delimiters", genre_delimiters),
     ):
         if value is not None:
             settings[key] = value

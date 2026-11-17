@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, OnDestroy, computed, effect, inject, signal, viewChild, DOCUMENT } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -18,6 +18,7 @@ import { OverlayScrollbarService } from './shared/services/overlay-scrollbar.ser
 import { autoScrollDuringDrag } from './shared/util/drag-autoscroll';
 import { EntryActionsService } from './shared/services/entry-actions.service';
 import { LibraryService } from './shared/services/library.service';
+import type { LibraryTab } from './features/library/data/library-entries';
 import { SetupService } from './shared/services/setup.service';
 import { SongManifest, SongsService } from './shared/services/songs.service';
 import { QueueItem } from './features/queue/interfaces/queue.models';
@@ -30,7 +31,7 @@ import { ToastService } from './shared/services/toast.service';
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {
+export class App implements OnDestroy {
   readonly layout = inject(LayoutService);
   readonly songs = inject(SongsService);
   readonly audioPlayer = inject(AudioPlayerService);
@@ -53,12 +54,28 @@ export class App {
   private libraryScrollTop = 0;
   private readonly fullscreen = inject(FullscreenService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly document = inject(DOCUMENT);
+  private readonly zone = inject(NgZone);
+  private cursorHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly onCursorPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === 'mouse' || event.pointerType === 'pen') this.resetIdleCursorTimer();
+  };
+  private readonly onCursorInput = (): void => this.resetIdleCursorTimer();
+  private readonly onCursorVisibilityChange = (): void => {
+    if (this.document.visibilityState === 'hidden') {
+      this.clearIdleCursorTimer();
+      this.document.documentElement.classList.remove('cursor-idle');
+    } else {
+      this.resetIdleCursorTimer();
+    }
+  };
   private readonly overlayScrollbar = inject(OverlayScrollbarService);
   private readonly popups = inject(PopupStateService);
   private readonly toast = inject(ToastService);
   readonly contextMenu = signal<{
     x: number;
     y: number;
+    page: 'library' | 'settings' | 'other';
     input: HTMLInputElement | HTMLTextAreaElement | null;
     selection: string;
     start: number;
@@ -69,26 +86,77 @@ export class App {
   readonly logsWindow = typeof location !== 'undefined' && location.pathname.startsWith('/logs');
 
   constructor() {
+    this.zone.runOutsideAngular(() => {
+      this.document.addEventListener('pointermove', this.onCursorPointerMove, { passive: true });
+      this.document.addEventListener('pointerdown', this.onCursorInput, { passive: true });
+      this.document.addEventListener('keydown', this.onCursorInput);
+      this.document.addEventListener('visibilitychange', this.onCursorVisibilityChange);
+    });
+    this.resetIdleCursorTimer();
     effect(() => {
-      const url = this.route();
-      const content = this.contentElement()?.nativeElement;
-      if (!content || !this.isLibraryRoute(url)) return;
-      requestAnimationFrame(() => {
-        if (content.isConnected && this.isLibraryRoute(this.route())) {
-          content.scrollTop = this.libraryScrollTop;
-        }
-      });
+      this.syncLibraryScroll(this.route(), this.library.activeTab());
     });
   }
 
+  private syncLibraryScroll(url: string, tab: LibraryTab): void {
+    const content = this.contentElement()?.nativeElement;
+    if (!content || !this.isLibraryRoute(url)) return;
+    if (tab !== 'songs') {
+      this.libraryScrollTop = 0;
+      content.scrollTop = 0;
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (
+        content.isConnected &&
+        this.isLibraryRoute(this.route()) &&
+        this.library.activeTab() === 'songs'
+      ) {
+        content.scrollTop = this.libraryScrollTop;
+      }
+    });
+  }
+
+  private resetIdleCursorTimer(): void {
+    this.zone.runOutsideAngular(() => {
+      this.clearIdleCursorTimer();
+      this.document.documentElement.classList.remove('cursor-idle');
+      if (this.document.visibilityState === 'hidden') return;
+      this.cursorHideTimer = setTimeout(() => {
+        this.document.documentElement.classList.add('cursor-idle');
+        this.cursorHideTimer = null;
+      }, 5000);
+    });
+  }
+
+  private clearIdleCursorTimer(): void {
+    if (this.cursorHideTimer) {
+      clearTimeout(this.cursorHideTimer);
+      this.cursorHideTimer = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.clearIdleCursorTimer();
+    this.document.documentElement.classList.remove('cursor-idle');
+    this.document.removeEventListener('pointermove', this.onCursorPointerMove);
+    this.document.removeEventListener('pointerdown', this.onCursorInput);
+    this.document.removeEventListener('keydown', this.onCursorInput);
+    this.document.removeEventListener('visibilitychange', this.onCursorVisibilityChange);
+  }
+
   onContentScroll(event: Event): void {
-    if (this.isLibraryRoute(this.route())) {
+    if (this.isLibraryRoute(this.route()) && this.library.activeTab() === 'songs') {
       this.libraryScrollTop = (event.currentTarget as HTMLElement).scrollTop;
     }
   }
 
   private isLibraryRoute(url: string): boolean {
     return this.router.parseUrl(url).root.children['primary']?.segments[0]?.path === 'library';
+  }
+
+  private isSettingsRoute(url: string): boolean {
+    return this.router.parseUrl(url).root.children['primary']?.segments[0]?.path === 'settings';
   }
 
   @HostListener('document:contextmenu', ['$event'])
@@ -106,9 +174,11 @@ export class App {
     const selection = input
       ? secret ? '' : input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0)
       : window.getSelection()?.toString() ?? '';
+    const url = this.route();
     this.contextMenu.set({
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - 200)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - 200)),
+      page: this.isLibraryRoute(url) ? 'library' : this.isSettingsRoute(url) ? 'settings' : 'other',
       input,
       selection,
       start: input?.selectionStart ?? 0,
@@ -166,6 +236,11 @@ export class App {
   openContextLibrary(): void {
     this.contextMenu.set(null);
     void this.router.navigateByUrl('/library');
+  }
+
+  openContextPlayer(): void {
+    this.contextMenu.set(null);
+    void this.router.navigateByUrl('/');
   }
 
   openContextQueue(): void {

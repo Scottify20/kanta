@@ -36,28 +36,26 @@
           (click)="lyricDisplay.setMode('transliteration')"
         >English + transliteration</button>
       </div>
-      <label class="google-translate-toggle">
+      <label class="google-transliteration-toggle">
         <input
           class="switch"
           type="checkbox"
           role="switch"
-          [checked]="lyricDisplay.googleTranslateEnabled()"
-          (change)="lyricDisplay.setGoogleTranslateEnabled($any($event.target).checked)"
+          [checked]="lyricDisplay.googleTransliterationEnabled()"
+          (change)="lyricDisplay.setGoogleTransliterationEnabled($any($event.target).checked)"
         />
-        <span>Google Translate when missing</span>
+        <span>Google transliteration when missing</span>
       </label>
-      @if (lyricDisplay.translationStatus() === 'embedded') {
-        <small class="translation-status">Embedded transliteration</small>
-      } @else if (lyricDisplay.translationStatus() === 'loading') {
-        <small class="translation-status">Translating…</small>
-      } @else if (lyricDisplay.translationStatus() === 'translated') {
-        <small class="translation-status">Google Translate</small>
-      } @else if (lyricDisplay.translationStatus() === 'rate-limited') {
-        <p class="translation-warning" role="alert">Google Translate is rate-limited.</p>
-        <a class="translation-settings-link" routerLink="/settings">Set an API key in Settings</a>
-      } @else if (lyricDisplay.translationStatus() === 'error') {
-        <p class="translation-warning" role="alert">Google Translate unavailable.</p>
-        <a class="translation-settings-link" routerLink="/settings">Check API key in Settings</a>
+      @if (lyricDisplay.transliterationStatus() === 'embedded') {
+        <small class="transliteration-status">Embedded transliteration</small>
+      } @else if (lyricDisplay.transliterationStatus() === 'loading') {
+        <small class="transliteration-status">Transliterating…</small>
+      } @else if (lyricDisplay.transliterationStatus() === 'transliterated') {
+        <small class="transliteration-status">Google transliteration</small>
+      } @else if (lyricDisplay.transliterationStatus() === 'rate-limited') {
+        <p class="transliteration-warning" role="alert">Google transliteration is rate-limited.</p>
+      } @else if (lyricDisplay.transliterationStatus() === 'error') {
+        <p class="transliteration-warning" role="alert">Google transliteration unavailable.</p>
       }
     </div>
     <div class="color-settings">

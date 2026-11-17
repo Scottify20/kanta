@@ -5,7 +5,7 @@ import { Playlist } from '../../services/playlists.service';
 import { PlaylistPicker } from '../playlist-picker/playlist-picker';
 import { PopupPanel } from '../popup-panel/popup-panel';
 
-export type EntryKind = 'song' | 'album' | 'artist' | 'playlist';
+export type EntryKind = 'song' | 'album' | 'artist' | 'genre' | 'playlist';
 
 export type EntryAction =
   | 'play'

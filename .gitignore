@@ -11,6 +11,7 @@
 /backend/.env
 /backend/settings.json
 /backend/artist_info.json
+/backend/artist_photos/
 /backend/playlists.json
 /backend/uploads/
 /backend/queue_state.json
@@ -22,6 +23,8 @@
 /backend/*.egg-info/
 /backend/models/*
 !/backend/models/*.yaml
+# /backend/logs/
+# /backend/tests/
 
 # Frontend
 /frontend/node_modules/

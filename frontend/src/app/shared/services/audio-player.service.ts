@@ -18,6 +18,12 @@ export type ReplayGainMode = 'track' | 'album';
 
 const RG_ENABLED_KEY = 'kanta.replayGain.enabled';
 const RG_MODE_KEY = 'kanta.replayGain.mode';
+const VOLUME_BOOST_KEY = 'kanta.volumeBoostDb';
+export const MAX_VOLUME_BOOST_DB = 6;
+
+export function clampVolumeBoostDb(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_VOLUME_BOOST_DB, value)) : 0;
+}
 
 const storage = {
   get: (key: string): string | null => {
@@ -68,7 +74,9 @@ export class AudioPlayerService {
   readonly replayGainMode = signal<ReplayGainMode>(
     storage.get(RG_MODE_KEY) === 'album' ? 'album' : 'track',
   );
+  readonly volumeBoostDb = signal(clampVolumeBoostDb(Number(storage.get(VOLUME_BOOST_KEY) ?? 0)));
   private masterGain: GainNode | null = null;
+  private peakLimiter: DynamicsCompressorNode | null = null;
   private replayGain: ReplayGainInfo | undefined;
 
   private context: AudioContext | null = null;
@@ -127,6 +135,12 @@ export class AudioPlayerService {
     this.instrumentalAudio = instrumentalAudio;
     this.vocalsGain = context.createGain();
     this.instrumentalGain = context.createGain();
+    this.peakLimiter = context.createDynamicsCompressor();
+    this.peakLimiter.threshold.value = -1;
+    this.peakLimiter.knee.value = 0;
+    this.peakLimiter.ratio.value = 20;
+    this.peakLimiter.attack.value = 0.003;
+    this.peakLimiter.release.value = 0.15;
     this.vocalsSource = context.createMediaElementSource(vocalsAudio);
     this.instrumentalSource = context.createMediaElementSource(instrumentalAudio);
 
@@ -135,7 +149,7 @@ export class AudioPlayerService {
     this.masterGain = context.createGain();
     this.replayGain = sources.replayGain;
     this.applyReplayGain();
-    this.masterGain.connect(context.destination);
+    this.masterGain.connect(this.peakLimiter).connect(context.destination);
     this.vocalsSource.connect(this.vocalsGain).connect(this.masterGain);
     this.instrumentalSource.connect(this.instrumentalGain).connect(this.masterGain);
     this.instrumentalAudio.addEventListener('ended', () => {
@@ -239,10 +253,17 @@ export class AudioPlayerService {
     this.applyReplayGain();
   }
 
+  setVolumeBoostDb(value: number): void {
+    const boost = clampVolumeBoostDb(value);
+    this.volumeBoostDb.set(boost);
+    storage.set(VOLUME_BOOST_KEY, String(boost));
+    this.applyReplayGain();
+  }
+
   private applyReplayGain(): void {
     if (!this.masterGain) return;
     const factor = this.replayGainEnabled() ? replayGainFactor(this.replayGain, this.replayGainMode()) : 1;
-    this.masterGain.gain.value = factor;
+    this.masterGain.gain.value = factor * 10 ** (this.volumeBoostDb() / 20);
   }
 
   setOutputDevice(id: string): void {
@@ -253,6 +274,12 @@ export class AudioPlayerService {
   release(): void {
     this.pause();
     this.playbackStarted.set(false);
+    this.vocalsSource?.disconnect();
+    this.instrumentalSource?.disconnect();
+    this.vocalsGain?.disconnect();
+    this.instrumentalGain?.disconnect();
+    this.masterGain?.disconnect();
+    this.peakLimiter?.disconnect();
     this.vocalsAudio?.remove();
     this.instrumentalAudio?.remove();
     this.vocalsAudio = null;
@@ -262,6 +289,7 @@ export class AudioPlayerService {
     this.vocalsGain = null;
     this.instrumentalGain = null;
     this.masterGain = null;
+    this.peakLimiter = null;
     this.replayGain = undefined;
     this.currentTime.set(0);
     this.duration.set(0);

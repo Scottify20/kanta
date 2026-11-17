@@ -33,5 +33,18 @@
         (input)="setInstrumentalVolume($event)"
       />
     </label>
+    <label class="volume-slider boost-slider">
+      <span>Volume boost <output>+{{ audioPlayer.volumeBoostDb() }} dB</output></span>
+      <input
+        type="range"
+        min="0"
+        max="6"
+        step="0.5"
+        [value]="audioPlayer.volumeBoostDb()"
+        (input)="setVolumeBoost($event)"
+        aria-label="Volume boost"
+      />
+      <small>Up to +6 dB. A peak limiter helps prevent clipping.</small>
+    </label>
   </div>
 </app-popup-panel>

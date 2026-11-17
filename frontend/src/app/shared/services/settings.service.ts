@@ -1,7 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom } from 'rxjs';
 import { API_URL } from '../../app.config';
+import { DEFAULT_ARTIST_DELIMITER_LIST, DEFAULT_GENRE_DELIMITER_LIST } from '../util/metadata-delimiters';
 
 export type DeviceId = 'cuda' | 'mps' | 'directml' | 'vulkan' | 'cpu';
 
@@ -13,6 +14,9 @@ export interface AppSettings {
   output_mode: 'basic' | 'full';
   output_quality: 'high' | 'standard' | 'low';
   inference_device: DeviceId;
+  keep_original: boolean;
+  artist_delimiters: string[];
+  genre_delimiters: string[];
   developer_mode?: boolean;
   output_dirs_status?: OutputDirectoryStatus[];
   suggested_output_dir?: string;
@@ -34,12 +38,8 @@ export interface LyricsSettings {
   auto_fetch: boolean;
 }
 
-export interface GoogleTranslateSettings {
-  api_key_configured: boolean;
-}
-
-export interface LyricsTranslationResponse {
-  translations: string[];
+export interface LyricsTransliterationResponse {
+  transliterations: (string | null)[];
 }
 
 export interface OutputDirectoryStatus {
@@ -75,6 +75,8 @@ export interface BrowseFoldersResponse {
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private readonly http = inject(HttpClient);
+  readonly artistDelimiters = signal(DEFAULT_ARTIST_DELIMITER_LIST);
+  readonly genreDelimiters = signal(DEFAULT_GENRE_DELIMITER_LIST);
 
   getLyricsSettings(): Observable<LyricsSettings> {
     return this.http.get<LyricsSettings>(`${API_URL}/api/settings/lyrics`);
@@ -89,16 +91,8 @@ export class SettingsService {
     return this.http.put<LyricsSettings>(`${API_URL}/api/settings/lyrics`, update);
   }
 
-  getGoogleTranslateSettings(): Observable<GoogleTranslateSettings> {
-    return this.http.get<GoogleTranslateSettings>(`${API_URL}/api/settings/google-translate`);
-  }
-
-  updateGoogleTranslateApiKey(api_key: string | null): Observable<GoogleTranslateSettings> {
-    return this.http.put<GoogleTranslateSettings>(`${API_URL}/api/settings/google-translate`, { api_key });
-  }
-
-  translateLyrics(texts: string[]): Observable<LyricsTranslationResponse> {
-    return this.http.post<LyricsTranslationResponse>(`${API_URL}/api/lyrics/translate`, { texts });
+  transliterateLyrics(texts: string[]): Observable<LyricsTransliterationResponse> {
+    return this.http.post<LyricsTransliterationResponse>(`${API_URL}/api/lyrics/transliterate`, { texts });
   }
 
   getSettings(): Observable<AppSettings> {
@@ -107,7 +101,15 @@ export class SettingsService {
 
   updateSettings(settings: Pick<
     AppSettings,
-    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device'
+    | 'output_dirs'
+    | 'default_output_dir'
+    | 'model_dir'
+    | 'output_mode'
+    | 'output_quality'
+    | 'inference_device'
+    | 'keep_original'
+    | 'artist_delimiters'
+    | 'genre_delimiters'
   >): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
   }
@@ -115,7 +117,7 @@ export class SettingsService {
   // Partial update: the backend keeps whatever is not sent.
   patchSettings(settings: Partial<Pick<
     AppSettings,
-    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device' | 'developer_mode'
+    'output_dirs' | 'default_output_dir' | 'model_dir' | 'output_mode' | 'output_quality' | 'inference_device' | 'developer_mode' | 'keep_original' | 'artist_delimiters' | 'genre_delimiters'
   >>): Observable<AppSettings> {
     return this.http.put<AppSettings>(`${API_URL}/api/settings`, settings);
   }

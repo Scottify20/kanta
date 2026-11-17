@@ -1,6 +1,5 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { LucideALargeSmall, LucideRotateCcw } from '@lucide/angular';
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { LyricsSizeService } from '../../../../shared/services/lyrics-size.service';
@@ -9,7 +8,7 @@ import { LyricsDisplayService } from '../../../../shared/services/lyrics-display
 
 @Component({
   selector: 'app-lyrics-size-control',
-  imports: [DecimalPipe, RouterLink, PopupPanel, LucideALargeSmall, LucideRotateCcw],
+  imports: [DecimalPipe, PopupPanel, LucideALargeSmall, LucideRotateCcw],
   templateUrl: './lyrics-size-control.html',
   styleUrl: './lyrics-size-control.scss',
 })

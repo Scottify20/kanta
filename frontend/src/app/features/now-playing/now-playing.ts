@@ -27,6 +27,7 @@ import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { Tooltip } from '../../shared/directives/tooltip';
 import { FullscreenService } from '../../shared/services/fullscreen.service';
 import { LyricsService } from '../../shared/services/lyrics';
+import { LyricsColorService } from '../../shared/services/lyrics-color.service';
 import { QueueItem, QueueSnapshot } from '../queue/interfaces/queue.models';
 import { QueueService } from '../queue/data-access/queue.service';
 import { SongManifest, SongsService } from '../../shared/services/songs.service';
@@ -71,6 +72,7 @@ export class NowPlaying implements OnDestroy {
   readonly playlistsService = inject(PlaylistsService);
   private readonly entryActions = inject(EntryActionsService);
   private readonly library = inject(LibraryService);
+  readonly lyricsColors = inject(LyricsColorService);
 
   // The song loaded in the player: its manifest, or the library record matching the selected queue item.
   readonly currentSong = computed<SongManifest | null>(() => {

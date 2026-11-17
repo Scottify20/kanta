@@ -1,8 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { PlaylistsService } from './playlists.service';
+import { SettingsService } from './settings.service';
 import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
 import type { LibraryTab, LyricsFilter, SortMode } from '../../features/library/data/library-entries';
+import { DEFAULT_ARTIST_DELIMITER_LIST, DEFAULT_GENRE_DELIMITER_LIST, metadataValueKey, splitMetadataValues } from '../util/metadata-delimiters';
 
 export interface SongRef {
   artist: string;
@@ -53,17 +55,29 @@ export const songCover = (song: SongManifest): string | null =>
 export class LibraryService {
   private readonly songsService = inject(SongsService);
   private readonly playlistsService = inject(PlaylistsService);
+  private readonly settingsService = inject(SettingsService);
 
   readonly songs = signal<SongManifest[]>([]);
   readonly loaded = signal(false);
   readonly loading = signal(false);
   readonly sorts = signal<Record<LibraryTab, SortMode>>({
-    songs: 'az', albums: 'az', artists: 'az', playlists: 'az',
+    songs: 'az', genres: 'az', albums: 'az', artists: 'az', playlists: 'az',
   });
+  readonly activeTab = signal<LibraryTab>('songs');
   readonly lyricsFilter = signal<LyricsFilter>('all');
   private inflight: Promise<void> | null = null;
   // Entry key (album:/artist:/playlist:) the library page should open as soon as it is shown.
   readonly pendingOpen = signal<string | null>(null);
+
+  constructor() {
+    this.settingsService.getSettings().subscribe({
+      next: (settings) => {
+        this.settingsService.artistDelimiters.set(settings.artist_delimiters ?? DEFAULT_ARTIST_DELIMITER_LIST);
+        this.settingsService.genreDelimiters.set(settings.genre_delimiters ?? DEFAULT_GENRE_DELIMITER_LIST);
+      },
+      error: (error: unknown) => console.error('Could not load metadata delimiters:', error),
+    });
+  }
 
   readonly albums = computed<AlbumEntry[]>(() => {
     const groups = new Map<string, AlbumEntry>();
@@ -83,14 +97,27 @@ export class LibraryService {
   readonly artists = computed<ArtistEntry[]>(() => {
     const groups = new Map<string, ArtistEntry>();
     for (const album of this.albums()) {
-      let entry = groups.get(album.artist);
-      if (!entry) {
-        entry = { key: album.artist, artist: album.artist, displayArtist: album.displayArtist, coverUrl: null, albums: [], songs: [] };
-        groups.set(album.artist, entry);
+      const albumsByArtist = new Map<string, AlbumEntry>();
+      for (const song of album.songs) {
+        for (const artistName of splitMetadataValues(songArtist(song), this.settingsService.artistDelimiters())) {
+          const key = metadataValueKey(artistName);
+          let entry = groups.get(key);
+          if (!entry) {
+            entry = { key, artist: song.artist, displayArtist: artistName, coverUrl: null, albums: [], songs: [] };
+            groups.set(key, entry);
+          }
+          entry.songs.push(song);
+          entry.coverUrl ??= songCover(song);
+
+          let artistAlbum = albumsByArtist.get(key);
+          if (!artistAlbum) {
+            artistAlbum = { ...album, displayArtist: artistName, coverUrl: songCover(song), songs: [] };
+            albumsByArtist.set(key, artistAlbum);
+            entry.albums.push(artistAlbum);
+          }
+          artistAlbum.songs.push(song);
+        }
       }
-      entry.albums.push(album);
-      entry.songs.push(...album.songs);
-      entry.coverUrl ??= album.coverUrl;
     }
     return [...groups.values()];
   });
@@ -191,6 +218,16 @@ export class LibraryService {
       };
     });
 
+    const stronglyMatchedCollectionKeys = new Set([
+      ...artists.filter(({ score }) => score < 2).map(({ item }) => `artist:${item.artist.key}`),
+      ...albums.filter(({ score }) => score < 2).map(({ item }) => `album:${item.album.key}`),
+    ]);
+    const prioritizedCollections = [
+      ...artistHits.filter((hit) => stronglyMatchedCollectionKeys.has(hit.key)).slice(0, 3),
+      ...albumHits.filter((hit) => stronglyMatchedCollectionKeys.has(hit.key)).slice(0, 3),
+    ];
+    const prioritizedCollectionKeys = new Set(prioritizedCollections.map(({ key }) => key));
+
     // Songs also match on artist/album text, so only count songs whose own title matches.
     // Artist, album and playlist groups matching by name more often than songs lead the results.
     const titleMatches = songs.filter(({ score }) => score < 2).length;
@@ -204,6 +241,13 @@ export class LibraryService {
       .filter((group) => group.order > 0 && group.matches > titleMatches)
       .sort((a, b) => b.matches - a.matches || a.order - b.order);
     const rest = groups.filter((group) => !leading.includes(group));
-    return [...leading, ...rest].flatMap((group) => group.hits.slice(0, Math.min(group.cap, limit)));
+    return [
+      ...prioritizedCollections,
+      ...[...leading, ...rest].flatMap((group) =>
+        group.hits
+          .filter((hit) => !prioritizedCollectionKeys.has(hit.key))
+          .slice(0, Math.min(group.cap, limit)),
+      ),
+    ];
   }
 }

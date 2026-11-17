@@ -44,6 +44,28 @@
         />
       </app-settings-section>
 
+      <app-settings-section title="Original Audio" description="Choose whether to keep a compressed copy of each source song alongside its processed stems.">
+        <div class="replaygain-controls">
+          <label class="replaygain-toggle">
+            <input class="switch" type="checkbox" role="switch" [checked]="keepOriginal()" (change)="setKeepOriginal($any($event.target).checked)" />
+            <span><strong>Keep original audio</strong><small>Save a compressed source copy for new jobs. Existing copies are kept.</small></span>
+          </label>
+        </div>
+      </app-settings-section>
+
+      <app-settings-section title="Metadata Separators" description="Choose which characters split multiple artists and genres into separate library entries.">
+        <div class="metadata-delimiters">
+          <label>
+            <span><strong>Artist delimiters</strong><small>One separator per line. Includes feat. and common punctuation.</small></span>
+            <textarea aria-label="Artist delimiters" rows="5" maxlength="128" [ngModel]="artistDelimiters()" (ngModelChange)="setArtistDelimiters($event)"></textarea>
+          </label>
+          <label>
+            <span><strong>Genre delimiters</strong><small>One separator per line; multi-character separators are supported.</small></span>
+            <textarea aria-label="Genre delimiters" rows="4" maxlength="128" [ngModel]="genreDelimiters()" (ngModelChange)="setGenreDelimiters($event)"></textarea>
+          </label>
+        </div>
+      </app-settings-section>
+
       <app-settings-section title="Output Mode" description="Choose how vocals and instruments are separated.">
         <app-settings-option-group
           label="Output mode"

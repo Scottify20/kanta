@@ -33,6 +33,11 @@ to reposition it; expanding restores the panel size at the new position.
 Processed songs from the Library skip separation. The player loads their existing manifest and stems directly. Library clicks play the song after clearing the queues; the card menu can add it to Karaoke Queue without reprocessing.
 On an artist page, each album heading expands or collapses its songs. Playing or
 queueing the whole artist still includes songs in collapsed albums.
+When artist information is loaded, Kanta saves the photo as `artist.jpg`,
+`artist.png`, `artist.webp`, or `artist.gif` in each existing artist folder in
+the configured library roots. Existing `artist.*` photos are preserved and used
+instead of downloading replacements. Photo URLs and biographies are cached
+separately in the application data directory.
 In the Library's Songs tab, select one filter: Word synced, Line synced, Duet
 Lyrics, or No lyrics. Select All songs or select the active filter again to reset
 the filter. Duets

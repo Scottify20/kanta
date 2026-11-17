@@ -26,9 +26,10 @@ class QueueLocalLyricsTests(unittest.IsolatedAsyncioTestCase):
             root = Path(temp)
             with (
                 patch.object(queue, "get_output_dir", return_value=root),
+                patch.object(queue, "find_song_directory", return_value=None),
                 patch.object(queue, "extract_raw_metadata", return_value=METADATA),
                 patch.object(queue, "read_duration", return_value=10),
-                patch.object(queue.queue_manager, "add_item", new=AsyncMock()),
+                patch.object(queue.queue_manager, "add_item", new=AsyncMock(return_value=None)),
             ):
                 result = await queue.add_to_queue(
                     UploadFile(filename="Song.mp3", file=io.BytesIO(b"audio")), 2, None
@@ -40,9 +41,10 @@ class QueueLocalLyricsTests(unittest.IsolatedAsyncioTestCase):
     async def test_uploaded_lyrics_are_preserved_and_cleaned_up(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            add = AsyncMock()
+            add = AsyncMock(return_value=None)
             with (
                 patch.object(queue, "get_output_dir", return_value=root),
+                patch.object(queue, "find_song_directory", return_value=None),
                 patch.object(queue, "extract_raw_metadata", return_value=METADATA),
                 patch.object(queue, "read_duration", return_value=10),
                 patch.object(queue.queue_manager, "add_item", new=add),
@@ -66,9 +68,10 @@ class QueueLocalLyricsTests(unittest.IsolatedAsyncioTestCase):
     async def test_uploaded_lrc_is_preserved_and_cleaned_up(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            add = AsyncMock()
+            add = AsyncMock(return_value=None)
             with (
                 patch.object(queue, "get_output_dir", return_value=root),
+                patch.object(queue, "find_song_directory", return_value=None),
                 patch.object(queue, "extract_raw_metadata", return_value=METADATA),
                 patch.object(queue, "read_duration", return_value=10),
                 patch.object(queue.queue_manager, "add_item", new=add),

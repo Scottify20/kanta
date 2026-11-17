@@ -19,4 +19,8 @@ export class StemVolumeControl {
   setInstrumentalVolume(event: Event): void {
     this.audioPlayer.setInstrumentalVolume(Number((event.target as HTMLInputElement).value));
   }
+
+  setVolumeBoost(event: Event): void {
+    this.audioPlayer.setVolumeBoostDb(Number((event.target as HTMLInputElement).value));
+  }
 }

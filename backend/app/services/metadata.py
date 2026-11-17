@@ -8,6 +8,7 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, ID3, TXXX
 
 from app.services.paths import run_ffmpeg
+from app.services.audio_file import read_audio_file
 from app.services.settings import get_output_quality
 from app.services.tagging import embed_cover
 
@@ -39,14 +40,14 @@ def sanitize_filename(name: str) -> str:
 
 def extract_raw_metadata(input_file: Path):
     """Read display/API metadata before a file enters the processing queue."""
-    audio_info = mutagen.File(input_file)
+    audio_info = read_audio_file(input_file)
     if audio_info is None:
         raise ValueError("The uploaded file is not a supported audio file.")
     raw_artist = "Unknown Artist"
     raw_album = "Unknown Album"
     raw_title = input_file.stem
 
-    easy_audio = mutagen.File(input_file, easy=True)
+    easy_audio = read_audio_file(input_file, easy=True)
     if easy_audio and easy_audio.tags:
         tags = easy_audio.tags
 
@@ -97,7 +98,7 @@ def remove_title_annotations(title: str) -> str:
 
 def extract_metadata_and_setup_dirs(input_file: Path, song_dir: Path):
     """Parses metadata, sanitizes path names, creates folder tree, and extracts cover art."""
-    audio_info = mutagen.File(input_file)
+    audio_info = read_audio_file(input_file)
     metadata = extract_raw_metadata(input_file)
     raw_artist, raw_album, raw_title = metadata["raw_artist"], metadata["raw_album"], metadata["raw_title"]
     artist, album, title = metadata["artist"], metadata["album"], metadata["title"]
@@ -185,7 +186,7 @@ def _set_basic_tags(path: Path, artist: str, album: str, title: str, *, stem: bo
     try:
         tags = EasyID3(path)
     except mutagen.MutagenError:
-        tags = mutagen.File(path, easy=True)
+        tags = read_audio_file(path, easy=True)
         if tags is None:
             raise ValueError(f"Could not read converted audio file: {path}")
         tags.add_tags()
@@ -231,7 +232,7 @@ def _embed_cover_art(output_mp3_path: Path, cover_path: Path) -> None:
 
 
 def _preserve_compatible_metadata(metadata_source: Path, output_mp3_path: Path) -> None:
-    source = mutagen.File(metadata_source)
+    source = read_audio_file(metadata_source)
     if source is None:
         return
     if isinstance(source, FLAC) and output_mp3_path.suffix.lower() == ".flac":
@@ -267,7 +268,7 @@ def _preserve_compatible_metadata(metadata_source: Path, output_mp3_path: Path) 
         tags.save()
     elif isinstance(source.tags, ID3) and output_mp3_path.suffix.lower() == ".flac":
         output = FLAC(output_mp3_path)
-        easy_source = mutagen.File(metadata_source, easy=True)
+        easy_source = read_audio_file(metadata_source, easy=True)
         if easy_source and easy_source.tags:
             for key, values in easy_source.tags.items():
                 output[key] = list(values)
@@ -284,7 +285,7 @@ def _preserve_compatible_metadata(metadata_source: Path, output_mp3_path: Path) 
             output.add_picture(picture)
         output.save()
     else:
-        easy_source = mutagen.File(metadata_source, easy=True)
+        easy_source = read_audio_file(metadata_source, easy=True)
         if easy_source and easy_source.tags:
             if output_mp3_path.suffix.lower() == ".flac":
                 output = FLAC(output_mp3_path)

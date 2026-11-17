@@ -1,8 +1,9 @@
 import { AlbumEntry, ArtistEntry, songCover, songKey } from '../../../shared/services/library.service';
 import { Playlist } from '../../../shared/services/playlists.service';
 import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
+import { DEFAULT_GENRE_DELIMITERS, splitMetadataValues } from '../../../shared/util/metadata-delimiters';
 
-export type LibraryTab = 'songs' | 'albums' | 'artists' | 'playlists';
+export type LibraryTab = 'songs' | 'genres' | 'albums' | 'artists' | 'playlists';
 export type LyricsFilter = 'all' | 'word' | 'line' | 'duet' | 'none';
 export type SortMode =
   | 'az'
@@ -32,6 +33,7 @@ export const SORT_LABELS: Record<SortMode, string> = {
 // Sort options offered per content type; karaoke searches lean on artist and year.
 export const SORT_MODES: Record<LibraryTab, SortMode[]> = {
   songs: ['az', 'za', 'artist', 'album', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
+  genres: ['az', 'za', 'most-songs', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
   albums: ['az', 'za', 'artist', 'year-new', 'year-old', 'recent', 'most-songs'],
   artists: ['az', 'za', 'most-songs', 'recent'],
   playlists: ['az', 'za', 'most-songs', 'longest', 'shortest'],
@@ -39,7 +41,7 @@ export const SORT_MODES: Record<LibraryTab, SortMode[]> = {
 
 export interface LibraryEntry {
   key: string;
-  kind: 'song' | 'album' | 'artist' | 'playlist';
+  kind: 'song' | 'album' | 'artist' | 'genre' | 'playlist';
   title: string;
   subtitle: string;
   covers: string[];
@@ -101,6 +103,39 @@ export const artistEntry = (artist: ArtistEntry): LibraryEntry => ({
   album: '',
   ...stats(artist.songs),
 });
+
+export const genreKey = (genre: string): string =>
+  genre.normalize('NFKC').toLocaleLowerCase();
+
+export const genreEntry = (genre: string, songs: SongManifest[]): LibraryEntry => ({
+  key: `genre:${genreKey(genre)}`,
+  kind: 'genre',
+  title: genre,
+  subtitle: `${songs.length} ${songs.length === 1 ? 'song' : 'songs'}`,
+  covers: [...new Set(songs.map(songCover).filter((cover): cover is string => !!cover))].slice(0, 4),
+  songs,
+  added: newest(songs),
+  artist: '',
+  album: '',
+  ...stats(songs),
+});
+
+export function genreEntries(
+  songs: SongManifest[],
+  delimiters: string | readonly string[] = DEFAULT_GENRE_DELIMITERS,
+): LibraryEntry[] {
+  const grouped = new Map<string, { label: string; songs: SongManifest[] }>();
+  for (const song of songs) {
+    const genres = splitMetadataValues(song.genre, delimiters);
+    for (const label of genres.length ? genres : ['Unknown genre']) {
+      const key = genreKey(label);
+      const group = grouped.get(key);
+      if (group) group.songs.push(song);
+      else grouped.set(key, { label, songs: [song] });
+    }
+  }
+  return [...grouped.values()].map(({ label, songs: genreSongs }) => genreEntry(label, genreSongs));
+}
 
 export function playlistEntry(playlist: Playlist, all: Map<string, SongManifest>): LibraryEntry {
   const songs = playlist.songs

@@ -22,6 +22,7 @@ export class LibraryToolbar {
     { id: 'songs', label: 'Songs' },
     { id: 'albums', label: 'Albums' },
     { id: 'artists', label: 'Artists' },
+    { id: 'genres', label: 'Genres' },
     { id: 'playlists', label: 'Playlists' },
   ];
   readonly sortModes = computed(() => SORT_MODES[this.tab()]);

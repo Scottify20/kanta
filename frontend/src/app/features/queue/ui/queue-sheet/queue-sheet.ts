@@ -422,8 +422,19 @@ export class QueueSheet implements OnInit {
     }
     from(pending).pipe(
       mergeMap(({ file, lyrics, temp }) => this.queueService.addTrack(file, priority, lyrics).pipe(
-        tap(({ item }) => {
+        tap(({ item, skipped }) => {
           this.entering.delete(temp.task_id);
+          if (skipped || !item) {
+            this.uploads.update((list) => list.filter((entry) => entry !== temp));
+            this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
+            this.toast.show(
+              skipped === 'already_queued'
+                ? `Skipped “${file.name}”; it is already queued.`
+                : `Skipped “${file.name}”; it is already in the library.`,
+            );
+            this.releaseServerOrder();
+            return;
+          }
           this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
           if (priority === 1) {
             this.karaokeItems.update((items) => items.map((entry) => (entry === temp ? item : entry)));

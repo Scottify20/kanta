@@ -159,7 +159,8 @@ class OutputWorkPathTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(separator, "get_output_dir", return_value=root), \
                  patch.object(separator, "audio_extension", return_value=".mp3"), \
                  patch.object(separator, "check_cancellation_and_update"), \
-                 patch.object(separator.mutagen, "File", return_value=None), \
+                 patch.object(separator, "_separator_input_path", return_value=input_path), \
+                 patch.object(separator, "read_audio_file", return_value=None), \
                  patch.object(separator, "extract_metadata_and_setup_dirs", side_effect=metadata), \
                  patch.object(separator, "fetch_and_save_lyrics"), \
                  patch.object(separator, "create_compressed_original_with_cover"), \

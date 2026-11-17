@@ -7,29 +7,29 @@ import { SettingsService } from './settings.service';
 import { lyricRomanization } from '../util/lyrics-display';
 
 export type LyricsDisplayMode = 'original' | 'transliteration';
-export type LyricsTranslationStatus =
+export type LyricsTransliterationStatus =
   | 'idle'
   | 'embedded'
   | 'loading'
-  | 'translated'
+  | 'transliterated'
   | 'disabled'
   | 'rate-limited'
   | 'error';
 
 const STORAGE_KEY = 'kanta.lyricsDisplayMode';
-const GOOGLE_TRANSLATE_STORAGE_KEY = 'kanta.googleTranslateEnabled';
+const GOOGLE_TRANSLITERATION_STORAGE_KEY = 'kanta.googleTranslateEnabled';
 
 @Injectable({ providedIn: 'root' })
 export class LyricsDisplayService {
   private readonly settings = inject(SettingsService);
   readonly mode = signal<LyricsDisplayMode>(this.load());
-  readonly googleTranslateEnabled = signal(this.loadGoogleTranslateEnabled());
-  readonly translatedLines = signal<(string | null)[] | null>(null);
-  readonly translationStatus = signal<LyricsTranslationStatus>('idle');
+  readonly googleTransliterationEnabled = signal(this.loadGoogleTransliterationEnabled());
+  readonly transliteratedLines = signal<(string | null)[] | null>(null);
+  readonly transliterationStatus = signal<LyricsTransliterationStatus>('idle');
   private currentLyrics: Lyric[] | null = null;
   private currentMode: LyricsDisplayMode = this.mode();
-  private currentGoogleSetting: boolean | null = null;
-  private translationRequest: Subscription | null = null;
+  private currentTransliterationSetting: boolean | null = null;
+  private transliterationRequest: Subscription | null = null;
 
   setMode(mode: LyricsDisplayMode): void {
     if (mode === this.mode()) return;
@@ -41,97 +41,86 @@ export class LyricsDisplayService {
     }
   }
 
-  setGoogleTranslateEnabled(enabled: boolean): void {
-    if (enabled === this.googleTranslateEnabled()) return;
-    this.googleTranslateEnabled.set(enabled);
+  setGoogleTransliterationEnabled(enabled: boolean): void {
+    if (enabled === this.googleTransliterationEnabled()) return;
+    this.googleTransliterationEnabled.set(enabled);
     try {
-      localStorage.setItem(GOOGLE_TRANSLATE_STORAGE_KEY, String(enabled));
+      localStorage.setItem(GOOGLE_TRANSLITERATION_STORAGE_KEY, String(enabled));
     } catch (error) {
-      console.warn('Could not save Google Translate setting:', error);
+      console.warn('Could not save Google transliteration setting:', error);
     }
     this.prepareLyrics(this.currentLyrics, this.currentMode);
   }
 
   prepareLyrics(lyrics: Lyric[] | null, mode: LyricsDisplayMode): void {
-    const enabled = this.googleTranslateEnabled();
+    const enabled = this.googleTransliterationEnabled();
     const lyricsChanged = lyrics !== this.currentLyrics;
-    const settingChanged = enabled !== this.currentGoogleSetting;
+    const settingChanged = enabled !== this.currentTransliterationSetting;
     if (!lyricsChanged && !settingChanged && mode === this.currentMode) return;
     if (lyricsChanged || settingChanged) {
-      this.translationRequest?.unsubscribe();
-      this.translationRequest = null;
-      this.translatedLines.set(null);
+      this.transliterationRequest?.unsubscribe();
+      this.transliterationRequest = null;
+      this.transliteratedLines.set(null);
     }
     this.currentLyrics = lyrics;
     this.currentMode = mode;
-    this.currentGoogleSetting = enabled;
+    this.currentTransliterationSetting = enabled;
 
     if (!lyrics?.length) {
-      this.translationStatus.set('idle');
+      this.transliterationStatus.set('idle');
       return;
     }
-    if (lyrics.some((line) => lyricRomanization(line))) {
-      this.translationStatus.set('embedded');
-      return;
-    }
+    const hasEmbedded = lyrics.some((line) => !!lyricRomanization(line));
     if (mode !== 'transliteration') {
-      this.translationStatus.set(this.translatedLines() ? 'translated' : 'idle');
-      return;
-    }
-    if (!enabled) {
-      this.translationStatus.set('disabled');
+      this.transliterationStatus.set(this.transliteratedLines() ? 'transliterated' : hasEmbedded ? 'embedded' : 'idle');
       return;
     }
 
     const indexedTexts = lyrics
-      .map((line, index) => ({ index, text: line.words }))
-      .filter(({ text }) => text.trim().length > 0 && containsNonLatin(text));
+      .map((line, index) => ({ index, text: line.words, hasRomanization: !!lyricRomanization(line) }))
+      .filter(({ text, hasRomanization }) => !hasRomanization && text.trim().length > 0 && containsNonLatin(text));
     if (!indexedTexts.length) {
-      this.translationStatus.set('idle');
+      this.transliterationStatus.set(hasEmbedded ? 'embedded' : 'idle');
       return;
     }
-    if (this.translatedLines()) {
-      this.translationStatus.set('translated');
+    if (!enabled) {
+      this.transliterationStatus.set('disabled');
       return;
     }
-    if (this.translationRequest && !this.translationRequest.closed) {
-      this.translationStatus.set('loading');
+    if (this.transliteratedLines()) {
+      this.transliterationStatus.set('transliterated');
+      return;
+    }
+    if (this.transliterationRequest && !this.transliterationRequest.closed) {
+      this.transliterationStatus.set('loading');
       return;
     }
 
-    this.translationStatus.set('loading');
-    this.translationRequest = this.settings.translateLyrics(indexedTexts.map(({ text }) => text)).subscribe({
-      next: ({ translations }) => {
-        this.translationRequest = null;
+    this.transliterationStatus.set('loading');
+    this.transliterationRequest = this.settings.transliterateLyrics(indexedTexts.map(({ text }) => text)).subscribe({
+      next: ({ transliterations }) => {
+        this.transliterationRequest = null;
         const result: (string | null)[] = Array.from({ length: lyrics.length }, () => null);
-        indexedTexts.forEach(({ index }, translationIndex) => {
-          result[index] = translations[translationIndex] ?? null;
+        indexedTexts.forEach(({ index }, transliterationIndex) => {
+          result[index] = transliterations[transliterationIndex] ?? null;
         });
-        this.translatedLines.set(result);
+        this.transliteratedLines.set(result);
         if (result.some((line) => line?.trim())) {
-          this.translationStatus.set('translated');
+          this.transliterationStatus.set('transliterated');
         } else {
-          this.translationStatus.set('error');
+          this.transliterationStatus.set(hasEmbedded ? 'embedded' : 'error');
         }
       },
       error: (error: unknown) => {
-        this.translationRequest = null;
+        this.transliterationRequest = null;
         if (error instanceof HttpErrorResponse && error.status === 429) {
-          this.translationStatus.set('rate-limited');
+          this.transliterationStatus.set('rate-limited');
         } else {
-          console.error('Could not translate lyrics:', error);
-          this.translationStatus.set('error');
+          console.error('Could not transliterate lyrics:', error);
+          this.transliterationStatus.set('error');
         }
       },
     });
-  }
-
-  retryTranslation(): void {
-    this.translationRequest?.unsubscribe();
-    this.translationRequest = null;
-    this.translatedLines.set(null);
-    this.currentGoogleSetting = null;
-    this.prepareLyrics(this.currentLyrics, this.currentMode);
   }
 
   private load(): LyricsDisplayMode {
@@ -146,9 +135,9 @@ export class LyricsDisplayService {
     }
   }
 
-  private loadGoogleTranslateEnabled(): boolean {
+  private loadGoogleTransliterationEnabled(): boolean {
     try {
-      return localStorage.getItem(GOOGLE_TRANSLATE_STORAGE_KEY) !== 'false';
+      return localStorage.getItem(GOOGLE_TRANSLITERATION_STORAGE_KEY) !== 'false';
     } catch {
       return true;
     }

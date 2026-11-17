@@ -3,11 +3,14 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { EntryAction, EntryKind } from '../components/entry-menu/entry-menu';
+import { genreKey } from '../../features/library/data/library-entries';
 import { LibraryService } from './library.service';
 import { PlaybackActions, isPlayable } from './playback-actions.service';
 import { PlaylistsService } from './playlists.service';
 import { ToastService } from './toast.service';
-import { SongManifest, SongsService } from './songs.service';
+import { SettingsService } from './settings.service';
+import { SongManifest, SongsService, songArtist } from './songs.service';
+import { metadataValueKey, splitMetadataValues } from '../util/metadata-delimiters';
 
 export interface ActionTarget {
   kind: EntryKind;
@@ -23,6 +26,7 @@ export class EntryActionsService {
   private readonly songsService = inject(SongsService);
   private readonly library = inject(LibraryService);
   private readonly playlists = inject(PlaylistsService);
+  private readonly settings = inject(SettingsService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
@@ -41,7 +45,11 @@ export class EntryActionsService {
     else if (action === 'open') this.open(this.keyOf(target));
     else if (action === 'go-album' && target.songs[0]) {
       this.open(`album:${target.songs[0].artist}\u0000${target.songs[0].album}`);
-    } else if (action === 'go-artist' && target.songs[0]) this.open(`artist:${target.songs[0].artist}`);
+    } else if (action === 'go-artist' && target.songs[0]) {
+      const artists = splitMetadataValues(songArtist(target.songs[0]), this.settings.artistDelimiters());
+      const artist = artists[0] ?? songArtist(target.songs[0]);
+      this.open(`artist:${metadataValueKey(artist)}`);
+    }
     else if (action === 'delete') await this.deleteSongs(target);
     else if (action === 'delete-playlist' && target.playlistId) {
       if (!confirm(`Delete the playlist “${target.title}”?`)) return true;
@@ -81,6 +89,7 @@ export class EntryActionsService {
     const first = target.songs[0];
     if (target.kind === 'playlist') return `playlist:${target.playlistId}`;
     if (target.kind === 'artist') return `artist:${first?.artist}`;
+    if (target.kind === 'genre') return `genre:${genreKey(target.title)}`;
     return `album:${first?.artist}\u0000${first?.album}`;
   }
 

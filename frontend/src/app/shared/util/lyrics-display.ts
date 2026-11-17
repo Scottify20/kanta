@@ -12,15 +12,15 @@ export function lyricRomanization(lyric: Lyric): string | null {
 export function lyricsForDisplay(
   lyrics: Lyric[] | null,
   mode: LyricsDisplayMode,
-  translations: (string | null)[] | null = null,
+  transliterations: (string | null)[] | null = null,
 ): Lyric[] | null {
   if (!lyrics || mode === 'original') return lyrics;
 
   return lyrics.map((lyric, index) => {
     const romanization = lyricRomanization(lyric);
-    const translation = translations?.[index];
+    const transliteration = transliterations?.[index];
     if (!romanization && !containsNonLatin(lyric.words)) return lyric;
-    const text = romanization ?? translation;
+    const text = romanization ?? transliteration;
     if (!text) return lyric;
 
     return {

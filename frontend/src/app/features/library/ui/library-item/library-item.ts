@@ -37,7 +37,7 @@ export class LibraryItem {
 
   readonly lyricsLevel = computed(() => (this.entry().kind === 'song' ? (this.entry().songs[0]?.lyrics_level ?? 'none') : null));
   readonly round = computed(() => this.entry().kind === 'artist');
-  readonly mosaic = computed(() => this.entry().kind === 'playlist' && this.entry().covers.length > 1);
+  readonly mosaic = computed(() => ['playlist', 'genre'].includes(this.entry().kind) && this.entry().covers.length > 1);
   readonly mosaicCovers = computed(() => {
     const covers = this.entry().covers;
     return Array.from({ length: 4 }, (_, i) => covers[i % Math.max(covers.length, 1)] ?? null);

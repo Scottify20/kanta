@@ -52,7 +52,12 @@
       <button type="button" role="menuitem" (click)="selectContextInput()">Select all</button>
     }
     @if (!logsWindow) {
-      <button type="button" role="menuitem" (click)="openContextLibrary()">Open library</button>
+      @if (menu.page !== 'library') {
+        <button type="button" role="menuitem" (click)="openContextLibrary()">Open library</button>
+      }
+      @if (menu.page === 'library' || menu.page === 'settings') {
+        <button type="button" role="menuitem" (click)="openContextPlayer()">Open player</button>
+      }
       <button type="button" role="menuitem" (click)="openContextQueue()">Toggle queue</button>
     } @else if (!menu.selection && !menu.input) {
       <span>No actions available</span>

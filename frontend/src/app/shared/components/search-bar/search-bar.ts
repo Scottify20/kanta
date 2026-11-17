@@ -1,5 +1,5 @@
 import { CdkConnectedOverlay, CdkOverlayOrigin } from '@angular/cdk/overlay';
-import { Component, ElementRef, HostListener, computed, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, computed, effect, inject, input, signal } from '@angular/core';
 import { LucideSearch, LucideX } from '@lucide/angular';
 
 import { LibraryService, SearchHit } from '../../services/library.service';
@@ -10,6 +10,7 @@ import { songArtist, songTitle } from '../../services/songs.service';
 import { PlaybackActions } from '../../services/playback-actions.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../util/drag-payload';
 import { LayoutService } from '../../services/layout.service';
+import { ArtistInfoService } from '../../services/artist-info.service';
 
 @Component({
   selector: 'app-search-bar',
@@ -23,6 +24,7 @@ export class SearchBar {
   private readonly layout = inject(LayoutService);
   private readonly entryActions = inject(EntryActionsService);
   private readonly playlistsService = inject(PlaylistsService);
+  private readonly artistInfo = inject(ArtistInfoService);
   readonly playlists = this.playlistsService.playlists;
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -30,8 +32,19 @@ export class SearchBar {
   readonly query = signal('');
   readonly focused = signal(false);
   readonly activeIndex = signal(0);
-  readonly hits = computed<SearchHit[]>(() => this.library.search(this.query()));
+  readonly hits = computed<SearchHit[]>(() =>
+    this.library.search(this.query()).map((hit) => this.withArtistPhoto(hit)),
+  );
   readonly open = computed(() => this.focused() && this.query().trim().length > 0);
+
+  constructor() {
+    effect(() => {
+      if (!this.open()) return;
+      for (const hit of this.library.search(this.query())) {
+        if (hit.kind === 'artist') this.artistInfo.request(hit.title, hit.songs[0]?.artist);
+      }
+    });
+  }
 
   onFocus(): void {
     this.focused.set(true);
@@ -60,7 +73,7 @@ export class SearchBar {
       this.activeIndex.update((i) => (i - 1 + count) % count);
     } else if (event.key === 'Enter' && count) {
       event.preventDefault();
-      this.play(this.hits()[this.activeIndex()]);
+      this.activate(this.hits()[this.activeIndex()]);
     } else if (event.key === 'Escape') {
       (event.target as HTMLInputElement).blur();
       this.focused.set(false);
@@ -77,9 +90,19 @@ export class SearchBar {
     }
   }
 
-  play(hit: SearchHit): void {
+  activate(hit: SearchHit): void {
     this.focused.set(false);
-    void this.actions.playSongs(hit.songs);
+    if (hit.kind === 'song') {
+      void this.actions.playSongs(hit.songs);
+    } else {
+      this.entryActions.open(hit.key);
+    }
+  }
+
+  private withArtistPhoto(hit: SearchHit): SearchHit {
+    if (hit.kind !== 'artist') return hit;
+    const photo = this.artistInfo.info(hit.title)?.photo_url;
+    return photo ? { ...hit, coverUrl: photo } : hit;
   }
 
   onAction(hit: SearchHit, action: EntryAction): void {

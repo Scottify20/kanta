@@ -93,7 +93,7 @@
   }
 }
 
-.google-translate-toggle {
+.google-transliteration-toggle {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -101,21 +101,15 @@
   font-size: 0.75rem;
 }
 
-.translation-status,
-.translation-warning {
+.transliteration-status,
+.transliteration-warning {
   margin: 0;
   color: rgba(255, 255, 255, 0.62);
   font-size: 0.75rem;
 }
 
-.translation-warning {
+.transliteration-warning {
   color: #ffd37a;
-}
-
-.translation-settings-link {
-  justify-self: start;
-  color: #fff;
-  font-size: 0.75rem;
 }
 
 .color-settings {

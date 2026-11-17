@@ -77,13 +77,17 @@ export class QueueService {
     this.refresh$.next();
   }
 
-  addTrack(file: File, priority: QueuePriority = 2, lyrics?: File): Observable<{ item: QueueItem }> {
+  addTrack(
+    file: File,
+    priority: QueuePriority = 2,
+    lyrics?: File,
+  ): Observable<{ item: QueueItem | null; skipped?: 'already_in_library' | 'already_queued' | null }> {
     const formData = new FormData();
     formData.append('file', file, file.name);
     formData.append('priority', String(priority));
     if (lyrics) formData.append('lyrics', lyrics, lyrics.name);
     return this.http
-      .post<{ item: QueueItem }>(`${API_URL}/api/queue/add`, formData)
+      .post<{ item: QueueItem | null; skipped?: 'already_in_library' | 'already_queued' | null }>(`${API_URL}/api/queue/add`, formData)
       .pipe(tap(() => this.refresh()));
   }
 

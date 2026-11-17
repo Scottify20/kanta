@@ -45,6 +45,10 @@
         <button type="button" role="menuitem" (click)="action.emit('open')">View artist</button>
         <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete artist’s songs</button>
       }
+      @case ('genre') {
+        <hr />
+        <button type="button" role="menuitem" (click)="action.emit('open')">View genre</button>
+      }
       @case ('playlist') {
         <hr />
         <button type="button" role="menuitem" (click)="action.emit('open')">View playlist</button>

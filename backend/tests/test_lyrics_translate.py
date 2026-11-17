@@ -6,22 +6,34 @@ from app.routes import settings as settings_routes
 from app.services import settings as settings_service
 
 
-def test_web_translation_preserves_line_breaks():
+def test_google_response_extracts_romanization_not_translation():
     payload = [
         [
-            ["Hello", "안녕", None, None, 1],
-            ["\n", "\n", None, None, 1],
-            ["world", "세계", None, None, 1],
+            ["Hello", "こんにちは", None, None, 1],
+            ["", "", None, None, "konnichiwa", None],
         ],
         None,
-        "ko",
+        "ja",
     ]
 
-    assert lyrics._translated_web_lines(payload, 2) == ["Hello", "world"]
+    assert lyrics._romanized_line(payload) == "konnichiwa"
+
+
+def test_google_response_without_romanization_does_not_use_translation():
+    payload = [
+        [
+            ["Hello", "こんにちは", None, None, 1],
+            ["", "", None, None, None, None],
+        ],
+        None,
+        "ja",
+    ]
+
+    assert lyrics._romanized_line(payload) is None
 
 
 @pytest.mark.asyncio
-async def test_web_translation_reports_rate_limit():
+async def test_google_transliteration_reports_rate_limit():
     class RateLimitedResponse:
         status_code = 429
 
@@ -30,35 +42,33 @@ async def test_web_translation_reports_rate_limit():
             return RateLimitedResponse()
 
     with pytest.raises(HTTPException) as error:
-        await lyrics._translate_without_key(FakeClient(), ["안녕"])
+        await lyrics._transliterate_with_google(FakeClient(), ["안녕"])
 
     assert error.value.status_code == 429
 
 
-def test_cloud_translation_identifies_quota_rate_limits():
-    class RateLimitedResponse:
-        status_code = 403
-
-        def json(self):
-            return {"error": {"message": "Quota exceeded"}}
-
-    assert lyrics._is_rate_limited(RateLimitedResponse())
-
-
 @pytest.mark.asyncio
-async def test_cloud_translation_decodes_html_entities():
+async def test_google_transliteration_requests_romanization():
     class Response:
         status_code = 200
 
         def json(self):
-            return {"data": {"translations": [{"translatedText": "Rock &amp; Roll"}]}}
+            return [
+                [
+                    ["Hello", "こんにちは", None, None, 1],
+                    ["", "", None, None, "konnichiwa", None],
+                ],
+                None,
+                "ja",
+            ]
 
     class FakeClient:
-        async def post(self, *_args, **_kwargs):
+        async def get(self, _url, *, params):
+            assert params["dt"] == ["rm", "t"]
             return Response()
 
-    assert await lyrics._translate_with_key(FakeClient(), "test-key", ["록 앤 롤"]) == [
-        "Rock & Roll"
+    assert await lyrics._transliterate_with_google(FakeClient(), ["こんにちは"]) == [
+        "konnichiwa"
     ]
 
 

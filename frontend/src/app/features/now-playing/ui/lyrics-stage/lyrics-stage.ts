@@ -33,7 +33,7 @@ export class LyricsStage {
     lyricsForDisplay(
       this.lyrics(),
       this.lyricDisplay.mode(),
-      this.lyricDisplay.translatedLines(),
+      this.lyricDisplay.transliteratedLines(),
     ),
   );
   readonly lyricClick = output<Event>();

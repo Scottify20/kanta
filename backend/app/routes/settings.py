@@ -9,15 +9,18 @@ from pydantic import BaseModel, Field
 from app.services import folder_dialog, storage
 from app.services.lyrics_providers import PROVIDERS_BY_ID
 from app.services.settings import (
+    get_artist_delimiters,
     device_availability,
     get_default_output_dir,
     get_developer_mode,
     get_inference_device,
+    get_keep_original,
     get_lyrics_auto_fetch,
     get_lyrics_provider_keys,
     get_lyrics_provider_order,
     get_lyrics_providers,
     get_google_translate_api_key,
+    get_genre_delimiters,
     get_model_dir,
     get_output_dirs,
     get_output_mode,
@@ -40,6 +43,9 @@ class SettingsUpdate(BaseModel):
     output_quality: Optional[Literal["high", "standard", "low"]] = None
     inference_device: Optional[Literal["cuda", "mps", "directml", "vulkan", "cpu"]] = None
     developer_mode: Optional[bool] = None
+    keep_original: Optional[bool] = None
+    artist_delimiters: Optional[list[str]] = Field(default=None, max_length=32)
+    genre_delimiters: Optional[list[str]] = Field(default=None, max_length=32)
 
 
 def _settings_payload(
@@ -54,6 +60,9 @@ def _settings_payload(
         "output_quality": get_output_quality(),
         "inference_device": get_inference_device(),
         "developer_mode": get_developer_mode(),
+        "keep_original": get_keep_original(),
+        "artist_delimiters": get_artist_delimiters(),
+        "genre_delimiters": get_genre_delimiters(),
         "lyrics_providers": get_lyrics_providers(),
         "lyrics_auto_fetch": get_lyrics_auto_fetch(),
         "output_dirs_status": storage.output_dirs_status(list(output_dirs)),
@@ -105,6 +114,9 @@ def update_settings(settings: SettingsUpdate) -> dict[str, Any]:
             output_quality=settings.output_quality,
             inference_device=settings.inference_device,
             developer_mode=settings.developer_mode,
+            keep_original=settings.keep_original,
+            artist_delimiters=settings.artist_delimiters,
+            genre_delimiters=settings.genre_delimiters,
         )
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

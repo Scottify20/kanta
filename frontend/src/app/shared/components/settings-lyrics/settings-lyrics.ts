@@ -15,7 +15,6 @@ import {
 import { LucideExternalLink, LucideGripVertical, LucideKeyRound, LucideListOrdered, LucideX } from '@lucide/angular';
 
 import { LyricsProviderInfo, LyricsSettings, SettingsService } from '../../services/settings.service';
-import { LyricsDisplayService } from '../../services/lyrics-display.service';
 
 @Component({
   selector: 'app-settings-lyrics',
@@ -29,11 +28,7 @@ export class SettingsLyrics implements OnDestroy {
   private readonly modalTpl = viewChild.required<TemplateRef<unknown>>('modalTpl');
   private overlayRef: OverlayRef | null = null;
   private readonly settings = inject(SettingsService);
-  private readonly lyricsDisplay = inject(LyricsDisplayService);
   readonly providers = signal<LyricsProviderInfo[]>([]);
-  readonly googleTranslateApiKey = signal('');
-  readonly googleTranslateKeyConfigured = signal(false);
-  readonly googleTranslateKeySaving = signal(false);
   readonly autoFetch = signal(true);
   readonly error = signal('');
   readonly open = signal(false);
@@ -59,10 +54,6 @@ export class SettingsLyrics implements OnDestroy {
     this.settings.getLyricsSettings().subscribe({
       next: (value) => this.apply(value),
       error: () => this.error.set('Could not load lyrics settings.'),
-    });
-    this.settings.getGoogleTranslateSettings().subscribe({
-      next: (value) => this.googleTranslateKeyConfigured.set(value.api_key_configured),
-      error: () => this.error.set('Could not load Google Translate settings.'),
     });
   }
 
@@ -98,42 +89,6 @@ export class SettingsLyrics implements OnDestroy {
       list.map((entry) => (entry.id === provider.id ? { ...entry, key_fields: fields } : entry)),
     );
     this.save({ keys: { [provider.id]: Object.fromEntries(fields.map((field) => [field.id, field.value])) } });
-  }
-
-  saveGoogleTranslateApiKey(): void {
-    const key = this.googleTranslateApiKey().trim();
-    if (!key || this.googleTranslateKeySaving()) return;
-    this.googleTranslateKeySaving.set(true);
-    this.settings.updateGoogleTranslateApiKey(key).subscribe({
-      next: (value) => {
-        this.googleTranslateKeyConfigured.set(value.api_key_configured);
-        this.googleTranslateApiKey.set('');
-        this.googleTranslateKeySaving.set(false);
-        this.error.set('');
-        this.lyricsDisplay.retryTranslation();
-      },
-      error: () => {
-        this.error.set('Could not save Google Translate API key.');
-        this.googleTranslateKeySaving.set(false);
-      },
-    });
-  }
-
-  clearGoogleTranslateApiKey(): void {
-    if (this.googleTranslateKeySaving()) return;
-    this.googleTranslateKeySaving.set(true);
-    this.settings.updateGoogleTranslateApiKey(null).subscribe({
-      next: (value) => {
-        this.googleTranslateKeyConfigured.set(value.api_key_configured);
-        this.googleTranslateKeySaving.set(false);
-        this.error.set('');
-        this.lyricsDisplay.retryTranslation();
-      },
-      error: () => {
-        this.error.set('Could not remove Google Translate API key.');
-        this.googleTranslateKeySaving.set(false);
-      },
-    });
   }
 
   private save(update: Parameters<SettingsService['updateLyricsSettings']>[0]): void {

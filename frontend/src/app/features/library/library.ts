@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   computed,
   effect,
@@ -21,6 +22,7 @@ import { LibraryService, SongRef, songKey } from '../../shared/services/library.
 import { EntryActionsService } from '../../shared/services/entry-actions.service';
 import { PlaybackActions, isPlayable } from '../../shared/services/playback-actions.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
+import { SettingsService } from '../../shared/services/settings.service';
 import { SongManifest, SongsService, songArtist } from '../../shared/services/songs.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-payload';
 import {
@@ -29,6 +31,7 @@ import {
   SortMode,
   albumEntry,
   artistEntry,
+  genreEntries,
   playlistEntry,
   songEntry,
   sortArtistSongs,
@@ -61,10 +64,12 @@ export class Library {
   private readonly actions = inject(PlaybackActions);
   private readonly entryActions = inject(EntryActionsService);
   private readonly playlistsService = inject(PlaylistsService);
+  private readonly settingsService = inject(SettingsService);
   protected readonly layoutService = inject(LayoutService);
   private readonly router = inject(Router);
   private readonly queueService = inject(QueueService);
   private readonly artistInfo = inject(ArtistInfoService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly queueSnapshot = toSignal(this.queueService.queue$, { initialValue: null });
 
   // Average processing progress per artist (lower-cased name) for songs still in the processing queue.
@@ -120,7 +125,7 @@ export class Library {
     return this.artistProgress().get(entry.title.trim().toLowerCase()) ?? null;
   }
 
-  readonly tab = signal<LibraryTab>('songs');
+  readonly tab = this.library.activeTab;
   readonly sort = computed(() => this.library.sorts()[this.tab()]);
   readonly layout = signal<'grid' | 'list'>('grid');
   readonly lyricsFilter = this.library.lyricsFilter;
@@ -133,6 +138,8 @@ export class Library {
   readonly currentTaskId = this.songsService.currentQueueTaskId;
   private anchorIndex = -1;
   private skipTabReset = false;
+  private detailScrollTop: number | null = null;
+  private detailScrollTab: LibraryTab | null = null;
   private previousProcessing = new Set<string>();
 
   private readonly songIndex = computed(
@@ -147,6 +154,8 @@ export class Library {
         return sortEntries(this.library.albums().map(albumEntry), this.sort());
       case 'artists':
         return sortEntries(this.library.artists().map((a) => this.withPhoto(artistEntry(a))), this.sort());
+      case 'genres':
+        return sortEntries(genreEntries(this.library.songs(), this.settingsService.genreDelimiters()), this.sort());
       case 'playlists':
         return sortEntries(
           this.playlists().map((p) => playlistEntry(p, this.songIndex())),
@@ -181,7 +190,6 @@ export class Library {
     }
     return groups;
   });
-
   albumKey(entry: LibraryEntry): string {
     const song = entry.songs[0];
     return `${this.detail()?.key ?? ''}\u0000${song.artist}\u0000${song.album}`;
@@ -215,9 +223,9 @@ export class Library {
     effect(() => {
       // Look up photos and bios for the artists on screen.
       const detail = this.detail();
-      if (detail?.kind === 'artist') this.artistInfo.request(detail.title);
+      if (detail?.kind === 'artist' && detail.songs[0]) this.artistInfo.request(detail.title, detail.songs[0].artist);
       else if (!detail && this.tab() === 'artists') {
-        for (const artist of this.library.artists()) this.artistInfo.request(artist.displayArtist);
+        for (const artist of this.library.artists()) this.artistInfo.request(artist.displayArtist, artist.artist);
       }
     });
     effect(() => {
@@ -238,6 +246,8 @@ export class Library {
         this.skipTabReset = false;
         return;
       }
+      this.detailScrollTop = null;
+      this.detailScrollTab = null;
       this.detail.set(null);
       this.selection.set(new Set());
     });
@@ -257,12 +267,17 @@ export class Library {
       }
       untracked(() => {
         const tab: LibraryTab =
-          entry.kind === 'album' ? 'albums' : entry.kind === 'artist' ? 'artists' : 'playlists';
+          entry.kind === 'album' ? 'albums'
+            : entry.kind === 'artist' ? 'artists'
+              : entry.kind === 'genre' ? 'genres'
+                : 'playlists';
         if (this.tab() !== tab) {
           this.skipTabReset = true;
           this.tab.set(tab);
         }
         this.selection.set(new Set());
+        this.detailScrollTop = null;
+        this.detailScrollTab = null;
         this.detail.set(entry);
         this.library.pendingOpen.set(null);
       });
@@ -275,8 +290,20 @@ export class Library {
 
   back(): void {
     if (this.detail()) {
+      const scrollTop = this.detailScrollTop;
+      const tab = this.detailScrollTab;
+      this.detailScrollTop = null;
+      this.detailScrollTab = null;
       this.detail.set(null);
       this.selection.set(new Set());
+      if (scrollTop !== null && tab === this.tab()) {
+        requestAnimationFrame(() => {
+          const content = this.host.nativeElement.closest<HTMLElement>('.content');
+          if (content?.isConnected && !this.detail() && this.tab() === tab) {
+            content.scrollTop = scrollTop;
+          }
+        });
+      }
     } else {
       void this.router.navigateByUrl('/');
     }
@@ -325,6 +352,10 @@ export class Library {
     if (entry.kind === 'song') {
       void this.run(() => this.actions.playSongs(entry.songs));
     } else {
+      if (!this.detail()) {
+        this.detailScrollTop = this.host.nativeElement.closest<HTMLElement>('.content')?.scrollTop ?? null;
+        this.detailScrollTab = this.tab();
+      }
       this.detail.set(entry);
       this.selection.set(new Set());
     }
@@ -443,13 +474,15 @@ export class Library {
     if (album) return albumEntry(album);
     const artist = this.library.artists().find((a) => `artist:${a.key}` === key);
     if (artist) return artistEntry(artist);
+    const genre = genreEntries(this.library.songs(), this.settingsService.genreDelimiters()).find((entry) => entry.key === key);
+    if (genre) return genre;
     const playlist = this.playlists().find((p) => `playlist:${p.id}` === key);
     return playlist ? playlistEntry(playlist, this.songIndex()) : null;
   }
 
   private detailSongs(detail: LibraryEntry): LibraryEntry[] {
     const current = detail.songs.map((song) => this.songIndex().get(songKey(song))).filter((song): song is SongManifest => !!song);
-    const songs = detail.kind === 'artist' ? sortArtistSongs(current) : current;
+    const songs = detail.kind === 'artist' || detail.kind === 'genre' ? sortArtistSongs(current) : current;
     if (detail.kind === 'album') {
       songs.sort(
         (a, b) =>

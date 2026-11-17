@@ -8,6 +8,7 @@ from unittest.mock import patch
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC, ID3, TIT2, TPE1, TALB, TXXX
 from mutagen.mp4 import MP4
+from mutagen.oggopus import OggOpus
 from PIL import Image
 
 from app.services.metadata import (
@@ -17,9 +18,11 @@ from app.services.metadata import (
     extract_raw_metadata,
 )
 from app.services.paths import run_ffmpeg
+from app.services.separator import _separator_input_path
+from app.services.tagging import read_duration
 
 
-@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required")
+@unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg and ffprobe are required")
 class ProcessingMetadataTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -150,3 +153,60 @@ class ProcessingMetadataTests(unittest.TestCase):
                 converted = FLAC(output)
                 self.assertEqual(converted["artist"], ["First artist", "Second artist"])
                 self.assertEqual(converted["composer"], ["Composer"])
+
+    def test_m4a_and_mislabeled_audio_are_normalized_for_separation(self):
+        source = self.root / "source.m4a"
+        run_ffmpeg(["-v", "error", "-y", "-i", str(self.wav), "-c:a", "aac", str(source)])
+        tags = MP4(source)
+        tags["\xa9ART"] = ["Artist"]
+        tags["\xa9alb"] = ["Album"]
+        tags["\xa9nam"] = ["Real title"]
+        tags.save()
+        temp_dir = self.root / "temp"
+        temp_dir.mkdir()
+
+        normalized = _separator_input_path(source, temp_dir)
+        self.assertEqual(normalized.suffix, ".wav")
+
+        mislabeled = self.root / "actually-aac.flac"
+        shutil.copyfile(source, mislabeled)
+        normalized_mislabeled = _separator_input_path(mislabeled, temp_dir)
+        self.assertEqual(normalized_mislabeled.suffix, ".wav")
+        self.assertEqual(extract_raw_metadata(mislabeled)["raw_title"], "Real title")
+        self.assertIsNotNone(read_duration(mislabeled))
+        copied_original = self.root / "mislabeled-master.mp3"
+        create_compressed_original_with_cover(
+            mislabeled,
+            copied_original,
+            self.root / "missing.jpg",
+            "Artist",
+            "Album",
+            "Real title",
+        )
+        self.assertEqual(ID3(copied_original)["TIT2"].text, ["Real title"])
+
+        opus_mislabeled = self.root / "actually-opus.flac"
+        run_ffmpeg([
+            "-v", "error", "-y", "-i", str(self.wav),
+            "-c:a", "libopus", "-f", "ogg", str(opus_mislabeled),
+        ])
+        opus_tags = OggOpus(opus_mislabeled)
+        opus_tags["artist"] = ["Artist"]
+        opus_tags["album"] = ["Album"]
+        opus_tags["title"] = ["Opus title"]
+        opus_tags.save()
+        normalized_opus = _separator_input_path(opus_mislabeled, temp_dir)
+        self.assertEqual(normalized_opus.suffix, ".wav")
+        self.assertEqual(extract_raw_metadata(opus_mislabeled)["raw_title"], "Opus title")
+        self.assertIsNotNone(read_duration(opus_mislabeled))
+
+        import soundfile
+
+        self.assertEqual(soundfile.info(normalized_mislabeled).samplerate, 44100)
+        self.assertEqual(soundfile.info(normalized_opus).samplerate, 44100)
+
+    def test_corrupt_audio_reports_decode_error(self):
+        corrupt = self.root / "corrupt.m4a"
+        corrupt.write_bytes(b"not an audio stream")
+        with self.assertRaisesRegex(RuntimeError, "Could not inspect audio file"):
+            _separator_input_path(corrupt, self.root)

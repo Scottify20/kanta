@@ -106,11 +106,23 @@ class QueueManager:
         self._worker_task = None
         self._flush_state()
 
-    async def add_item(self, item: QueueItem) -> None:
+    async def add_item(self, item: QueueItem) -> Optional[QueueItem]:
         async with self._lock:
             existing = self._find_item(item.task_id)
             if existing is not None:
-                return
+                return existing
+            duplicate = next(
+                (
+                    queued
+                    for queued in self.queue
+                    if queued.status in {"pending", "processing", "paused", "cancelling"}
+                    and self._same_song(queued, item)
+                ),
+                None,
+            )
+            if duplicate is not None:
+                self._delete_input(item)
+                return duplicate
             item.position = self._next_position(item.priority)
             self.queue.append(item)
             if item.priority == QueuePriority.KARAOKE:
@@ -120,6 +132,7 @@ class QueueManager:
             pause_events.setdefault(item.task_id, threading.Event())
             self._save_state()
             self._wake_event.set()
+            return None
 
     async def add_karaoke_item(
         self,

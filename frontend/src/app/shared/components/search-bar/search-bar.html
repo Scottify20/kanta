@@ -42,7 +42,7 @@
         [class.active]="i === activeIndex()"
         [attr.aria-selected]="i === activeIndex()"
         (mouseenter)="activeIndex.set(i)"
-        (click)="play(hit)"
+        (click)="activate(hit)"
         (contextmenu)="menu.openAt($event)"
         (dragstart)="dragStart($event, hit)"
         (dragend)="dragEnd()"

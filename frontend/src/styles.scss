@@ -13,6 +13,11 @@ html {
   scrollbar-width: none;
 }
 
+html.cursor-idle,
+html.cursor-idle * {
+  cursor: none !important;
+}
+
 body {
   background-color: var(--body-bg-color);
   &.scroll-disabled {

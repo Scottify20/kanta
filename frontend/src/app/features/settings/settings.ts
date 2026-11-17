@@ -23,6 +23,12 @@ interface ReplayGainControls {
 }
 
 import { SettingsLyrics } from '../../shared/components/settings-lyrics/settings-lyrics';
+import {
+  DEFAULT_ARTIST_DELIMITERS,
+  DEFAULT_ARTIST_DELIMITER_LIST,
+  DEFAULT_GENRE_DELIMITERS,
+  DEFAULT_GENRE_DELIMITER_LIST,
+} from '../../shared/util/metadata-delimiters';
 
 @Component({
   selector: 'app-settings',
@@ -49,6 +55,9 @@ export class Settings {
   readonly outputMode = signal<'basic' | 'full'>('basic');
   readonly outputQuality = signal<'high' | 'standard' | 'low'>('standard');
   readonly inferenceDevice = signal<DeviceId>('cpu');
+  readonly keepOriginal = signal(true);
+  readonly artistDelimiters = signal(DEFAULT_ARTIST_DELIMITERS);
+  readonly genreDelimiters = signal(DEFAULT_GENRE_DELIMITERS);
   readonly devices = signal<InferenceDevice[]>([]);
   readonly outputDirsStatus = signal<OutputDirectoryStatus[]>([]);
   readonly loaded = signal(false);
@@ -112,6 +121,13 @@ export class Settings {
         this.outputMode.set(settings.output_mode || 'basic');
         this.outputQuality.set(settings.output_quality || 'standard');
         this.inferenceDevice.set(settings.inference_device || 'cpu');
+        this.keepOriginal.set(settings.keep_original !== false);
+        const artistDelimiters = settings.artist_delimiters ?? DEFAULT_ARTIST_DELIMITER_LIST;
+        const genreDelimiters = settings.genre_delimiters ?? DEFAULT_GENRE_DELIMITER_LIST;
+        this.artistDelimiters.set(artistDelimiters.join('\n'));
+        this.genreDelimiters.set(genreDelimiters.join('\n'));
+        this.settingsService.artistDelimiters.set(artistDelimiters);
+        this.settingsService.genreDelimiters.set(genreDelimiters);
         this.developerMode.set(settings.developer_mode === true);
         this.outputDirsStatus.set(settings.output_dirs_status ?? []);
         this.loaded.set(true);
@@ -128,6 +144,17 @@ export class Settings {
   setOutputMode(value: string): void { this.outputMode.set(value as 'basic' | 'full'); this.changed(); }
   setOutputQuality(value: string): void { this.outputQuality.set(value as 'high' | 'standard' | 'low'); this.changed(); }
   setInferenceDevice(value: string): void { this.inferenceDevice.set(value as DeviceId); this.changed(); }
+  setKeepOriginal(value: boolean): void { this.keepOriginal.set(value); this.changed(); }
+  setArtistDelimiters(value: string): void {
+    this.artistDelimiters.set(value);
+    this.settingsService.artistDelimiters.set(this.delimiterLines(value));
+    this.changed();
+  }
+  setGenreDelimiters(value: string): void {
+    this.genreDelimiters.set(value);
+    this.settingsService.genreDelimiters.set(this.delimiterLines(value));
+    this.changed();
+  }
   setReplayGainEnabled(value: boolean): void { this.audioPlayer.setReplayGainEnabled?.(value); }
   setDeveloperMode(value: boolean): void {
     this.developerMode.set(value);
@@ -196,7 +223,15 @@ export class Settings {
       output_mode: this.outputMode(),
       output_quality: this.outputQuality(),
       inference_device: this.inferenceDevice(),
+      keep_original: this.keepOriginal(),
+      artist_delimiters: this.delimiterLines(this.artistDelimiters()),
+      genre_delimiters: this.delimiterLines(this.genreDelimiters()),
     };
+  }
+
+  private delimiterLines(value: string): string[] {
+    const delimiters = value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    return [...new Set(delimiters)];
   }
 
   private deviceLabel(id: string, fallback: string): string {

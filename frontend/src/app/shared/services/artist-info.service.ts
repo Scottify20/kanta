@@ -13,7 +13,7 @@ export interface ArtistInfo {
 }
 
 const MAX_PARALLEL = 3;
-const keyOf = (name: string): string => name.trim().toLowerCase();
+const keyOf = (name: string): string => name.trim().normalize('NFKC').toLocaleLowerCase();
 
 /** Artist bios and photos from the backend lookup; requests are queued and cached per session. */
 @Injectable({ providedIn: 'root' })
@@ -21,7 +21,7 @@ export class ArtistInfoService {
   private readonly http = inject(HttpClient);
   // null = looked up with nothing found (or failed); absent = not requested yet.
   private readonly cache = signal<ReadonlyMap<string, ArtistInfo | null>>(new Map());
-  private readonly pending: string[] = [];
+  private readonly pending: { name: string; folder?: string }[] = [];
   private readonly queued = new Set<string>();
   private running = 0;
 
@@ -29,23 +29,28 @@ export class ArtistInfoService {
     return this.cache().get(keyOf(name)) ?? null;
   }
 
-  request(name: string): void {
+  request(name: string, folder?: string): void {
     const key = keyOf(name);
-    if (!key || this.cache().has(key) || this.queued.has(key)) return;
+    if (!name.trim() || this.cache().has(key) || this.queued.has(key)) return;
     this.queued.add(key);
-    this.pending.push(name.trim());
+    this.pending.push({ name: name.trim(), folder });
     this.pump();
   }
 
   private pump(): void {
     while (this.running < MAX_PARALLEL && this.pending.length) {
-      const name = this.pending.shift()!;
+      const { name, folder } = this.pending.shift()!;
       this.running++;
       firstValueFrom(
-        this.http.get<ArtistInfo>(`${API_URL}/api/artists/info`, { params: { name } }),
+        this.http.get<ArtistInfo>(`${API_URL}/api/artists/info`, {
+          params: folder ? { name, folder } : { name },
+        }),
       )
         .then((info) => this.store(name, info.bio || info.photo_url ? info : null))
-        .catch(() => this.store(name, null))
+        .catch((error: unknown) => {
+          console.error('Could not load artist information:', error);
+          this.store(name, null);
+        })
         .finally(() => {
           this.running--;
           this.pump();
