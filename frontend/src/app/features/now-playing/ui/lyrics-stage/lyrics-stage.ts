@@ -1,6 +1,8 @@
 import { Component, CUSTOM_ELEMENTS_SCHEMA, DestroyRef, ElementRef, computed, effect, inject, input, output } from '@angular/core';
 import { LyricsSizeService } from '../../../../shared/services/lyrics-size.service';
 import { LyricsColorService, paletteFromCanvas } from '../../../../shared/services/lyrics-color.service';
+import { LyricsDisplayService } from '../../../../shared/services/lyrics-display.service';
+import { lyricsForDisplay } from '../../../../shared/util/lyrics-display';
 import type { BraccatoLyricsElement } from '@braccato/core/element';
 import type { Lyric } from '@braccato/parsers';
 import { stabilizeLyricsLayout } from './lyrics-layout';
@@ -14,6 +16,7 @@ import { stabilizeLyricsLayout } from './lyrics-layout';
 export class LyricsStage {
   protected readonly size = inject(LyricsSizeService);
   protected readonly colors = inject(LyricsColorService);
+  protected readonly lyricDisplay = inject(LyricsDisplayService);
   readonly coverUrl = input<string | null>(null);
   readonly coverAlt = input('Current album cover');
   readonly lyrics = input<Lyric[] | null>(null);
@@ -23,7 +26,16 @@ export class LyricsStage {
   readonly collapsed = input(false);
   readonly compact = input(false);
   readonly songKey = input('');
-  readonly lyricsKey = computed(() => `${this.songKey()}|${this.lyrics() ? 'lyrics' : 'none'}`);
+  readonly lyricsKey = computed(
+    () => `${this.songKey()}|${this.lyrics() ? 'lyrics' : 'none'}|${this.lyricDisplay.mode()}`,
+  );
+  readonly displayLyrics = computed(() =>
+    lyricsForDisplay(
+      this.lyrics(),
+      this.lyricDisplay.mode(),
+      this.lyricDisplay.translatedLines(),
+    ),
+  );
   readonly lyricClick = output<Event>();
 
   constructor() {
@@ -38,6 +50,12 @@ export class LyricsStage {
       element.tickOptions = { ...options, smoothScroll: false };
       element.currentTime = this.currentTime();
       element.tickOptions = options;
+      element.renderer?.scheduleLyricPositionUpdate(
+        () => element.isConnected,
+        () => {
+          if (element.isConnected) element.currentTime = this.currentTime();
+        },
+      );
       if (element !== observed) {
         stopObserving?.();
         observed = element;
@@ -49,6 +67,8 @@ export class LyricsStage {
       host.removeEventListener('braccato:lyrics-loaded', onLyricsLoaded);
       stopObserving?.();
     });
+
+    effect(() => this.lyricDisplay.prepareLyrics(this.lyrics(), this.lyricDisplay.mode()));
 
     effect((onCleanup) => {
       const cover = this.coverUrl();

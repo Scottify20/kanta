@@ -19,7 +19,7 @@
     <!-- The web component keeps rendered lines when lyrics become empty, so recreate it per lyrics set. -->
     @for (key of [lyricsKey()]; track key) {
       <braccato-lyrics
-        [lyrics]="lyrics() ?? []"
+        [lyrics]="displayLyrics() ?? []"
         [currentTime]="currentTime()"
         [playing]="playing()"
         [style.--kanta-lyric-primary]="colors.colors()[0]"

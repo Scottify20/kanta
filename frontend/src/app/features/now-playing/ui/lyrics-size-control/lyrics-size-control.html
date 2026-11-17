@@ -20,6 +20,46 @@
       <svg lucideRotateCcw [size]="14"></svg>
       Reset size
     </button>
+    <div class="lyrics-display-settings">
+      <strong>Lyrics</strong>
+      <div role="group" aria-label="Lyrics display">
+        <button
+          type="button"
+          [class.active]="lyricDisplay.mode() === 'original'"
+          [attr.aria-pressed]="lyricDisplay.mode() === 'original'"
+          (click)="lyricDisplay.setMode('original')"
+        >Original</button>
+        <button
+          type="button"
+          [class.active]="lyricDisplay.mode() === 'transliteration'"
+          [attr.aria-pressed]="lyricDisplay.mode() === 'transliteration'"
+          (click)="lyricDisplay.setMode('transliteration')"
+        >English + transliteration</button>
+      </div>
+      <label class="google-translate-toggle">
+        <input
+          class="switch"
+          type="checkbox"
+          role="switch"
+          [checked]="lyricDisplay.googleTranslateEnabled()"
+          (change)="lyricDisplay.setGoogleTranslateEnabled($any($event.target).checked)"
+        />
+        <span>Google Translate when missing</span>
+      </label>
+      @if (lyricDisplay.translationStatus() === 'embedded') {
+        <small class="translation-status">Embedded transliteration</small>
+      } @else if (lyricDisplay.translationStatus() === 'loading') {
+        <small class="translation-status">Translating…</small>
+      } @else if (lyricDisplay.translationStatus() === 'translated') {
+        <small class="translation-status">Google Translate</small>
+      } @else if (lyricDisplay.translationStatus() === 'rate-limited') {
+        <p class="translation-warning" role="alert">Google Translate is rate-limited.</p>
+        <a class="translation-settings-link" routerLink="/settings">Set an API key in Settings</a>
+      } @else if (lyricDisplay.translationStatus() === 'error') {
+        <p class="translation-warning" role="alert">Google Translate unavailable.</p>
+        <a class="translation-settings-link" routerLink="/settings">Check API key in Settings</a>
+      }
+    </div>
     <div class="color-settings">
       <strong>Lyrics color</strong>
       <div class="color-modes" role="group" aria-label="Lyrics color">

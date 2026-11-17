@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -49,6 +49,8 @@ export class App {
   readonly playerVisible = computed(() =>
     (this.router.parseUrl(this.route()).root.children['primary']?.segments.length ?? 0) === 0,
   );
+  private readonly contentElement = viewChild<ElementRef<HTMLElement>>('content');
+  private libraryScrollTop = 0;
   private readonly fullscreen = inject(FullscreenService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly overlayScrollbar = inject(OverlayScrollbarService);
@@ -65,6 +67,29 @@ export class App {
   } | null>(null);
   // The developer log window loads /logs directly and shows only the log viewer, without the app chrome.
   readonly logsWindow = typeof location !== 'undefined' && location.pathname.startsWith('/logs');
+
+  constructor() {
+    effect(() => {
+      const url = this.route();
+      const content = this.contentElement()?.nativeElement;
+      if (!content || !this.isLibraryRoute(url)) return;
+      requestAnimationFrame(() => {
+        if (content.isConnected && this.isLibraryRoute(this.route())) {
+          content.scrollTop = this.libraryScrollTop;
+        }
+      });
+    });
+  }
+
+  onContentScroll(event: Event): void {
+    if (this.isLibraryRoute(this.route())) {
+      this.libraryScrollTop = (event.currentTarget as HTMLElement).scrollTop;
+    }
+  }
+
+  private isLibraryRoute(url: string): boolean {
+    return this.router.parseUrl(url).root.children['primary']?.segments[0]?.path === 'library';
+  }
 
   @HostListener('document:contextmenu', ['$event'])
   onContextMenu(event: MouseEvent): void {

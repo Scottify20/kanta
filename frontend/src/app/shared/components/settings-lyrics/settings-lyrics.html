@@ -13,6 +13,38 @@
     </span>
     <button class="manage" type="button" (click)="open.set(true)"><svg lucideListOrdered [size]="16"></svg>Manage</button>
   </div>
+  <div class="google-translate-settings">
+    <div class="text">
+      <strong>Google Translate API key</strong>
+      <small>
+        Optional. First 500,000 characters/month are listed as free credit; billing and API access are required.
+        <a href="https://cloud.google.com/translate/pricing" target="_blank" rel="noopener noreferrer">Pricing</a>
+        ·
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Get an API key</a>
+      </small>
+    </div>
+    @if (googleTranslateKeyConfigured()) {
+      <span class="key-configured">Configured</span>
+    }
+    <label class="api-key-input">
+      <span>{{ googleTranslateKeyConfigured() ? 'Replace API key' : 'API key' }}</span>
+      <input
+        type="password"
+        autocomplete="new-password"
+        spellcheck="false"
+        [value]="googleTranslateApiKey()"
+        (input)="googleTranslateApiKey.set($any($event.target).value)"
+      />
+    </label>
+    <div class="api-key-actions">
+      <button class="manage" type="button" [disabled]="!googleTranslateApiKey().trim() || googleTranslateKeySaving()" (click)="saveGoogleTranslateApiKey()">
+        {{ googleTranslateKeySaving() ? 'Saving…' : 'Save key' }}
+      </button>
+      @if (googleTranslateKeyConfigured()) {
+        <button class="manage" type="button" [disabled]="googleTranslateKeySaving()" (click)="clearGoogleTranslateApiKey()">Remove</button>
+      }
+    </div>
+  </div>
 </div>
 @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
 

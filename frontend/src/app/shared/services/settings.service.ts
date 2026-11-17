@@ -34,6 +34,14 @@ export interface LyricsSettings {
   auto_fetch: boolean;
 }
 
+export interface GoogleTranslateSettings {
+  api_key_configured: boolean;
+}
+
+export interface LyricsTranslationResponse {
+  translations: string[];
+}
+
 export interface OutputDirectoryStatus {
   path: string;
   available: boolean;
@@ -79,6 +87,18 @@ export class SettingsService {
     keys?: Record<string, Record<string, string>>;
   }): Observable<LyricsSettings> {
     return this.http.put<LyricsSettings>(`${API_URL}/api/settings/lyrics`, update);
+  }
+
+  getGoogleTranslateSettings(): Observable<GoogleTranslateSettings> {
+    return this.http.get<GoogleTranslateSettings>(`${API_URL}/api/settings/google-translate`);
+  }
+
+  updateGoogleTranslateApiKey(api_key: string | null): Observable<GoogleTranslateSettings> {
+    return this.http.put<GoogleTranslateSettings>(`${API_URL}/api/settings/google-translate`, { api_key });
+  }
+
+  translateLyrics(texts: string[]): Observable<LyricsTranslationResponse> {
+    return this.http.post<LyricsTranslationResponse>(`${API_URL}/api/lyrics/translate`, { texts });
   }
 
   getSettings(): Observable<AppSettings> {

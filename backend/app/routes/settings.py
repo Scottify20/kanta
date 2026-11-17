@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services import folder_dialog, storage
 from app.services.lyrics_providers import PROVIDERS_BY_ID
@@ -17,12 +17,14 @@ from app.services.settings import (
     get_lyrics_provider_keys,
     get_lyrics_provider_order,
     get_lyrics_providers,
+    get_google_translate_api_key,
     get_model_dir,
     get_output_dirs,
     get_output_mode,
     get_output_quality,
     suggested_output_dir,
     update_lyrics_settings,
+    update_google_translate_api_key,
     update_settings as save_settings,
 )
 
@@ -118,6 +120,10 @@ class LyricsSettingsUpdate(BaseModel):
     keys: Optional[dict[str, dict[str, str]]] = None
 
 
+class GoogleTranslateSettingsUpdate(BaseModel):
+    api_key: Optional[str] = Field(default=None, max_length=1024)
+
+
 @router.get("/lyrics")
 def get_lyrics_settings() -> dict[str, Any]:
     enabled = get_lyrics_providers()
@@ -151,6 +157,20 @@ def update_lyrics(update: LyricsSettingsUpdate) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return get_lyrics_settings()
+
+
+@router.get("/google-translate")
+def get_google_translate_settings() -> dict[str, bool]:
+    return {"api_key_configured": bool(get_google_translate_api_key())}
+
+
+@router.put("/google-translate")
+def update_google_translate_settings(update: GoogleTranslateSettingsUpdate) -> dict[str, bool]:
+    try:
+        configured = update_google_translate_api_key(update.api_key)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Could not save Google Translate API key.") from exc
+    return {"api_key_configured": configured}
 
 
 class PickFolderRequest(BaseModel):

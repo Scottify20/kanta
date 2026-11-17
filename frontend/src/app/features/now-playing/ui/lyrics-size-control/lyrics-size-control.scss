@@ -61,6 +61,63 @@
   }
 }
 
+.lyrics-display-settings {
+  display: grid;
+  gap: 0.7rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+
+  [role='group'] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  button {
+    padding: 0.5rem 0.2rem;
+    border: 0;
+    border-radius: 0.35rem;
+    color: rgba(255, 255, 255, 0.7);
+    background: transparent;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+
+    &:hover { background: rgba(255, 255, 255, 0.1); }
+    &.active { color: #fff; background: rgba(255, 255, 255, 0.16); }
+    &:focus-visible { outline: 1px solid var(--color-accent, #fff); }
+  }
+}
+
+.google-translate-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.75rem;
+}
+
+.translation-status,
+.translation-warning {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.75rem;
+}
+
+.translation-warning {
+  color: #ffd37a;
+}
+
+.translation-settings-link {
+  justify-self: start;
+  color: #fff;
+  font-size: 0.75rem;
+}
+
 .color-settings {
   display: grid;
   gap: 0.7rem;

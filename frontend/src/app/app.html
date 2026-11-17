@@ -12,7 +12,7 @@
     <app-sidebar />
   </aside>
 
-  <div class="content">
+  <div class="content" #content (scroll)="onContentScroll($event)">
     <app-now-playing [active]="playerVisible()" [style.display]="playerVisible() ? 'block' : 'none'" />
     <router-outlet></router-outlet>
   </div>

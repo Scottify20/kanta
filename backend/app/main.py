@@ -15,6 +15,7 @@ import httpx
 from app.tasks import tasks_db, TaskCancelledException
 from app.routes.artists import router as artists_router
 from app.routes.logs import router as logs_router
+from app.routes.lyrics import router as lyrics_router
 from app.routes.playlists import router as playlists_router
 from app.routes.queue import router as queue_router, search_router, songs_router
 from app.routes.setup import router as setup_router
@@ -89,6 +90,7 @@ app.mount(
     name="separated",
 )
 app.include_router(logs_router)
+app.include_router(lyrics_router)
 app.include_router(queue_router)
 app.include_router(songs_router)
 app.include_router(settings_router)

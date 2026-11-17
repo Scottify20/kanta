@@ -186,6 +186,22 @@ def get_lyrics_provider_keys() -> dict[str, dict[str, str]]:
     return stored if isinstance(stored, dict) else {}
 
 
+def get_google_translate_api_key() -> str | None:
+    value = _read_settings().get("google_translate_api_key")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def update_google_translate_api_key(api_key: str | None) -> bool:
+    settings = dict(_read_settings())
+    value = api_key.strip() if api_key else ""
+    if value:
+        settings["google_translate_api_key"] = value
+    else:
+        settings.pop("google_translate_api_key", None)
+    _write_settings(settings)
+    return bool(value)
+
+
 def get_lyrics_auto_fetch() -> bool:
     return _read_settings().get("lyrics_auto_fetch") is not False
 
