@@ -76,7 +76,11 @@
             (contextmenu)="!isUpload(item) && actions.openAt($event)"
             (keydown.enter)="selectTrack(item)"
           >
-            <app-queue-track-summary [item]="item" />
+            <app-queue-track-summary
+              [item]="item"
+              [duetPrompt]="duetAssignmentTaskId() === item.task_id"
+              (duetPromptHandled)="clearDuetAssignmentPrompt(item.task_id)"
+            />
             <app-queue-item-actions #actions
               [item]="item"
               queue="karaoke_queue"

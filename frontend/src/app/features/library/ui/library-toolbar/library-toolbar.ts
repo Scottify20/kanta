@@ -1,9 +1,10 @@
-import { Component, computed, model, output } from '@angular/core';
+import { Component, computed, inject, model, output } from '@angular/core';
 import { LucideChevronDown, LucideLayoutGrid, LucideList, LucidePlus } from '@lucide/angular';
 
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { LibraryTab, LyricsFilter, SORT_LABELS, SORT_MODES, SortMode } from '../../data/library-entries';
+import { PartySessionService, UserProfile } from '../../../../shared/services/party-session.service';
 
 @Component({
   selector: 'app-library-toolbar',
@@ -12,6 +13,7 @@ import { LibraryTab, LyricsFilter, SORT_LABELS, SORT_MODES, SortMode } from '../
   styleUrl: './library-toolbar.scss',
 })
 export class LibraryToolbar {
+  readonly party = inject(PartySessionService, { optional: true });
   readonly tab = model.required<LibraryTab>();
   readonly sort = model.required<SortMode>();
   readonly layout = model.required<'grid' | 'list'>();
@@ -39,6 +41,20 @@ export class LibraryToolbar {
   readonly filterLabel = computed(() =>
     this.lyricsFilters.find((option) => option.value === this.lyricsFilter())?.label ?? 'All songs',
   );
+  readonly fitSinger = computed(() => this.party?.activeSinger() ?? null);
+  readonly fitProfiles = computed(() => {
+    const roster = this.party?.roster() ?? [];
+    const ids = new Set(roster.map((profile) => profile.id));
+    return [...roster, ...(this.party?.savedProfiles() ?? []).filter((profile) => !ids.has(profile.id))];
+  });
+
+  selectSinger(profile: UserProfile | null): void {
+    if (!profile || !this.party) return;
+    if (!this.party.roster().some((singer) => singer.id === profile.id)) {
+      this.party.addSavedProfile(profile.id);
+    }
+    this.party.setActiveSinger(profile.id);
+  }
 
   selectFilter(value: LyricsFilter): void {
     this.lyricsFilter.set(this.lyricsFilter() === value ? 'all' : value);

@@ -9,7 +9,6 @@
       type="button"
       aria-label="Open menu"
       appTooltip="Menu" tooltipPosition="below"
-      title="Menu"
       [attr.aria-expanded]="layout.sidebarOpen()"
       (click)="layout.toggleSidebar()"
     >
@@ -17,22 +16,20 @@
     </button>
     <app-search-bar class="topbar-search" />
 
-    <!-- Queue Preview/ Playing Next -->
-    <nav class="next-tracks" aria-label="Queue preview">
-      @for (item of queuePreview(); track item.task_id) {
-        <span
-          ><strong>{{ item.raw_title || item.title }}</strong
-          ><small>{{ item.raw_artist || item.artist }}</small></span
-        >
-      }
-    </nav>
+    @defer (on idle) {
+      <app-party-header-strip
+        [queuePreview]="queuePreview()"
+        [playing]="audioPlayer.isPlaying()"
+        [currentTime]="audioPlayer.currentTime()"
+        [duration]="audioPlayer.duration()"
+      />
+    }
 
     <button
       class="circle-button queue-toggle"
       type="button"
       aria-label="Toggle queue"
       appTooltip="Queue" tooltipPosition="below"
-      title="Queue"
       [attr.aria-expanded]="layout.queueOpen()"
       (click)="layout.toggleQueue()"
     >
@@ -54,6 +51,7 @@
       [playing]="audioPlayer.isPlaying()"
       [fullscreen]="isFullScreen()"
       [collapsed]="trackAreaCollapsed()"
+      [effectiveSemitones]="audioPlayer.effectiveSemitones()"
       (lyricClick)="onLyricClick($event)"
     />
 
@@ -226,6 +224,15 @@
             />
           }
           <app-stem-volume-control />
+          @defer (on idle) {
+            <app-key-adjustment-control
+              [song]="currentSong()"
+            />
+          } @placeholder {
+            <button class="circle-button key-trigger-placeholder" type="button" aria-label="Adjust Key" title="Adjust Key">
+              <span aria-hidden="true">♭/♯</span>
+            </button>
+          }
           <button
             class="circle-button"
             type="button"

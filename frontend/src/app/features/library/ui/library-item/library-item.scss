@@ -121,6 +121,30 @@
   }
 }
 
+.fit-pill {
+  flex-shrink: 0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.62rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.fit-natural {
+    color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.12);
+  }
+  &.fit-adjusted {
+    color: #bae6fd;
+    background: rgba(14, 165, 233, 0.12);
+  }
+  &.fit-reach {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.12);
+  }
+}
+
 .text {
   display: grid;
   gap: 0.15rem;

@@ -1,16 +1,21 @@
 :host {
+  position: sticky;
+  top: 5rem;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  padding:.55rem 0;
 }
 
 .tabs {
   display: inline-flex;
   padding: 0.25rem;
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
-  background: var(--surface-hover);
+  background: transparent;
 
   button {
     padding: 0.5rem 1.25rem;
@@ -48,10 +53,11 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 1rem;
-  border: 0;
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
   color: #fff;
-  background: var(--surface-hover);
+  background: rgba(12,14,18,.38);
+  backdrop-filter: blur(12px);
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
@@ -66,6 +72,13 @@
   color: #1e1e1e;
   background: #fff;
 }
+
+.fit-profile { max-width:13rem; }
+.fit-profile > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fit-profile-list button { display:flex; align-items:center; gap:.5rem; }
+.fit-profile-list i { display:grid; place-items:center; flex:none; width:1.55rem; height:1.55rem; border-radius:50%; color:#fff; font-size:.62rem; font-style:normal; font-weight:700; }
+.fit-profile-list span { flex:1; }
+.fit-profile-list small { color:rgba(255,255,255,.55); font-size:.66rem; white-space:nowrap; }
 
 .sort-list {
   display: grid;
@@ -94,8 +107,9 @@
 .layout-toggle {
   display: inline-flex;
   padding: 0.2rem;
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
-  background: var(--surface-hover);
+  background: transparent;
 }
 
 .icon {

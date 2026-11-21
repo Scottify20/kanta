@@ -1,0 +1,47 @@
+<div class="analysis-options">
+  <label class="analysis-option">
+    <input type="checkbox" [checked]="options().vocal_range" [disabled]="running() || starting()" (change)="setOption('vocal_range', $any($event.target).checked)" />
+    <span><strong>Vocal pitch range from vocal stems</strong><small>Find each song's lowest and highest vocal notes.</small></span>
+  </label>
+  <label class="analysis-option">
+    <input type="checkbox" [checked]="options().musical_key" [disabled]="running() || starting()" (change)="setOption('musical_key', $any($event.target).checked)" />
+    <span><strong>Musical key</strong><small>Estimate the song's key from master or instrumental audio.</small></span>
+  </label>
+  <label class="analysis-option">
+    <input type="checkbox" [checked]="options().bpm" [disabled]="running() || starting()" (change)="setOption('bpm', $any($event.target).checked)" />
+    <span><strong>BPM</strong><small>Estimate the song's tempo from master or instrumental audio.</small></span>
+  </label>
+  <label class="analysis-option">
+    <input type="checkbox" [checked]="options().replaygain" [disabled]="running() || starting()" (change)="setOption('replaygain', $any($event.target).checked)" />
+    <span><strong>ReplayGain</strong><small>Measure loudness from the master audio.</small></span>
+  </label>
+</div>
+
+<label class="missing-only">
+  <input class="switch" type="checkbox" role="switch" [checked]="options().missing_only" [disabled]="running() || starting()" (change)="setOption('missing_only', $any($event.target).checked)" />
+  <span><strong>Missing songs only (recommended)</strong><small>Turn off to overwrite existing analysis results.</small></span>
+</label>
+
+<div class="analysis-actions">
+  <button class="analysis-button primary" type="button" [disabled]="!canStart()" (click)="start()">
+    {{ starting() ? 'Starting…' : running() ? 'Analysis running' : 'Start analysis' }}
+  </button>
+  @if (running()) {
+    <button class="analysis-button" type="button" [disabled]="cancelling()" (click)="cancel()">
+      {{ cancelling() ? 'Cancelling…' : 'Cancel' }}
+    </button>
+  }
+</div>
+
+@if (task(); as currentTask) {
+  <section class="task-progress" aria-live="polite">
+    <div class="progress-heading"><strong>{{ currentTask.status | titlecase }}</strong><span>{{ currentTask.progress }}%</span></div>
+    <progress [value]="currentTask.progress" max="100" aria-label="Library analysis progress"></progress>
+    <p>{{ currentTask.step }}</p>
+    @if (currentTask.total !== undefined) {
+      <small>{{ currentTask.processed ?? 0 }} / {{ currentTask.total }} songs · {{ currentTask.analyzed ?? 0 }} analyzed · {{ currentTask.skipped ?? 0 }} skipped</small>
+    }
+  </section>
+}
+
+@if (error()) { <p class="analysis-error" role="alert">{{ error() }}</p> }

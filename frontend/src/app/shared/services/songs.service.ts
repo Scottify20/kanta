@@ -1,7 +1,7 @@
 import type { QueueItem } from '../../features/queue/interfaces/queue.models';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 
 import { API_URL } from '../../app.config';
 
@@ -21,7 +21,51 @@ export interface SongFile {
   level?: LyricsLevel;
 }
 
-export type SongMetadataUpdate = Partial<Omit<SongManifest, 'stems' | 'lyrics' | 'covers' | 'master' | 'duration_seconds' | 'date_added' | 'max_offset_ms' | 'replaygain_track_gain' | 'replaygain_track_peak' | 'replaygain_album_gain' | 'replaygain_album_peak'>> & {
+export interface BatchSongAnalysisOptions {
+  vocal_range: boolean;
+  musical_key: boolean;
+  bpm: boolean;
+  replaygain: boolean;
+  missing_only: boolean;
+}
+
+export interface AnalysisTaskStatus {
+  task_id: string;
+  status: string;
+  progress: number;
+  step: string;
+  total?: number;
+  processed?: number;
+  analyzed?: number;
+  skipped?: number;
+  error?: string;
+}
+
+export type SongMetadataUpdate = Partial<
+  Omit<
+    SongManifest,
+    | 'stems'
+    | 'lyrics'
+    | 'covers'
+    | 'master'
+    | 'duration_seconds'
+    | 'date_added'
+    | 'max_offset_ms'
+    | 'vocal_min_hz'
+    | 'vocal_max_hz'
+    | 'vocal_min_note'
+    | 'vocal_max_note'
+    | 'vocal_tessitura_min_hz'
+    | 'vocal_tessitura_max_hz'
+    | 'vocal_tessitura_min_note'
+    | 'vocal_tessitura_max_note'
+    | 'vocal_voice_type'
+    | 'replaygain_track_gain'
+    | 'replaygain_track_peak'
+    | 'replaygain_album_gain'
+    | 'replaygain_album_peak'
+  >
+> & {
   replaygain_track_gain?: string | number | null;
   replaygain_track_peak?: string | number | null;
   replaygain_album_gain?: string | number | null;
@@ -50,6 +94,7 @@ export interface SongManifest {
   comment?: string | null;
   composer?: string | null;
   bpm?: number | null;
+  musical_key?: string | null;
   replaygain_track_gain?: string | number | null;
   replaygain_track_peak?: string | number | null;
   replaygain_album_gain?: string | number | null;
@@ -57,16 +102,33 @@ export interface SongManifest {
   duration_seconds?: number | null;
   date_added?: string | null;
   max_offset_ms?: number | null;
+  vocal_min_hz?: number | null;
+  vocal_max_hz?: number | null;
+  vocal_min_note?: string | null;
+  vocal_max_note?: string | null;
+  vocal_tessitura_min_hz?: number | null;
+  vocal_tessitura_max_hz?: number | null;
+  vocal_tessitura_min_note?: string | null;
+  vocal_tessitura_max_note?: string | null;
+  vocal_voice_type?: 'Bass' | 'Baritone' | 'Tenor' | 'Alto' | 'Mezzo-Soprano' | 'Soprano' | null;
 }
 
 // Folder keys are sanitized; these return the real tag values for display.
 export const songTitle = (song: SongManifest): string => song.display_title || song.title;
 export const songArtist = (song: SongManifest): string => song.display_artist || song.artist;
 export const songAlbum = (song: SongManifest): string => song.display_album || song.album;
+export const hasVocalRange = (
+  song: Pick<SongManifest, 'vocal_min_hz' | 'vocal_max_hz'>,
+): boolean =>
+  Number.isFinite(song.vocal_min_hz) && Number.isFinite(song.vocal_max_hz);
+export const hasVocalStem = (song: Pick<SongManifest, 'stems'>): boolean =>
+  song.stems.some((stem) => /\(Vocals\)\.[a-z0-9]+$/i.test(stem.name));
 
 @Injectable({ providedIn: 'root' })
 export class SongsService {
   private readonly http = inject(HttpClient);
+  private readonly vocalRangeRequests = new Map<string, Promise<SongManifest | null>>();
+  private readonly vocalRangeAttempts = new Set<string>();
   readonly selectedSong = signal<SongManifest | null>(null);
   readonly selectedSongQueueTaskId = signal<string | null>(null);
   readonly playRequested = signal(false);
@@ -101,6 +163,59 @@ export class SongsService {
   getManifest(artist: string, album: string, title: string): Observable<SongManifest> {
     return this.http.get<SongManifest>(
       `${API_URL}/api/songs/${encodeURIComponent(artist)}/${encodeURIComponent(album)}/${encodeURIComponent(title)}`,
+    );
+  }
+
+  analyzeSongVocalRange(song: SongManifest, force = false): Promise<SongManifest | null> {
+    const key = `${song.artist}\u0000${song.album}\u0000${song.title}`;
+    if (hasVocalRange(song) && !force) return Promise.resolve(song);
+    if (this.vocalRangeAttempts.has(key) && !force) return Promise.resolve(null);
+    const pending = this.vocalRangeRequests.get(key);
+    if (pending) return pending;
+
+    const request = firstValueFrom(this.http.post<{ song: SongManifest }>(
+      `${this.songUrl(song)}/vocal-range/analyze`,
+      { vocal_range: true, replaygain: false },
+    )).then(({ song: updated }) => {
+      this.vocalRangeAttempts.add(key);
+      this.currentSong.update((current) =>
+        current && songIdentity(current) === key ? updated : current,
+      );
+      return updated;
+    }).finally(() => {
+      this.vocalRangeRequests.delete(key);
+    });
+    this.vocalRangeRequests.set(key, request);
+    return request;
+  }
+
+  analyzeSongMusicalKey(song: SongManifest): Promise<SongManifest> {
+    return firstValueFrom(this.http.post<{ song: SongManifest }>(
+      `${this.songUrl(song)}/vocal-range/analyze`,
+      { vocal_range: false, musical_key: true, bpm: false, replaygain: false },
+    )).then(({ song: updated }) => {
+      this.currentSong.update((current) =>
+        current && songIdentity(current) === songIdentity(song) ? updated : current,
+      );
+      return updated;
+    });
+  }
+
+  startLibraryReanalysis(options: BatchSongAnalysisOptions): Observable<{ task_id: string; status: string }> {
+    return this.http.post<{ task_id: string; status: string }>(
+      `${API_URL}/api/songs/reanalyze`,
+      options,
+    );
+  }
+
+  getAnalysisTaskStatus(taskId: string): Observable<AnalysisTaskStatus> {
+    return this.http.get<AnalysisTaskStatus>(`${API_URL}/api/status/${encodeURIComponent(taskId)}`);
+  }
+
+  cancelAnalysisTask(taskId: string): Observable<{ task_id?: string; status: string; message?: string }> {
+    return this.http.post<{ task_id?: string; status: string; message?: string }>(
+      `${API_URL}/api/cancel/${encodeURIComponent(taskId)}`,
+      {},
     );
   }
 
@@ -198,3 +313,6 @@ export class SongsService {
     return `${API_URL}/api/songs/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.album)}/${encodeURIComponent(song.title)}`;
   }
 }
+
+const songIdentity = (song: Pick<SongManifest, 'artist' | 'album' | 'title'>): string =>
+  `${song.artist}\u0000${song.album}\u0000${song.title}`;

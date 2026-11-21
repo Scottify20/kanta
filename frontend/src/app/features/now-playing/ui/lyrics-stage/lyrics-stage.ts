@@ -24,6 +24,7 @@ export class LyricsStage {
   readonly playing = input(false);
   readonly fullscreen = input(false);
   readonly collapsed = input(false);
+  readonly effectiveSemitones = input(0);
   readonly compact = input(false);
   readonly songKey = input('');
   readonly lyricsKey = computed(

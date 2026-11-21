@@ -1,0 +1,44 @@
+:host { display:grid; gap:1.15rem; min-width:0; color:rgba(255,255,255,.9); }
+.profile-actions,.guest-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.profile-actions p,.guest-heading p { margin:.25rem 0 0; color:rgba(255,255,255,.55); font-size:.78rem; line-height:1.45; }
+.profile-list { display:grid; gap:.65rem; }
+.profile-card { display:flex; align-items:flex-start; gap:.75rem; min-width:0; padding:.85rem; border:1px solid rgba(255,255,255,.09); border-radius:.9rem; background:rgba(255,255,255,.035); }
+.profile-avatar { display:grid; place-items:center; flex:none; width:2.5rem; height:2.5rem; overflow:hidden; border-radius:50%; color:#fff; font-size:.72rem; font-weight:700; box-shadow:inset 0 0 0 1px rgba(255,255,255,.2); }
+.profile-avatar img { width:100%; height:100%; object-fit:cover; }
+.profile-avatar.small { width:1.9rem; height:1.9rem; font-size:.63rem; }
+.profile-details { display:grid; flex:1; min-width:0; gap:.22rem; padding-top:.15rem; }
+.profile-details strong,.guest-heading strong { color:#fff; font-size:.85rem; font-weight:620; }
+.profile-details span,.guest-row { color:rgba(255,255,255,.58); font-size:.75rem; }
+.profile-buttons { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:.4rem; }
+.profile-edit { display:grid; flex:1; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; }
+.profile-edit label { display:grid; gap:.35rem; color:rgba(255,255,255,.63); font-size:.69rem; }
+.profile-edit input:not([type=color]),.profile-edit select { width:100%; min-width:0; box-sizing:border-box; padding:.52rem .6rem; border:1px solid rgba(255,255,255,.12); border-radius:.55rem; color:#fff; background:rgba(0,0,0,.2); font:inherit; font-size:.76rem; }
+.profile-edit select option { color:#fff; background:#25292c; }
+.profile-edit .color-field { grid-template-columns:1fr auto; align-items:center; }
+.profile-edit .photo-field { grid-column:1/-1; }
+.profile-edit .photo-field input { width:100%; }
+.profile-edit input[type=color] { width:2.5rem; height:2rem; padding:.15rem; border:1px solid rgba(255,255,255,.15); border-radius:.45rem; background:transparent; }
+.profile-color-presets { display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; }
+.profile-color-presets button { width:1.15rem; height:1.15rem; padding:0; border:2px solid rgba(255,255,255,.28); border-radius:50%; cursor:pointer; }
+.profile-color-presets button.selected { outline:2px solid #fff; outline-offset:2px; }
+.profile-edit .profile-buttons { grid-column:1/-1; }
+.profile-button { display:inline-flex; align-items:center; justify-content:center; min-height:2rem; padding:.35rem .65rem; border:1px solid rgba(255,255,255,.12); border-radius:.55rem; color:rgba(255,255,255,.83); background:rgba(255,255,255,.06); font:inherit; font-size:.7rem; cursor:pointer; }
+.profile-button:hover { background:rgba(255,255,255,.12); }
+.profile-button.primary { border-color:transparent; color:#25211f; background:#f0ae94; font-weight:650; }
+.profile-button.danger { color:#ffd0c0; }
+.guest-section { display:grid; gap:.65rem; padding:1rem; border:1px solid rgba(255,255,255,.08); border-radius:.9rem; background:rgba(255,255,255,.025); }
+.guest-row { display:flex; align-items:center; gap:.65rem; }
+.guest-row > span:nth-child(2) { flex:1; }
+.empty-state { margin:0; color:rgba(255,255,255,.45); font-size:.75rem; }
+.auto-adjust { display:flex; align-items:center; gap:.75rem; padding:.8rem; border:1px solid rgba(255,255,255,.08); border-radius:.8rem; background:rgba(255,255,255,.025); cursor:pointer; }
+.auto-adjust span { display:grid; gap:.2rem; }
+.auto-adjust strong { color:rgba(255,255,255,.88); font-size:.77rem; font-weight:600; }
+.auto-adjust small { color:rgba(255,255,255,.49); font-size:.69rem; }
+.profile-error { margin:0; color:#ffb8a5; font-size:.78rem; }
+@media(max-width:650px) {
+  .profile-actions,.guest-heading { align-items:flex-start; flex-direction:column; }
+  .profile-card { flex-wrap:wrap; }
+  .profile-details { flex-basis:calc(100% - 3.5rem); }
+  .profile-card > .profile-buttons { width:100%; justify-content:flex-start; }
+  .profile-edit { flex-basis:calc(100% - 3.5rem); }
+}

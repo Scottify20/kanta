@@ -1,0 +1,109 @@
+<div class="queue-party-controls" [style.--singer-color]="primarySinger()?.accentColor ?? 'transparent'">
+  <span class="assignment-accent" aria-hidden="true"></span>
+  <div class="assignment-content">
+    <app-popup-panel [popupId]="popupId()" group="queue-party" placement="above" label="Assign singers">
+      <div class="singer-buttons">
+        <button
+          popup-trigger
+          type="button"
+          class="singer-avatar"
+          [style.background]="primarySinger()?.accentColor ?? '#555'"
+          [attr.aria-label]="'Reassign Part 1 singer for ' + item().raw_title"
+          [title]="primarySinger()?.name ?? 'Assign singer'"
+        >
+          {{ singerInitial(primarySinger()) }}
+        </button>
+        @if (isDuet()) {
+          <button
+            popup-trigger
+            type="button"
+            class="singer-avatar secondary"
+            [style.background]="secondarySinger()?.accentColor ?? '#555'"
+            [attr.aria-label]="'Reassign Part 2 singer for ' + item().raw_title"
+            [title]="secondarySinger()?.name ?? 'Assign second singer'"
+          >
+            {{ singerInitial(secondarySinger()) }}
+          </button>
+        }
+      </div>
+      <section popup-content class="singer-assignment-popover">
+        <div class="singer-slot">
+          <h3>Part 1</h3>
+          <button type="button" class="singer-option unassigned" data-keep-open
+            [class.selected]="assignment().primarySingerId === null"
+            (click)="clearSinger('primary')">
+            No assigned singer
+          </button>
+          @for (singer of party.roster(); track singer.id) {
+            <button
+              type="button"
+              data-keep-open
+              class="singer-option"
+              [class.selected]="assignment().primarySingerId === singer.id"
+              [disabled]="!canAssign(singer, 'primary')"
+              (click)="assignSinger(singer.id, 'primary')"
+            >
+              <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+              <span>{{ singer.name }}</span>
+            </button>
+          }
+          @if (!party.roster().length) {
+            <small>Add a singer from the top bar first.</small>
+          }
+        </div>
+        @if (isDuet()) {
+          <div class="singer-slot">
+            <h3>Part 2</h3>
+            <button type="button" class="singer-option unassigned" data-keep-open
+              [class.selected]="assignment().secondarySingerId === null"
+              (click)="clearSinger('secondary')">
+              Single singer
+            </button>
+            @for (singer of party.roster(); track singer.id) {
+              <button
+                type="button"
+                data-keep-open
+                class="singer-option"
+                [class.selected]="assignment().secondarySingerId === singer.id"
+                [disabled]="!canAssign(singer, 'secondary')"
+                (click)="assignSinger(singer.id, 'secondary')"
+              >
+                <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+                <span>{{ singer.name }}</span>
+              </button>
+            }
+          </div>
+        }
+      </section>
+    </app-popup-panel>
+
+    <div class="queue-fit-row">
+      @if (keyShiftLabel(); as shift) {
+        <span class="key-shift">{{ shift }}</span>
+      }
+      @if (rangeFit(); as fit) {
+        <span class="fit-indicator" [class]="'fit-indicator fit-' + fit" [attr.aria-label]="'Vocal range fit: ' + fit"></span>
+      } @else {
+        <span class="fit-indicator fit-unknown" aria-label="Vocal range not analyzed"></span>
+      }
+    </div>
+  </div>
+
+  @if (recommendation(); as fit) {
+    @if (fit.kind === 'duet' && fit.conflict) {
+      <app-popup-panel [popupId]="'queue-priority:' + item().task_id" group="queue-party" placement="above" [closeOnContentClick]="true" label="Choose whose range takes priority">
+        <button popup-trigger type="button" class="conflict-pill">Vocal Range Conflict</button>
+        <div popup-content class="priority-popover">
+          <strong>Whose range should take priority?</strong>
+          @for (singer of [primarySinger(), secondarySinger()]; track $index) {
+            @if (singer) {
+              <button type="button" [class.selected]="isPriority(singer.id)" (click)="prioritizeSinger(singer.id)">
+                {{ singer.name }}
+              </button>
+            }
+          }
+        </div>
+      </app-popup-panel>
+    }
+  }
+</div>

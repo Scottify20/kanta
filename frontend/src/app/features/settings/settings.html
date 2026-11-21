@@ -12,7 +12,7 @@
 
     <div class="settings-content">
       <app-settings-section title="Playback and Microphone" description="Choose which audio devices Kanta uses for playback and input.">
-        <app-settings-audio-device-controls />
+        <app-settings-audio-device-controls #audioControls />
         <div class="replaygain-controls">
           <label class="replaygain-toggle">
             <input class="switch" type="checkbox" role="switch" [checked]="replayGainEnabled()" (change)="setReplayGainEnabled($any($event.target).checked)" />
@@ -24,6 +24,14 @@
           </div>
           <p class="replaygain-hint">Track mode adjusts each song independently; album mode preserves relative loudness across an album.</p>
         </div>
+      </app-settings-section>
+
+      <app-settings-section title="Singers and Vocal Profiles" description="Manage the singers in your household and tailor key suggestions to each voice.">
+        <app-singer-profiles-panel [microphoneDeviceId]="audioControls.inputId()" />
+      </app-settings-section>
+
+      <app-settings-section title="Audio and Library Analysis" description="Analyze existing processed songs in the background. You can continue using Kanta while the library is scanned.">
+        <app-library-analysis-panel />
       </app-settings-section>
 
       <app-settings-section title="Output Folders" description="Choose where processed songs are saved. Select a default folder for new jobs.">

@@ -23,6 +23,62 @@
           <label>Disc number<input name="disc" type="number" min="1" [ngModel]="draft().disc_number" (ngModelChange)="setNumber('disc_number', $event)" /></label>
           <label>Composer<input name="composer" [ngModel]="draft().composer" (ngModelChange)="setText('composer', $event)" /></label>
           <label>BPM<input name="bpm" type="number" min="1" [ngModel]="draft().bpm" (ngModelChange)="setNumber('bpm', $event)" /></label>
+          <div class="key-field wide" (click)="$event.stopPropagation()">
+            <div class="key-heading">
+              <span class="key-label">Musical key</span>
+              <button
+                class="analyze-stem-button"
+                type="button"
+                [disabled]="saving() || analyzingVocalRange() || analyzingMusicalKey() || !analysisAudioAvailable()"
+                (click)="analyzeMusicalKey()"
+              >
+                {{ analyzingMusicalKey() ? 'Analyzing…' : 'Re-analyze key' }}
+              </button>
+            </div>
+            <div class="key-control">
+              <input name="musicalKey" [ngModel]="draft().musical_key" (ngModelChange)="setText('musical_key', $event)" placeholder="Select or enter a key" />
+              <button class="key-picker-trigger" type="button" aria-label="Choose musical key" [attr.aria-expanded]="keyPickerOpen()" (click)="keyPickerOpen.update((open) => !open)">
+                @if (camelotCode(); as camelot) { <span class="camelot-badge">{{ camelot }}</span> }
+                <svg lucideChevronDown [size]="16"></svg>
+              </button>
+            </div>
+            @if (musicalKeyError()) { <p class="error-message" role="alert">{{ musicalKeyError() }}</p> }
+            @if (keyPickerOpen()) {
+              <section class="key-popover" role="dialog" aria-label="Choose musical key">
+                @for (mode of ['Major', 'Minor']; track mode) {
+                  <h3>{{ mode }}</h3>
+                  <div class="key-options">
+                    @for (option of musicalKeyOptions; track option.key) {
+                      @if (option.mode === mode) {
+                        <button type="button" [class.selected]="draft().musical_key.toLocaleLowerCase() === option.key.toLocaleLowerCase()" [attr.aria-pressed]="draft().musical_key.toLocaleLowerCase() === option.key.toLocaleLowerCase()" (click)="selectMusicalKey(option.key)">
+                          <span>{{ option.key }}</span><small>{{ option.camelot }}</small>
+                        </button>
+                      }
+                    }
+                  </div>
+                }
+                <footer><span>Small code = Camelot wheel</span><button type="button" (click)="selectMusicalKey('')">Clear</button></footer>
+              </section>
+            }
+          </div>
+          <section class="vocal-range-field wide" aria-label="Vocal range">
+            <div class="vocal-range-heading">
+              <div><strong>Vocal range</strong><p>Notes detected from the isolated vocal stem.</p></div>
+              <button class="analyze-stem-button" type="button" [disabled]="saving() || analyzingVocalRange() || analyzingMusicalKey() || !vocalStemAvailable()" (click)="analyzeVocalRange()">
+                <svg lucideMic [size]="16"></svg>{{ analyzingVocalRange() ? 'Analyzing…' : 'Analyze Stem' }}
+              </button>
+            </div>
+            @if (vocalRangeAvailable()) {
+              <div class="vocal-range-values">
+                <span><small>Lowest note</small><strong>{{ manifest()?.vocal_min_note }}</strong></span>
+                <span><small>Highest note</small><strong>{{ manifest()?.vocal_max_note }}</strong></span>
+                <span><small>Detected voice</small><strong>{{ manifest()?.vocal_voice_type || '—' }}</strong></span>
+              </div>
+            } @else {
+              <p class="vocal-range-empty">{{ vocalStemAvailable() ? 'No vocal range has been analyzed yet.' : 'No isolated vocal stem is available for this song.' }}</p>
+            }
+            @if (vocalRangeError()) { <p class="error-message" role="alert">{{ vocalRangeError() }}</p> }
+          </section>
           <label class="wide">Comment<textarea name="comment" rows="3" [ngModel]="draft().comment" (ngModelChange)="setText('comment', $event)"></textarea></label>
         </form>
       } @else if (activeTab() === 'cover') {
@@ -37,8 +93,8 @@
     <footer class="editor-footer">
       <span class="save-hint" role="status">{{ saveStatus() || (dirty() ? 'Unsaved changes' : 'Changes save to your library') }} · Ctrl/⌘ S</span>
       <button class="secondary-button" type="button" (click)="requestClose()">Cancel</button>
-      <button class="primary-button" type="button" [disabled]="saving() || !dirty()" (click)="saveMetadata()">
-        <svg lucideCheck [size]="17"></svg>{{ saving() ? 'Saving…' : 'Save changes' }}
+      <button class="primary-button" type="button" [disabled]="saving() || analyzingVocalRange() || !dirty()" (click)="saveMetadata()">
+        <svg lucideCheck [size]="17"></svg>{{ saving() ? 'Saving…' : analyzingVocalRange() ? 'Analyzing…' : 'Save changes' }}
       </button>
     </footer>
   </section>

@@ -23,6 +23,10 @@ select option { color: #fff; background: #25292c; }
 .monitor-toggle { display: flex; align-items: center; gap: .75rem; color: rgba(255,255,255,.8); font-size: .85rem; cursor: pointer; }
 .monitor-toggle svg { color: rgba(255,255,255,.5); }
 .feedback-warning { margin: 0; color: #e6c184; font-size: .8rem; line-height: 1.45; }
+.range-calibration { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border: 1px solid rgba(255,255,255,.09); border-radius: 1rem; background: rgba(255,255,255,.03); }
+.range-calibration strong { color: #fff; font-size: .9rem; font-weight: 600; }
+.range-calibration p { margin: .25rem 0 0; color: rgba(255,255,255,.55); font-size: .78rem; line-height: 1.4; }
+.range-profile { display: inline-flex; margin-top: .55rem; padding: .3rem .6rem; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; color: rgba(255,255,255,.78); background: rgba(255,255,255,.06); font-size: .72rem; }
 @media (max-width: 560px) { .devices-grid { grid-template-columns: 1fr; } .test-heading { align-items: flex-start; } }
 
 .link-button {

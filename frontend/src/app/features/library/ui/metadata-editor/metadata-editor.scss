@@ -16,6 +16,36 @@
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem .85rem; }
 .field-grid label { display:grid; gap:.45rem; color:rgba(255,255,255,.68); font-size:.75rem; }
 .field-grid label.wide { grid-column:1/-1; }
+.key-field { position:relative; display:grid; gap:.45rem; color:rgba(255,255,255,.68); font-size:.75rem; }
+.key-heading { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.key-heading .analyze-stem-button { min-height:1.9rem; padding:0 .6rem; font-size:.67rem; }
+.key-control { display:flex; min-width:0; }
+.key-control input { min-width:0; border-radius:var(--radius-md) 0 0 var(--radius-md); }
+.key-picker-trigger { display:flex; align-items:center; justify-content:center; gap:.5rem; min-width:5.7rem; padding:0 .65rem; border:1px solid rgba(255,255,255,.12); border-left:0; border-radius:0 var(--radius-md) var(--radius-md) 0; color:#fff; background:rgba(255,255,255,.055); cursor:pointer; }
+.camelot-badge { padding:.23rem .55rem; border-radius:999px; color:#fff; background:#725cff; font-size:.7rem; font-weight:650; }
+.key-popover { position:absolute; z-index:5; top:calc(100% + .45rem); right:0; width:min(25rem,calc(100vw - 3rem)); box-sizing:border-box; padding:.9rem; border:1px solid rgba(255,255,255,.14); border-radius:var(--radius-lg); background:rgba(28,31,34,.98); box-shadow:var(--shadow-popup); }
+.key-popover h3 { margin:.1rem 0 .45rem; color:rgba(255,255,255,.66); font-size:.74rem; font-weight:650; }
+.key-popover h3:not(:first-child) { margin-top:.8rem; }
+.key-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.35rem; }
+.key-options button { display:grid; gap:.15rem; min-width:0; padding:.45rem .25rem; border:1px solid rgba(255,255,255,.08); border-radius:var(--radius-sm); color:#fff; background:rgba(255,255,255,.035); cursor:pointer; }
+.key-options button:hover { background:rgba(255,255,255,.11); }
+.key-options button.selected { border-color:transparent; background:#725cff; }
+.key-options button span { font-size:.78rem; font-weight:650; }
+.key-options button small { color:rgba(255,255,255,.6); font-size:.65rem; font-weight:600; }
+.key-options button.selected small { color:rgba(255,255,255,.76); }
+.key-popover footer { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-top:.75rem; color:rgba(255,255,255,.55); font-size:.68rem; }
+.key-popover footer button { padding:.25rem .4rem; border:0; color:rgba(255,255,255,.9); background:transparent; font:inherit; font-weight:650; cursor:pointer; }
+.vocal-range-field { display:grid; gap:.9rem; padding:1rem; border:1px solid rgba(255,255,255,.1); border-radius:var(--radius-lg); background:rgba(255,255,255,.035); }
+.vocal-range-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.vocal-range-heading strong { color:#fff; font-size:.85rem; font-weight:650; }
+.vocal-range-heading p,.vocal-range-empty { margin:.25rem 0 0; color:rgba(255,255,255,.52); font-size:.74rem; }
+.analyze-stem-button { display:inline-flex; align-items:center; justify-content:center; gap:.45rem; flex:none; min-height:2.35rem; padding:0 .8rem; border:1px solid rgba(255,255,255,.12); border-radius:var(--radius-md); color:#fff; background:rgba(255,255,255,.08); font:inherit; font-size:.75rem; cursor:pointer; }
+.analyze-stem-button:hover:not(:disabled) { background:rgba(255,255,255,.14); }
+.analyze-stem-button:disabled { opacity:.45; cursor:not-allowed; }
+.vocal-range-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; }
+.vocal-range-values span { display:grid; gap:.2rem; padding:.65rem .75rem; border-radius:var(--radius-md); background:rgba(255,255,255,.045); }
+.vocal-range-values small { color:rgba(255,255,255,.5); font-size:.65rem; }
+.vocal-range-values strong { color:rgba(255,255,255,.9); font-size:.82rem; font-weight:600; }
 .field-grid input,.field-grid textarea { width:100%; box-sizing:border-box; padding:.72rem .8rem; border:1px solid rgba(255,255,255,.12); border-radius:var(--radius-md); outline:none; color:#fff; background:rgba(255,255,255,.055); font:inherit; font-size:.86rem; transition:border-color var(--motion-fast),background var(--motion-fast); }
 .field-grid input:focus,.field-grid textarea:focus { border-color:rgba(243,173,145,.75); background:rgba(255,255,255,.09); }
 .field-grid textarea { resize:vertical; }

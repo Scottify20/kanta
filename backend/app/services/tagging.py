@@ -15,6 +15,7 @@ from mutagen.id3 import (
     TCOM,
     TCON,
     TDRC,
+    TKEY,
     TIT2,
     TPE1,
     TPE2,
@@ -35,6 +36,7 @@ EXTENDED_FIELDS = (
     "comment",
     "composer",
     "bpm",
+    "musical_key",
     "replaygain_track_gain",
     "replaygain_track_peak",
     "replaygain_album_gain",
@@ -50,6 +52,7 @@ _ID3_FRAMES = {
     "disc_number": TPOS,
     "composer": TCOM,
     "bpm": TBPM,
+    "musical_key": TKEY,
 }
 _VORBIS_KEYS = {
     "album_artist": "albumartist",
@@ -60,6 +63,7 @@ _VORBIS_KEYS = {
     "comment": "comment",
     "composer": "composer",
     "bpm": "bpm",
+    "musical_key": "initialkey",
     "replaygain_track_gain": "replaygain_track_gain",
     "replaygain_track_peak": "replaygain_track_peak",
     "replaygain_album_gain": "replaygain_album_gain",
@@ -105,6 +109,8 @@ def read_tags(path: Path) -> dict[str, Any]:
             audio = FLAC(path)
             for field, key in _VORBIS_KEYS.items():
                 values = audio.get(key)
+                if field == "musical_key" and not values:
+                    values = audio.get("key")
                 if values:
                     result[field] = _normalize(field, values[0])
         else:
@@ -113,6 +119,11 @@ def read_tags(path: Path) -> dict[str, Any]:
                 frame = tags.get(frame_cls.__name__)
                 if frame is not None and frame.text:
                     result[field] = _normalize(field, str(frame.text[0]))
+            if result["musical_key"] is None:
+                for frame in tags.getall("TXXX"):
+                    if frame.desc.casefold() in {"key", "initialkey", "musicalkey"} and frame.text:
+                        result["musical_key"] = _normalize("musical_key", frame.text[0])
+                        break
             comments = tags.getall("COMM")
             if comments and comments[0].text:
                 result["comment"] = _normalize("comment", comments[0].text[0])
@@ -181,6 +192,13 @@ def _write_id3(path: Path, updates: dict[str, Any]) -> None:
             if value is not None:
                 frame_cls = _SIMPLE_FRAMES[field]
                 tags.setall(frame_cls.__name__, [frame_cls(encoding=3, text=[str(value)])])
+        elif field == "musical_key":
+            tags.delall("TKEY")
+            for frame in list(tags.getall("TXXX")):
+                if frame.desc.casefold() in {"key", "initialkey", "musicalkey"}:
+                    tags.delall(frame.HashKey)
+            if value is not None:
+                tags.add(TKEY(encoding=3, text=[str(value)]))
         elif field in _ID3_FRAMES:
             frame_cls = _ID3_FRAMES[field]
             tags.delall(frame_cls.__name__)

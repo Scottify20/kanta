@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
-from mutagen.id3 import ID3, TIT2, TPE1, TALB
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TXXX
 
 from app.routes import queue
 from app.services.tagging import read_tags, get_basic_tag
@@ -29,6 +29,20 @@ def make_song(root: Path, artist: str, album: str, title: str) -> Path:
 
 
 class MetadataEditTests(unittest.TestCase):
+    def test_reads_and_edits_musical_key_tags(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "key.mp3"
+            tags = ID3()
+            tags.add(TXXX(encoding=3, desc="INITIALKEY", text=["F"]))
+            tags.save(path)
+
+            self.assertEqual(read_tags(path)["musical_key"], "F")
+            queue.write_tags(path, {"musical_key": "F#"})
+            updated = ID3(path)
+            self.assertEqual(updated.get("TKEY").text[0], "F#")
+            self.assertFalse(updated.getall("TXXX"))
+            self.assertEqual(read_tags(path)["musical_key"], "F#")
+
     def test_move_reuses_album_and_removes_only_empty_old_parents(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -88,6 +102,16 @@ class MetadataEditTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required")
 class MetadataEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_flac_musical_key_round_trip(self):
+        with tempfile.TemporaryDirectory() as temp:
+            audio = Path(temp) / "key.flac"
+            run_ffmpeg(["-v", "error", "-f", "lavfi", "-i", "sine=duration=0.1",
+                        "-c:a", "flac", "-y", str(audio)])
+
+            queue.write_tags(audio, {"musical_key": "C#m"})
+
+            self.assertEqual(read_tags(audio)["musical_key"], "C#m")
+
     async def test_saved_metadata_is_returned_and_read_from_the_moved_song(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -111,11 +135,13 @@ class MetadataEndpointTests(unittest.IsolatedAsyncioTestCase):
                 result = await queue.update_song_metadata(
                     SimpleNamespace(base_url="http://localhost/"), "Artist", "Album", "Song",
                     queue.SongMetadataRequest(artist="New Artist", album="New Album",
-                                              title="New:Title", genre="Pop", replaygain_track_gain=-4.5),
+                                              title="New:Title", genre="Pop", musical_key="F",
+                                              replaygain_track_gain=-4.5),
                 )
             self.assertEqual(result["title"], "New_Title")
             self.assertEqual(result["display_title"], "New:Title")
             self.assertEqual(result["genre"], "Pop")
+            self.assertEqual(result["musical_key"], "F")
             self.assertEqual(result["replaygain_track_gain"], -4.5)
             self.assertFalse(old.exists())
             self.assertFalse((root / "Artist").exists())

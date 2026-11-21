@@ -1,10 +1,11 @@
 import { Component, input, output } from '@angular/core';
 import { LucideRotateCcw, LucideTimer } from '@lucide/angular';
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
+import { Tooltip } from '../../../../shared/directives/tooltip';
 
 @Component({
   selector: 'app-lyrics-timing-control',
-  imports: [PopupPanel, LucideRotateCcw, LucideTimer],
+  imports: [PopupPanel, Tooltip, LucideRotateCcw, LucideTimer],
   templateUrl: './lyrics-timing-control.html',
   styleUrl: './lyrics-timing-control.scss',
 })

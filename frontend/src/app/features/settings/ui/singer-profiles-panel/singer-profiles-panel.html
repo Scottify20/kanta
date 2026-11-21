@@ -1,0 +1,89 @@
+<div class="profile-actions">
+  <p>Saved singers are available in every party session. Quick guests stay on this device until saved.</p>
+  <button class="profile-button primary" type="button" (click)="startAdding()">+ Add Singer</button>
+</div>
+
+<div class="profile-list">
+  @for (profile of party.savedProfiles(); track profile.id) {
+    <article class="profile-card">
+      <span class="profile-avatar" [style.background]="profile.accentColor">
+        @if (profile.avatar) { <img [src]="profile.avatar" alt="" /> }
+        @else { {{ profile.initials }} }
+      </span>
+      @if (editingProfileId() === profile.id) {
+        <div class="profile-edit">
+          <label>Name<input [ngModel]="editName()" (ngModelChange)="editName.set($event)" maxlength="40" /></label>
+          <label>Voice preset
+            <select [ngModel]="editVoiceType()" (ngModelChange)="setVoiceType($event)">
+              @for (voiceType of voiceTypes; track voiceType) { <option [value]="voiceType">{{ voiceType }}</option> }
+            </select>
+          </label>
+          <label class="color-field">Accent color<input type="color" [ngModel]="editColor()" (ngModelChange)="editColor.set($event)" /></label>
+          <div class="profile-color-presets">
+            @for (color of colorPresets; track color) {
+              <button type="button" [style.background]="color" [class.selected]="editColor() === color"
+                [attr.aria-label]="'Choose profile color ' + color" (click)="selectEditColor(color)"></button>
+            }
+          </div>
+          <label class="photo-field">Profile photo<input type="file" accept="image/*" (change)="chooseEditPhoto($event)" /></label>
+          <div class="profile-buttons">
+            <button class="profile-button primary" type="button" (click)="saveEdit()">Save</button>
+            <button class="profile-button" type="button" (click)="editingProfileId.set(null)">Cancel</button>
+          </div>
+        </div>
+      } @else {
+        <div class="profile-details">
+          <strong>{{ profile.name }}</strong>
+          <span>{{ profile.voiceType }} · {{ profileRange(profile) }}</span>
+        </div>
+        <div class="profile-buttons">
+          <button class="profile-button" type="button" (click)="startEditing(profile)">Edit</button>
+          <button class="profile-button" type="button" (click)="startRecalibrating(profile)">Recalibrate</button>
+          @if (pendingDeleteId() === profile.id) {
+            <button class="profile-button danger" type="button" (click)="deleteProfile(profile.id)">Confirm delete</button>
+            <button class="profile-button" type="button" (click)="pendingDeleteId.set(null)">Keep</button>
+          } @else {
+            <button class="profile-button danger" type="button" (click)="requestDelete(profile.id)">Delete</button>
+          }
+        </div>
+      }
+    </article>
+  } @empty {
+    <p class="empty-state">No saved singers yet. Add a singer to create a vocal profile.</p>
+  }
+</div>
+
+<section class="guest-section">
+  <div class="guest-heading">
+    <div><strong>Temporary session guests</strong><p>Guests are not saved unless you choose to keep their profile.</p></div>
+    @if (guests().length) { <button class="profile-button danger" type="button" (click)="clearGuests()">Clear guests</button> }
+  </div>
+  @for (guest of guests(); track guest.id) {
+    <div class="guest-row">
+      <span class="profile-avatar small" [style.background]="guest.accentColor">{{ guest.initials }}</span>
+      <span>{{ guest.name }} · {{ guest.voiceType }}</span>
+      <button class="profile-button" type="button" (click)="saveGuest(guest.id)">Save profile</button>
+    </div>
+  } @empty {
+    <p class="empty-state">There are no temporary guests in this session.</p>
+  }
+</section>
+
+<label class="auto-adjust">
+  <input class="switch" type="checkbox" role="switch" [checked]="party.autoAdjustKey()" (change)="party.setAutoAdjustKey($any($event.target).checked)" />
+  <span><strong>Auto-adjust song key to active singer</strong><small>Use each singer's range to suggest a comfortable key.</small></span>
+</label>
+<label class="auto-adjust">
+  <input class="switch" type="checkbox" role="switch" [checked]="party.roundRobinEnabled()" (change)="party.setRoundRobinEnabled($any($event.target).checked)" />
+  <span><strong>Take turns automatically</strong><small>Assign each newly queued song to the next singer.</small></span>
+</label>
+
+@if (error()) { <p class="profile-error" role="alert">{{ error() }}</p> }
+
+@if (modalOpen()) {
+  <app-vocal-range-modal
+    [microphoneDeviceId]="microphoneDeviceId()"
+    [existingProfile]="modalProfile()"
+    (closed)="closeModal()"
+  />
+}

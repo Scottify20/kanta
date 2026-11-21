@@ -2,7 +2,16 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { PlaylistsService } from './playlists.service';
 import { SettingsService } from './settings.service';
-import { SongManifest, SongsService, songAlbum, songArtist, songTitle } from './songs.service';
+import { ToastService } from './toast.service';
+import {
+  SongManifest,
+  SongsService,
+  hasVocalRange,
+  hasVocalStem,
+  songAlbum,
+  songArtist,
+  songTitle,
+} from './songs.service';
 import type { LibraryTab, LyricsFilter, SortMode } from '../../features/library/data/library-entries';
 import { DEFAULT_ARTIST_DELIMITER_LIST, DEFAULT_GENRE_DELIMITER_LIST, metadataValueKey, splitMetadataValues } from '../util/metadata-delimiters';
 
@@ -10,6 +19,7 @@ export interface SongRef {
   artist: string;
   album: string;
   title: string;
+  is_duet?: boolean;
 }
 
 export interface AlbumEntry {
@@ -56,6 +66,7 @@ export class LibraryService {
   private readonly songsService = inject(SongsService);
   private readonly playlistsService = inject(PlaylistsService);
   private readonly settingsService = inject(SettingsService);
+  private readonly toast = inject(ToastService);
 
   readonly songs = signal<SongManifest[]>([]);
   readonly loaded = signal(false);
@@ -66,6 +77,8 @@ export class LibraryService {
   readonly activeTab = signal<LibraryTab>('songs');
   readonly lyricsFilter = signal<LyricsFilter>('all');
   private inflight: Promise<void> | null = null;
+  private vocalRangeAnalysisQueue: Promise<void> = Promise.resolve();
+  private readonly vocalRangeRequests = new Map<string, Promise<SongManifest | null>>();
   // Entry key (album:/artist:/playlist:) the library page should open as soon as it is shown.
   readonly pendingOpen = signal<string | null>(null);
 
@@ -151,6 +164,34 @@ export class LibraryService {
         this.inflight = null;
       });
     return this.inflight;
+  }
+
+  async requestVocalRangeAnalysis(song: SongManifest, force = false): Promise<SongManifest | null> {
+    if ((!force && hasVocalRange(song)) || !hasVocalStem(song)) return song;
+    const key = songKey(song);
+    const pending = this.vocalRangeRequests.get(key);
+    if (pending) return pending;
+    const analysis = this.vocalRangeAnalysisQueue.then(() =>
+      this.songsService.analyzeSongVocalRange(song, force),
+    );
+    this.vocalRangeAnalysisQueue = analysis.then(() => undefined, () => undefined);
+    const request = analysis
+      .then((updated) => {
+        if (updated) {
+          this.songs.update((songs) =>
+            songs.map((existing) => songKey(existing) === key ? updated : existing),
+          );
+        }
+        return updated;
+      })
+      .catch((error: unknown) => {
+        console.error(`Could not analyze vocal range for "${songTitle(song)}":`, error);
+        this.toast.error(`Could not analyze vocal range for "${songTitle(song)}".`);
+        throw error;
+      })
+      .finally(() => this.vocalRangeRequests.delete(key));
+    this.vocalRangeRequests.set(key, request);
+    return request;
   }
 
   search(query: string, limit = 8): SearchHit[] {

@@ -1,4 +1,4 @@
-import { ApplicationRef, Component, DestroyRef, ElementRef, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { ApplicationRef, Component, DestroyRef, ElementRef, Injector, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideChevronDown, LucideFilePlus, LucideFolderPlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
@@ -18,6 +18,7 @@ import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
 import { filterImportFiles, matchImportFiles } from './import-files';
+import type { PartySessionService } from '../../../../shared/services/party-session.service';
 
 const formatPlaytime = (seconds: number): string => {
   const total = Math.round(seconds);
@@ -57,6 +58,7 @@ export class QueueSheet implements OnInit {
   private readonly folderInput = viewChild<ElementRef<HTMLInputElement>>('folderInput');
   private browseTarget: QueueName = 'karaoke_queue';
   private readonly queueService = inject(QueueService);
+  private readonly injector = inject(Injector);
   private readonly actions = inject(PlaybackActions);
   private readonly library = inject(LibraryService);
   private readonly appRef = inject(ApplicationRef);
@@ -70,6 +72,8 @@ export class QueueSheet implements OnInit {
   private reorderTimer: ReturnType<typeof setTimeout> | null = null;
   private tempCounter = 0;
   private readonly entering = new Map<string, number>();
+  private readonly assignedQueueTasks = new Set<string>();
+  private partySessionPromise: Promise<PartySessionService> | null = null;
 
   readonly processedDrag = signal(false);
   readonly processedItemDrag = input(false);
@@ -81,6 +85,7 @@ export class QueueSheet implements OnInit {
   readonly processingCollapsed = signal(false);
 
   readonly karaokeItems = signal<QueueItem[]>([]);
+  readonly duetAssignmentTaskId = signal<string | null>(null);
   readonly processingItems = signal<QueueItem[]>([]);
   readonly karaokeTotalSeconds = computed(() =>
     this.karaokeItems()
@@ -107,7 +112,26 @@ export class QueueSheet implements OnInit {
   readonly trackSelected = output<QueueItem>();
 
   ngOnInit(): void {
+    this.queueService.trackAdded$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((item) => {
+      this.initializeQueueAssignment(item, true);
+    });
+    this.queueService.karaokeRemoved$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((taskId) => {
+      if (taskId === null) {
+        this.assignedQueueTasks.clear();
+        this.duetAssignmentTaskId.set(null);
+        void this.getPartySession()
+          .then((party) => party.clearQueueAssignments())
+          .catch((error: unknown) => this.reportAssignmentError(error));
+      } else {
+        this.assignedQueueTasks.delete(taskId);
+        if (this.duetAssignmentTaskId() === taskId) this.duetAssignmentTaskId.set(null);
+        void this.getPartySession()
+          .then((party) => party.removeQueueAssignment(taskId))
+          .catch((error: unknown) => this.reportAssignmentError(error));
+      }
+    });
     this.queueService.queue$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((snapshot) => {
+      snapshot.karaoke_queue.forEach((item) => this.initializeQueueAssignment(item, false));
       this.announceCompleted([...snapshot.processing_queue, ...snapshot.karaoke_queue]);
       if (!this.processingLocked) this.processingItems.set(snapshot.processing_queue);
       this.uploads.update((list) =>
@@ -141,6 +165,39 @@ export class QueueSheet implements OnInit {
     });
   }
 
+  clearDuetAssignmentPrompt(taskId: string): void {
+    if (this.duetAssignmentTaskId() === taskId) this.duetAssignmentTaskId.set(null);
+  }
+
+  private initializeQueueAssignment(item: QueueItem, promptForNewTrack: boolean): void {
+    if (item.priority !== 1) return;
+    if (this.assignedQueueTasks.has(item.task_id)) return;
+    this.assignedQueueTasks.add(item.task_id);
+    const song = this.library.songs().find((candidate) => songKey(candidate) === songKey(item));
+    const isDuet = item.is_duet === true || song?.is_duet === true;
+    void this.getPartySession()
+      .then((party) => {
+        party.ensureQueueAssignment(item.task_id, isDuet);
+        if (promptForNewTrack && party.roster().length >= 2) {
+          this.duetAssignmentTaskId.set(item.task_id);
+        }
+      })
+      .catch((error: unknown) => {
+        this.assignedQueueTasks.delete(item.task_id);
+        this.reportAssignmentError(error);
+      });
+  }
+
+  private reportAssignmentError(error: unknown): void {
+    console.error('Could not update queue singer assignments:', error);
+    this.toast.error('Could not update a queue singer assignment.');
+  }
+
+  private getPartySession(): Promise<PartySessionService> {
+    return this.partySessionPromise ??= import('../../../../shared/services/party-session.service')
+      .then(({ PartySessionService }) => this.injector.get(PartySessionService));
+  }
+
   // Toasts once per task when it moves from an in-progress status to completed.
   private announceCompleted(items: QueueItem[]): void {
     for (const item of items) {
@@ -157,7 +214,16 @@ export class QueueSheet implements OnInit {
       this.karaokeItems.set([]);
       this.lockServerOrder();
     }
-    this.queueService.clearQueue(priority).subscribe();
+    this.queueService.clearQueue(priority).subscribe({
+      error: (error: unknown) => {
+        const detail = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+          ? ` ${error.error.detail}`
+          : '';
+        console.error('Could not clear the queue:', error);
+        this.toast.error(`Could not clear the queue.${detail}`);
+        this.queueService.refresh();
+      },
+    });
   }
 
   toggleProcessingPause(isPaused: boolean): void {

@@ -62,6 +62,31 @@ class QueueResponsivenessTests(unittest.IsolatedAsyncioTestCase):
             clear_task_control(item.task_id)
             tasks_db.pop(item.task_id, None)
 
+    async def test_clearing_karaoke_queue_notifies_stream_subscribers(self):
+        manager = QueueManager()
+        item = QueueItem(
+            task_id="queue-clear-notification-test",
+            file_path="/tmp/queue-clear-notification-test.mp3",
+            raw_title="Title",
+            raw_artist="Artist",
+            raw_album="Album",
+            title="Title",
+            artist="Artist",
+            album="Album",
+            priority=QueuePriority.KARAOKE,
+            status="completed",
+        )
+        manager.karaoke_queue.append(item)
+        subscriber = manager.subscribe()
+        try:
+            with patch.object(manager, "_save_state"):
+                await manager.clear(QueuePriority.KARAOKE)
+            self.assertTrue(subscriber.is_set())
+            snapshot = await manager.get_queue_snapshot()
+            self.assertEqual(snapshot["karaoke_queue"], [])
+        finally:
+            manager.unsubscribe(subscriber)
+
     async def test_slow_asset_lookup_does_not_block_event_loop(self):
         started = threading.Event()
         release = threading.Event()

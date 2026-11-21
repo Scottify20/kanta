@@ -1,0 +1,144 @@
+<div class="party-header-strip">
+  <nav class="next-tracks" aria-label="Queue preview">
+    @for (item of queuePreview(); track item.task_id) {
+      <span class="next-track" [class.up-next]="isUpNext(item)" [style.--singer-color]="singerFor(item)?.accentColor ?? '#fff'" [attr.aria-label]="isUpNext(item) ? 'Up next: ' + (item.raw_title || item.title) : null">
+        @if (singerFor(item); as singer) {
+          <i class="singer-dot" [style.background]="singer.accentColor" [attr.aria-label]="singer.name + '\'s turn'"></i>
+        }
+        <span class="next-track-text">
+          <strong>{{ item.raw_title || item.title }}</strong>
+          <small>{{ item.raw_artist || item.artist }}</small>
+        </span>
+      </span>
+    }
+  </nav>
+
+  @if (party.roster().length) {
+    <div class="singer-roster" aria-label="Party singers">
+      @for (singer of visibleSingers(); track singer.id) {
+        <button
+          class="singer-chip"
+          type="button"
+          [class.active]="party.activeSingerId() === singer.id"
+          [style.--singer-color]="singer.accentColor"
+          [attr.aria-label]="'Make ' + singer.name + ' the active singer'"
+          [attr.aria-pressed]="party.activeSingerId() === singer.id"
+          [title]="singer.name"
+          (click)="selectSinger(singer.id)"
+        >
+          <i class="singer-avatar" [style.background]="singer.accentColor">
+            @if (singer.avatar) { <img [src]="singer.avatar" [alt]="''" /> }
+            @else { {{ singerInitial(singer) }} }
+          </i>
+          <span class="singer-chip-copy">
+            <strong>{{ singer.name }}</strong>
+            <small>{{ rangeLabel(singer) }}</small>
+          </span>
+        </button>
+      }
+      @if (hiddenSingers() > 0) {
+        <app-popup-panel popupId="party-roster-more" group="player" placement="below" label="More singers">
+          <button popup-trigger class="roster-more" type="button" aria-label="Show {{ hiddenSingers() }} more singers">+{{ hiddenSingers() }}</button>
+          <div popup-content class="roster-more-list">
+            @for (singer of party.roster(); track singer.id) {
+              @if (!isVisibleSinger(singer.id)) {
+                <button type="button" [class.active]="party.activeSingerId() === singer.id" (click)="selectSinger(singer.id)">
+                  <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i><span>{{ singer.name }}</span><small>{{ rangeLabel(singer) }}</small>
+                </button>
+              }
+            }
+          </div>
+        </app-popup-panel>
+      }
+    </div>
+  }
+
+  <app-popup-panel popupId="party-roster-add" group="player" placement="below" [closeOnContentClick]="true" label="Add a singer">
+    <button popup-trigger class="add-singer" type="button" aria-label="Add a singer to the room" title="Add a singer">
+      +
+    </button>
+    <section popup-content class="party-add-popover">
+      @if (savedProfilesNotInRoom().length) {
+        <div class="saved-profiles">
+          <h3>Saved singers</h3>
+          @for (profile of savedProfilesNotInRoom(); track profile.id) {
+            <button type="button" class="saved-profile" (click)="addSavedProfile(profile.id)">
+              <i [style.background]="profile.accentColor">{{ singerInitial(profile) }}</i>
+              <span>{{ profile.name }}</span>
+              <small>{{ profile.voiceType }}</small>
+            </button>
+          }
+        </div>
+      }
+      <div class="quick-guest">
+        <h3>Quick guest</h3>
+        <label>
+          <span>Name</span>
+          <input type="text" maxlength="32" placeholder="Guest name" [value]="guestName()" (input)="updateGuestName($event)" />
+        </label>
+        <div class="guest-options">
+          <label>
+            <span>Voice preset</span>
+            <select [value]="guestVoice()" (change)="updateGuestVoice($event)">
+              @for (voice of voiceOptions; track voice) {
+                <option [value]="voice">{{ voice }}</option>
+              }
+            </select>
+          </label>
+          <label class="color-option">
+            <span>Color</span>
+            <input type="color" [value]="guestColor()" (input)="updateGuestColor($event)" aria-label="Guest accent color" />
+          </label>
+        </div>
+        <div class="color-presets" aria-label="Guest color presets">
+          @for (color of guestColorPresets; track color) {
+            <button type="button" [style.background]="color" [class.selected]="guestColor() === color"
+              [attr.aria-label]="'Choose color ' + color" [attr.aria-pressed]="guestColor() === color"
+              (click)="selectGuestColor(color)"></button>
+          }
+        </div>
+        <button type="button" class="add-guest" (click)="addGuest()">Add guest</button>
+      </div>
+      <label class="round-robin-toggle">
+        <input type="checkbox" [checked]="party.roundRobinEnabled()" (change)="party.setRoundRobinEnabled($any($event.target).checked)" />
+        <span><strong>Take turns automatically</strong><small>New songs go to the next singer.</small></span>
+      </label>
+      @if (party.activeSinger(); as singer) {
+        <div class="active-profile-actions">
+          <h3>Active singer</h3>
+          <p>{{ singer.name }} · {{ singer.voiceType }} · {{ rangeLabel(singer) }}</p>
+          @if (editingActiveProfile()) {
+            <label>Name<input type="text" [value]="profileNameDraft()" (input)="profileNameDraft.set($any($event.target).value)" maxlength="40" /></label>
+            <div class="profile-photo-row">
+              <span class="profile-photo-preview" [style.background]="profileColorDraft()">
+                @if (profileAvatarDraft()) { <img [src]="profileAvatarDraft()" alt="" /> }
+                @else { {{ singerInitial(singer) }} }
+              </span>
+              <label>Photo<input type="file" accept="image/*" (change)="chooseProfilePhoto($event)" /></label>
+              <button type="button" (click)="profileAvatarDraft.set(null)">Remove</button>
+            </div>
+            <label>Accent color<input type="color" [value]="profileColorDraft()" (input)="profileColorDraft.set($any($event.target).value)" /></label>
+            <div class="color-presets" aria-label="Profile color presets">
+              @for (color of guestColorPresets; track color) {
+                <button type="button" [style.background]="color" [class.selected]="profileColorDraft() === color"
+                  [attr.aria-label]="'Choose color ' + color" (click)="profileColorDraft.set(color)"></button>
+              }
+            </div>
+            <div class="profile-actions">
+              <button type="button" (click)="saveActiveProfile()">Save profile</button>
+              <button type="button" (click)="editingActiveProfile.set(false)">Cancel</button>
+            </div>
+          } @else {
+            <div class="profile-actions">
+              <button type="button" (click)="startEditingActiveProfile()">Edit profile</button>
+              <button type="button" (click)="openCalibration()">Calibrate range</button>
+            </div>
+          }
+        </div>
+      }
+    </section>
+  </app-popup-panel>
+  @if (calibratingProfile(); as profile) {
+    <app-vocal-range-modal [microphoneDeviceId]="selectedMicrophoneId()" [existingProfile]="profile" (closed)="closeCalibration()" />
+  }
+</div>

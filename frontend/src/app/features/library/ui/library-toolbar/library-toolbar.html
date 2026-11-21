@@ -19,6 +19,27 @@
     </button>
   }
   @if (tab() === 'songs') {
+    @if (fitProfiles().length) {
+      <app-popup-panel popupId="library-fit-singer" group="library-toolbar" placement="below" [closeOnContentClick]="true" label="Choose singer for song fit">
+        <button popup-trigger class="sort fit-profile" type="button">
+          <span>
+            @if (fitSinger(); as singer) { Fit for: {{ singer.name }} }
+            @else { Choose singer }
+          </span>
+          <svg lucideChevronDown [size]="16"></svg>
+        </button>
+        <div popup-content class="sort-list fit-profile-list" role="menu">
+          @for (profile of fitProfiles(); track profile.id) {
+            <button type="button" role="menuitemradio" [attr.aria-checked]="fitSinger()?.id === profile.id"
+              [class.active]="fitSinger()?.id === profile.id" (click)="selectSinger(profile)">
+              <i [style.background]="profile.accentColor">{{ profile.initials }}</i>
+              <span>{{ profile.name }}</span>
+              <small>{{ profile.minNote && profile.maxNote ? profile.minNote + '–' + profile.maxNote : 'Uncalibrated' }}</small>
+            </button>
+          }
+        </div>
+      </app-popup-panel>
+    }
     <app-popup-panel popupId="library-filter" group="library-toolbar" placement="below" [closeOnContentClick]="true" label="Song filters">
       <button popup-trigger class="sort filter" type="button" [class.active]="lyricsFilter() !== 'all'">
         <span>Filter: {{ filterLabel() }}</span>

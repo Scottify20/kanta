@@ -6,6 +6,7 @@ import { QueueService } from '../../features/queue/data-access/queue.service';
 import { QueueItem } from '../../features/queue/interfaces/queue.models';
 import { SongRef } from './library.service';
 import { SongManifest, SongsService } from './songs.service';
+import { PartySessionService } from './party-session.service';
 
 type StemFile = SongManifest['stems'][number];
 
@@ -27,6 +28,7 @@ export const isPlayable = (song: Pick<SongManifest, 'stems'>): boolean =>
 export class PlaybackActions {
   private readonly queue = inject(QueueService);
   private readonly songs = inject(SongsService);
+  private readonly party = inject(PartySessionService);
   private readonly router = inject(Router);
 
   /** Replaces only the karaoke queue (never the processing queue) and starts the first song. */
@@ -41,6 +43,7 @@ export class PlaybackActions {
         this.queue.addProcessedTrack(song, false, afterTaskId),
       );
       const item = result.item;
+      this.party.ensureQueueAssignment(item.task_id, song.is_duet === true);
       firstTaskId ??= item.task_id;
       afterTaskId = item.task_id;
     }
@@ -56,6 +59,7 @@ export class PlaybackActions {
       const result: { item: QueueItem } = await firstValueFrom(
         this.queue.addProcessedTrack(song, atFront && first && !anchor, anchor),
       );
+      this.party.ensureQueueAssignment(result.item.task_id, song.is_duet === true);
       anchor = result.item.task_id;
       first = false;
     }

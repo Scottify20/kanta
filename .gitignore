@@ -50,3 +50,6 @@ npm-debug.log*
 # Local workspace and OS files
 .DS_Store
 Thumbs.db
+
+node_modules/
+backend/logs/

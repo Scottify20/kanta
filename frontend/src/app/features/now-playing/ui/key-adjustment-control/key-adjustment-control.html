@@ -1,0 +1,77 @@
+<app-popup-panel popupId="key-adjustment" group="player" label="Adjust Key">
+  <button
+    popup-trigger
+    class="circle-button key-trigger"
+    type="button"
+    aria-label="Adjust Key"
+    appTooltip="Adjust Key"
+  >
+    <span aria-hidden="true">♭/♯</span>
+  </button>
+  <section popup-content class="key-adjustment-popover">
+    <header>
+      <strong>Adjust Key</strong>
+      @if (partySession.activeSinger(); as singer) {
+        <span>Matched to {{ singer.name }}</span>
+      } @else {
+        <span>Original Pitch</span>
+      }
+    </header>
+    <label class="key-toggle">
+      <span>Apply Key Change</span>
+      <input
+        class="switch"
+        type="checkbox"
+        role="switch"
+        [checked]="audioPlayer.isKeyShiftEnabled()"
+        (change)="setKeyShiftEnabled($event)"
+      />
+    </label>
+    <div
+      class="key-adjustment-controls"
+      [class.disabled]="!audioPlayer.isKeyShiftEnabled()"
+      [attr.aria-disabled]="!audioPlayer.isKeyShiftEnabled()"
+    >
+      <div class="key-quick-steps" aria-label="Quick key adjustments">
+        @for (step of quickSteps; track step) {
+          <button
+            type="button"
+            [disabled]="!audioPlayer.isKeyShiftEnabled()"
+            [class.selected]="audioPlayer.semitoneShift() === step"
+            [attr.aria-pressed]="audioPlayer.semitoneShift() === step"
+            (click)="setSemitoneShift(step)"
+          >
+            {{ step > 0 ? '+' : '' }}{{ step }} ST
+          </button>
+        }
+      </div>
+      <label class="key-slider-label">
+        <span>Fine-tune</span>
+        <output>{{ audioPlayer.semitoneShift() > 0 ? '+' : '' }}{{ audioPlayer.semitoneShift() }} ST</output>
+      </label>
+      <div class="key-range-wrap">
+        <input
+          type="range"
+          min="-6"
+          max="6"
+          step="1"
+          [value]="audioPlayer.semitoneShift()"
+          [disabled]="!audioPlayer.isKeyShiftEnabled()"
+          (input)="updateSemitoneShift($event)"
+          aria-label="Fine-tune key"
+        />
+        <span class="key-center-detent" aria-hidden="true"></span>
+      </div>
+      <div class="key-slider-ends" aria-hidden="true">
+        <span>Lower</span><span>Original</span><span>Higher</span>
+      </div>
+    </div>
+    <p class="key-footer">Adjusting both vocals and music to keep them in key.</p>
+    @if (keyTransition(); as transition) {
+      <p class="key-result"><span>Original key</span><strong>{{ transition }}</strong></p>
+    }
+    @if (rangeTransition(); as range) {
+      <p class="key-result"><span>Vocal range</span><strong>{{ range }}</strong></p>
+    }
+  </section>
+</app-popup-panel>

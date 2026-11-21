@@ -262,6 +262,7 @@ class QueueManager:
             if priority == QueuePriority.KARAOKE:
                 self.karaoke_queue.clear()
                 self._save_state()
+                self._notify()
                 return
 
             retained: List[QueueItem] = []
@@ -289,6 +290,7 @@ class QueueManager:
             self._release_pause_if_idle()
             self._save_state()
             self._wake_event.set()
+            self._notify()
 
     async def remove_karaoke_item(self, task_id: str) -> None:
         async with self._lock:

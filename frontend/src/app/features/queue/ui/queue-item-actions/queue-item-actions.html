@@ -47,6 +47,7 @@
         <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
       }
       @if (queue() === 'karaoke_queue') {
+        <button type="button" role="menuitem" (click)="assignSingers()">Assign singers</button>
         <button type="button" role="menuitem" (click)="remove.emit()">
           Remove from Karaoke Queue
         </button>

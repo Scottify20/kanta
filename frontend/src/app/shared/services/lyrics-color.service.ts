@@ -1,7 +1,8 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { getPaletteSync } from 'colorthief';
+import { PartySessionService } from './party-session.service';
 
-export type LyricsColorMode = 'white' | 'automatic' | 'custom';
+export type LyricsColorMode = 'white' | 'automatic' | 'custom' | 'singer';
 export type LyricsPalette = readonly [string, string];
 export type LyricsOpacities = readonly [number, number, number];
 export interface AlbumLyricsColors {
@@ -231,6 +232,7 @@ export function mixLyricsColors(first: string, second: string): string {
 
 @Injectable({ providedIn: 'root' })
 export class LyricsColorService {
+  private readonly party = inject(PartySessionService);
   private readonly stored = this.load();
   readonly mode = signal<LyricsColorMode>(this.stored.mode);
   readonly custom = signal<LyricsPalette>(this.stored.custom);
@@ -239,9 +241,19 @@ export class LyricsColorService {
   readonly automaticInactiveColors = signal<LyricsPalette>(WHITE);
   readonly automaticInactiveCombined = computed(() => mixLyricsColors(...this.automaticInactiveColors()));
   readonly automaticInactiveOpacities = signal<LyricsOpacities>([0.4, 0.4, 0.4]);
+  readonly singerColors = computed<LyricsPalette>(() => {
+    const active = this.party.activeSinger();
+    if (!active) return this.custom();
+    const duetSinger = this.party.duetSinger()
+      ?? this.party.roster().find((singer) => singer.id !== active.id);
+    const first = tuneAlbumColor(active.accentColor, 0.76);
+    const second = tuneAlbumColor(duetSinger?.accentColor ?? this.custom()[1], 0.76);
+    return [first, second];
+  });
   readonly colors = computed<LyricsPalette>(() => {
     if (this.mode() === 'white') return WHITE;
     if (this.mode() === 'automatic') return this.automaticUsesCustom() ? this.custom() : this.automatic();
+    if (this.mode() === 'singer') return this.singerColors();
     return this.custom();
   });
   readonly combined = computed(() => mixLyricsColors(...this.colors()));
@@ -265,7 +277,7 @@ export class LyricsColorService {
       if (raw) {
         const value: unknown = JSON.parse(raw);
         if (typeof value === 'object' && value !== null && 'mode' in value && 'custom' in value &&
-            (value.mode === 'white' || value.mode === 'automatic' || value.mode === 'custom') &&
+            (value.mode === 'white' || value.mode === 'automatic' || value.mode === 'custom' || value.mode === 'singer') &&
             Array.isArray(value.custom) && value.custom.length === 2 &&
             value.custom.every((color: unknown) => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color))) {
           return { mode: value.mode, custom: [value.custom[0], value.custom[1]] };

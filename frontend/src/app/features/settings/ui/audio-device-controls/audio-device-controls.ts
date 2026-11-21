@@ -3,13 +3,16 @@ import { LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2 } from '@lucide
 import { Select } from '../../../../shared/components/select/select';
 import { Tooltip } from '../../../../shared/directives/tooltip';
 import { AudioPlayerService } from '../../../../shared/services/audio-player.service';
+import { PartySessionService } from '../../../../shared/services/party-session.service';
+import type { UserProfile } from '../../../../shared/services/party-session.service';
 import { MicTestService } from '../mic-test/mic-test.service';
+import { VocalRangeModal } from '../vocal-range-modal/vocal-range-modal';
 
 interface DeviceChoice { id: string; label: string; }
 
 @Component({
   selector: 'app-settings-audio-device-controls',
-  imports: [Select, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip],
+  imports: [Select, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip, VocalRangeModal],
   templateUrl: './audio-device-controls.html',
   styleUrl: './audio-device-controls.scss',
 })
@@ -27,9 +30,12 @@ export class AudioDeviceControls implements OnInit, OnDestroy {
   readonly outputId = signal('');
   readonly inputId = signal('');
   readonly outputRoutingAvailable = signal(false);
-  readonly monitor = signal(false);
+  readonly vocalRangeModalOpen = signal(false);
+  readonly calibrationProfile = signal<UserProfile | null>(null);
   readonly namesHidden = signal(false);
   readonly mic = inject(MicTestService);
+  readonly activeSinger = inject(PartySessionService).activeSinger;
+  readonly monitor = this.mic.monitorEnabled;
   readonly peakPercent = () => Math.round(this.mic.peak() * 100);
   private readonly player = inject(AudioPlayerService);
   private readonly onDeviceChange = (): void => { void this.refreshDevices(); };
@@ -110,8 +116,17 @@ export class AudioDeviceControls implements OnInit, OnDestroy {
   }
 
   setMonitor(enabled: boolean): void {
-    this.monitor.set(enabled);
     this.mic.setMonitor(enabled);
+  }
+
+  openVocalRangeCalibration(): void {
+    this.calibrationProfile.set(this.activeSinger());
+    this.vocalRangeModalOpen.set(true);
+  }
+
+  closeVocalRangeCalibration(): void {
+    this.vocalRangeModalOpen.set(false);
+    this.calibrationProfile.set(null);
   }
 
   private detectOutputRouting(): void {

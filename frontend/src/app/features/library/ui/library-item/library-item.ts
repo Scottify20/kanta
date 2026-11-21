@@ -1,5 +1,6 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, inject, input, output } from '@angular/core';
 import { EntryAction, EntryMenu } from '../../../../shared/components/entry-menu/entry-menu';
+import { PartySessionService, recommendSoloKey } from '../../../../shared/services/party-session.service';
 import { Playlist } from '../../../../shared/services/playlists.service';
 import { LibraryEntry } from '../../data/library-entries';
 
@@ -20,6 +21,7 @@ export type { EntryAction };
   },
 })
 export class LibraryItem {
+  private readonly partySession = inject(PartySessionService);
   readonly entry = input.required<LibraryEntry>();
   readonly layout = input<'grid' | 'list'>('grid');
   readonly selected = input(false);
@@ -34,6 +36,21 @@ export class LibraryItem {
   readonly action = output<EntryAction>();
   readonly dragStarted = output<DragEvent>();
   readonly dragEnded = output<void>();
+
+  readonly vocalFit = computed(() => {
+    const entry = this.entry();
+    const singer = this.partySession.activeSinger();
+    return entry.kind === 'song' && singer
+      ? recommendSoloKey(entry.songs[0], singer)
+      : null;
+  });
+  readonly vocalFitLabel = computed(() => {
+    const fit = this.vocalFit();
+    if (!fit || fit.unanalyzed || fit.status === 'uncalibrated') return null;
+    if (fit.status === 'natural') return 'Natural Fit';
+    if (fit.status === 'adjusted') return `Key ${fit.semitones > 0 ? '+' : ''}${fit.semitones}`;
+    return fit.semitones < 0 ? 'High Reach' : 'Low Reach';
+  });
 
   readonly lyricsLevel = computed(() => (this.entry().kind === 'song' ? (this.entry().songs[0]?.lyrics_level ?? 'none') : null));
   readonly round = computed(() => this.entry().kind === 'artist');

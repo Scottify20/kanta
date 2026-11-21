@@ -8,6 +8,8 @@ import { SettingsFolders } from '../../shared/components/settings-folders/settin
 import { SettingsOption, SettingsOptionGroup } from '../../shared/components/settings-option-group/settings-option-group';
 import { SettingsSection } from '../../shared/components/settings-section/settings-section';
 import { AudioDeviceControls } from './ui/audio-device-controls/audio-device-controls';
+import { LibraryAnalysisPanel } from './ui/library-analysis-panel/library-analysis-panel';
+import { SingerProfilesPanel } from './ui/singer-profiles-panel/singer-profiles-panel';
 import { StorageDevices } from './ui/storage-devices/storage-devices';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { LayoutService } from '../../shared/services/layout.service';
@@ -34,7 +36,7 @@ import {
   selector: 'app-settings',
   imports: [
     FormsModule, OverlayModule, LucideFolderOpen, LucideMenu, Tooltip,
-    AudioDeviceControls, SettingsLyrics, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
+    AudioDeviceControls, LibraryAnalysisPanel, SingerProfilesPanel, SettingsLyrics, SettingsFolderPicker, SettingsFolders, SettingsOptionGroup, SettingsSection, StorageDevices,
   ],
   templateUrl: './settings.html',
   styleUrl: './settings.scss',

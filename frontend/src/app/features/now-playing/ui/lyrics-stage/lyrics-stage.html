@@ -6,11 +6,16 @@
   [style.--lyrics-scale]="compact() ? size.miniScale() : size.scale()"
 >
   @if (!compact()) {
-    <section>
+    <section class="album-art-wrap">
       @if (coverUrl(); as cover) {
         <img class="album-art" [src]="cover" [alt]="coverAlt()" />
       } @else {
         <div class="album-art album-art-placeholder" aria-label="No album cover"></div>
+      }
+      @if (fullscreen() && collapsed() && effectiveSemitones() !== 0) {
+        <span class="key-shift-badge">
+          {{ effectiveSemitones() > 0 ? '+' : '' }}{{ effectiveSemitones() }} ST
+        </span>
       }
     </section>
   }

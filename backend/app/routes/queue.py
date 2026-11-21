@@ -1,5 +1,6 @@
 import threading
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import errno
 import io
 import json
@@ -16,10 +17,17 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 
 import mutagen
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.tasks import (
+    TaskCancelledException,
+    check_cancellation_and_update,
+    clear_task_control,
+    pause_events,
+    tasks_db,
+)
 from app.services import library, playlists
 from app.services.fsutil import safe_upload_name
 from app.services.paths import upload_dir, ffmpeg_path, subprocess_kwargs
@@ -50,6 +58,14 @@ from app.services.tagging import (
     remove_cover,
     write_tags,
 )
+from app.services.vocal_analysis import (
+    analyze_and_save_track_metadata,
+    analyze_and_save_vocal_range,
+)
+
+_audio_analysis_executor = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="kanta-audio-analysis"
+)
 
 router = APIRouter(prefix="/api/queue", tags=["Queue"])
 songs_router = APIRouter(prefix="/api", tags=["Songs"])
@@ -62,6 +78,7 @@ HEARTBEAT_SECONDS = 15.0
 STREAM_POLL_SECONDS = 0.5
 REFERENCE_LUFS = -18.0
 logger = logging.getLogger("uvicorn")
+_analysis_background_tasks: set[asyncio.Task] = set()
 
 
 def _has_playable_stems(song_dir: Path) -> bool:
@@ -103,10 +120,22 @@ class SongMetadataRequest(BaseModel):
     comment: Optional[str] = None
     composer: Optional[str] = None
     bpm: Optional[float] = Field(default=None, ge=0)
+    musical_key: Optional[str] = Field(default=None, max_length=32)
     replaygain_track_gain: Optional[float] = None
     replaygain_track_peak: Optional[float] = Field(default=None, ge=0)
     replaygain_album_gain: Optional[float] = None
     replaygain_album_peak: Optional[float] = Field(default=None, ge=0)
+
+
+class SongAnalysisOptions(BaseModel):
+    vocal_range: bool = True
+    musical_key: bool = False
+    bpm: bool = False
+    replaygain: bool = False
+
+
+class BatchSongAnalysisOptions(SongAnalysisOptions):
+    missing_only: bool = True
 
 
 class LyricsTimingRequest(BaseModel):
@@ -907,6 +936,296 @@ def _analyze_replaygain(song_dir: Path) -> Dict[str, float]:
         except Exception:
             continue
     return values
+
+
+def _validate_analysis_options(options: SongAnalysisOptions) -> None:
+    if not any((options.vocal_range, options.musical_key, options.bpm, options.replaygain)):
+        raise HTTPException(status_code=400, detail="Select at least one analysis.")
+
+
+def _find_vocal_stem(song_dir: Path) -> Path | None:
+    stems_dir = song_dir / "stems"
+    try:
+        files = list(stems_dir.iterdir())
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not inspect vocal stems: {exc}") from exc
+    for suffix in ("(lead vocals)", "(vocals)"):
+        stems = sorted(
+            (
+                path for path in files
+                if path.is_file()
+                and path.suffix.casefold() in AUDIO_SUFFIXES
+                and path.stem.casefold().endswith(suffix)
+            ),
+            key=lambda path: path.name.casefold(),
+        )
+        if stems:
+            return stems[0]
+    return None
+
+
+def _vocal_stem_path(song_dir: Path) -> Path:
+    vocal_stem = _find_vocal_stem(song_dir)
+    if vocal_stem is None:
+        raise HTTPException(status_code=409, detail="Song has no vocal stem to analyze")
+    return vocal_stem
+
+
+def _sidecar_has_vocal_range(song_dir: Path) -> bool:
+    sidecar = song_dir / library.SIDECAR_NAME
+    try:
+        value = json.loads(sidecar.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False
+    if not isinstance(value, dict):
+        raise ValueError(f"Song sidecar must contain a JSON object: {sidecar}")
+    return "vocal_range" in value
+
+
+def _sidecar_has_analysis(song_dir: Path, field: str) -> bool:
+    try:
+        value = json.loads((song_dir / library.SIDECAR_NAME).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False
+    if not isinstance(value, dict):
+        raise ValueError(f"Song sidecar must contain a JSON object: {song_dir / library.SIDECAR_NAME}")
+    return field in value
+
+
+def _analysis_audio_path(song_dir: Path) -> Path | None:
+    masters = library.top_level_audio(song_dir)
+    if masters:
+        return masters[0]
+    stems_dir = song_dir / "stems"
+    try:
+        instrumental_stems = sorted(
+            (
+                path for path in stems_dir.iterdir()
+                if path.is_file()
+                and path.suffix.casefold() in AUDIO_SUFFIXES
+                and path.stem.casefold().endswith("(instrumental)")
+            ),
+            key=lambda path: path.name.casefold(),
+        )
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not inspect instrumental stems: {exc}") from exc
+    return instrumental_stems[0] if instrumental_stems else None
+
+
+def _key_analysis_audio_path(song_dir: Path) -> Path | None:
+    """Prefer isolated lead vocals, falling back to vocals then master/instrumental."""
+    return _find_vocal_stem(song_dir) or _analysis_audio_path(song_dir)
+
+
+def _run_library_reanalysis(
+    task_id: str, options: BatchSongAnalysisOptions
+) -> None:
+    task = tasks_db[task_id]
+    analyzed = 0
+    skipped = 0
+    processed = 0
+    total = 0
+    try:
+        check_cancellation_and_update(task_id, "Scanning processed songs...", 0)
+        records = library.list_songs("")
+        total = len(records)
+        task["total"] = total
+
+        for index, record in enumerate(records, start=1):
+            title = record.get("title", "song")
+            check_cancellation_and_update(
+                task_id,
+                f"Analyzing {index}/{total}: {title}",
+                int((index - 1) * 100 / total) if total else 0,
+            )
+            song_dir = Path(record["path"])
+            analyze_vocals = options.vocal_range
+            if analyze_vocals and options.missing_only and _sidecar_has_vocal_range(song_dir):
+                analyze_vocals = False
+            analyze_key = options.musical_key and not (
+                options.missing_only
+                and (record.get("musical_key") is not None or _sidecar_has_analysis(song_dir, "musical_key"))
+            )
+            analyze_bpm = options.bpm and not (
+                options.missing_only
+                and (record.get("bpm") is not None or _sidecar_has_analysis(song_dir, "bpm"))
+            )
+
+            vocal_path = None
+            if analyze_vocals:
+                try:
+                    vocal_path = _vocal_stem_path(song_dir)
+                except HTTPException as exc:
+                    if exc.status_code != 409:
+                        raise
+                    analyze_vocals = False
+
+            if vocal_path is not None:
+                _audio_analysis_executor.submit(
+                    analyze_and_save_vocal_range, song_dir, vocal_path
+                ).result()
+                library.invalidate(song_dir)
+            key_path = _key_analysis_audio_path(song_dir) if analyze_key else None
+            bpm_path = _analysis_audio_path(song_dir) if analyze_bpm else None
+            analysis_path = key_path or bpm_path
+            if analysis_path is not None and (analyze_key or analyze_bpm):
+                analysis_args = [
+                    song_dir,
+                    analysis_path,
+                    analyze_key,
+                    analyze_bpm,
+                ]
+                if analyze_key and analyze_bpm and bpm_path != analysis_path:
+                    analysis_args.append(bpm_path)
+                _audio_analysis_executor.submit(
+                    analyze_and_save_track_metadata,
+                    *analysis_args,
+                ).result()
+                library.invalidate(song_dir)
+            if options.replaygain:
+                _analyze_replaygain(song_dir)
+                library.invalidate(song_dir)
+
+            if vocal_path is not None or analysis_path is not None or options.replaygain:
+                analyzed += 1
+            else:
+                skipped += 1
+
+            processed = index
+            task.update({"processed": processed, "analyzed": analyzed, "skipped": skipped})
+            check_cancellation_and_update(
+                task_id,
+                f"Processed {processed}/{total}: {title}",
+                int(processed * 100 / total) if total else 100,
+            )
+
+        check_cancellation_and_update(task_id, "Completed.", 100)
+        task.update(
+            {
+                "status": "completed",
+                "progress": 100,
+                "step": "Completed.",
+                "result": {
+                    "total": total,
+                    "processed": processed,
+                    "analyzed": analyzed,
+                    "skipped": skipped,
+                },
+            }
+        )
+    except TaskCancelledException as exc:
+        task.update({"status": "cancelled", "step": "Cancelled by user.", "error": str(exc)})
+    except Exception as exc:
+        logger.exception("Library re-analysis task %s failed", task_id)
+        task.update({"status": "failed", "step": "Error.", "error": str(exc)})
+    finally:
+        clear_task_control(task_id)
+
+
+@songs_router.post("/songs/{artist}/{album}/{title}/vocal-range/analyze")
+async def analyze_song_vocal_range(
+    request: Request,
+    artist: str,
+    album: str,
+    title: str,
+    options: SongAnalysisOptions = Body(default=SongAnalysisOptions()),
+) -> Dict[str, Any]:
+    _validate_analysis_options(options)
+    song_dir, _, _ = _locate(artist, album, title)
+    vocal_range = None
+    replaygain_values = None
+    analysis_values = None
+    changed = False
+    try:
+        if options.vocal_range:
+            vocal_path = _vocal_stem_path(song_dir)
+            try:
+                vocal_range = await asyncio.get_running_loop().run_in_executor(
+                    _audio_analysis_executor,
+                    analyze_and_save_vocal_range,
+                    song_dir,
+                    vocal_path,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Vocal range analysis failed: {exc}"
+                ) from exc
+            changed = True
+        if options.musical_key or options.bpm:
+            key_path = _key_analysis_audio_path(song_dir) if options.musical_key else None
+            bpm_path = _analysis_audio_path(song_dir) if options.bpm else None
+            analysis_path = key_path or bpm_path
+            if analysis_path is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Song has no vocal, master, or instrumental audio to analyze",
+                )
+            try:
+                analysis_args = [
+                    song_dir,
+                    analysis_path,
+                    options.musical_key,
+                    options.bpm,
+                ]
+                if options.musical_key and options.bpm and bpm_path != analysis_path:
+                    analysis_args.append(bpm_path)
+                analysis_values = await asyncio.get_running_loop().run_in_executor(
+                    _audio_analysis_executor,
+                    analyze_and_save_track_metadata,
+                    *analysis_args,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Key/BPM analysis failed: {exc}"
+                ) from exc
+            changed = True
+        if options.replaygain:
+            replaygain_values = await asyncio.to_thread(_analyze_replaygain, song_dir)
+            changed = True
+    finally:
+        if changed:
+            library.invalidate(song_dir)
+
+    manifest = await asyncio.to_thread(
+        library.get_song, artist, album, title, str(request.base_url)
+    )
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return {
+        "vocal_range": vocal_range,
+        "analysis": analysis_values,
+        "replaygain": replaygain_values,
+        "song": manifest,
+    }
+
+
+@songs_router.post("/songs/reanalyze", status_code=202)
+async def start_library_reanalysis(
+    options: BatchSongAnalysisOptions = Body(default=BatchSongAnalysisOptions()),
+) -> Dict[str, Any]:
+    _validate_analysis_options(options)
+    task_id = str(uuid.uuid4())
+    tasks_db[task_id] = {
+        "task_id": task_id,
+        "status": "pending",
+        "progress": 0,
+        "step": "Preparing library re-analysis...",
+        "cancel_requested": False,
+        "created_at": time.time(),
+        "total": 0,
+        "processed": 0,
+        "analyzed": 0,
+        "skipped": 0,
+    }
+    pause_events[task_id] = threading.Event()
+    background_task = asyncio.create_task(asyncio.to_thread(_run_library_reanalysis, task_id, options))
+    _analysis_background_tasks.add(background_task)
+    background_task.add_done_callback(_analysis_background_tasks.discard)
+    return {"task_id": task_id, "status": "pending"}
 
 
 @songs_router.post("/songs/{artist}/{album}/{title}/replaygain/analyze")

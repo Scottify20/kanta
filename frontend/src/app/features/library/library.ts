@@ -23,6 +23,7 @@ import { EntryActionsService } from '../../shared/services/entry-actions.service
 import { PlaybackActions, isPlayable } from '../../shared/services/playback-actions.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
 import { SettingsService } from '../../shared/services/settings.service';
+import { PartySessionService } from '../../shared/services/party-session.service';
 import { SongManifest, SongsService, songArtist } from '../../shared/services/songs.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-payload';
 import {
@@ -34,6 +35,7 @@ import {
   genreEntries,
   playlistEntry,
   songEntry,
+  sortSongsByVocalFit,
   sortArtistSongs,
   sortEntries,
 } from './data/library-entries';
@@ -65,6 +67,7 @@ export class Library {
   private readonly entryActions = inject(EntryActionsService);
   private readonly playlistsService = inject(PlaylistsService);
   private readonly settingsService = inject(SettingsService);
+  private readonly partySession = inject(PartySessionService);
   protected readonly layoutService = inject(LayoutService);
   private readonly router = inject(Router);
   private readonly queueService = inject(QueueService);
@@ -161,15 +164,17 @@ export class Library {
           this.playlists().map((p) => playlistEntry(p, this.songIndex())),
           this.sort(),
         );
-      default:
-        return sortEntries(
-          this.library.songs().filter((song) => {
-            const level = song.lyrics_level ?? 'none';
-            const filter = this.lyricsFilter();
-            return filter === 'all' || (filter === 'duet' ? song.is_duet === true : level === filter);
-          }).map(songEntry),
-          this.sort(),
-        );
+      default: {
+        const songs = this.library.songs().filter((song) => {
+          const level = song.lyrics_level ?? 'none';
+          const filter = this.lyricsFilter();
+          return filter === 'all' || (filter === 'duet' ? song.is_duet === true : level === filter);
+        });
+        if (this.sort() === 'best-fit') {
+          return sortSongsByVocalFit(songs, this.partySession.activeSinger()).map(songEntry);
+        }
+        return sortEntries(songs.map(songEntry), this.sort());
+      }
     }
   });
   readonly effectiveLayout = computed(() =>

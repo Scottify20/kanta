@@ -18,6 +18,7 @@ from app.services.metadata import (
     create_compressed_original_with_cover,
     convert_and_tag_stem,
 )
+from app.services.vocal_analysis import analyze_and_save_vocal_range
 from app.services.lyrics import fetch_and_save_lyrics
 from app.services.paths import (
     configure_environment,
@@ -329,15 +330,17 @@ def _run_basic_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path
         input_file_path,
         cover_path,
     )
+    vocal_stem_path = stems_dir / f"{title} (Vocals){ext}"
     convert_and_tag_stem(
         pass1_files[1],
-        stems_dir / f"{title} (Vocals){ext}",
+        vocal_stem_path,
         raw_artist,
         raw_album,
         f"{raw_title} (Vocals)",
         input_file_path,
         cover_path,
     )
+    analyze_and_save_vocal_range(final_song_dir, vocal_stem_path)
 
     check_cancellation_and_update(task_id, "Finalizing...", 95)
     return final_song_dir
@@ -421,23 +424,24 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
         input_file_path,
         cover_path,
     )
+    vocal_stem_path = stems_dir / f"{title} (Vocals){ext}"
     convert_and_tag_stem(
         pass1_files[1],
-        stems_dir / f"{title} (Vocals){ext}",
+        vocal_stem_path,
         raw_artist,
         raw_album,
         f"{raw_title} (Vocals)",
         input_file_path,
         cover_path,
     )
-
     # Pass 2: Lead/Backing Vocals (40% -> 65%)
     TaskProgressTqdm.set_task_context(task_id, 40, 65, "Pass 2/3 (Karaoke Split)")
     separator.load_model("mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt")
     pass2_files = _separate(separator, vocal_pass2_input, 2, temp_dir)
+    lead_vocal_stem_path = stems_dir / f"{title} (Lead Vocals){ext}"
     convert_and_tag_stem(
         pass2_files[1],
-        stems_dir / f"{title} (Lead Vocals){ext}",
+        lead_vocal_stem_path,
         raw_artist,
         raw_album,
         f"{raw_title} (Lead Vocals)",
@@ -453,6 +457,7 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
         input_file_path,
         cover_path,
     )
+    analyze_and_save_vocal_range(final_song_dir, lead_vocal_stem_path)
     if vocal_pass2_input.exists():
         vocal_pass2_input.unlink()
 

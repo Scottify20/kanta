@@ -39,3 +39,22 @@
   <label class="monitor-toggle"><input class="switch" type="checkbox" role="switch" [checked]="monitor()" (change)="setMonitor($any($event.target).checked)" /><span>Monitor / loopback</span><svg lucideVolume2 [size]="16"></svg></label>
   @if (monitor()) { <p class="feedback-warning" role="note">Feedback warning: microphone audio will play through your speakers. Use headphones or keep the level low.</p> }
 </div>
+<div class="range-calibration">
+  <div>
+    <strong>Vocal Range Calibration</strong>
+    <p>Measure your comfortable notes or choose a voice preset.</p>
+    @if (activeSinger(); as singer) {
+      <span class="range-profile">{{ singer.name }} · {{ singer.voiceType }} ({{ singer.minNote ?? '—' }} – {{ singer.maxNote ?? '—' }})</span>
+    } @else {
+      <span class="range-profile">No active singer</span>
+    }
+  </div>
+  <button type="button" class="test-button" (click)="openVocalRangeCalibration()">Calibrate Range</button>
+</div>
+@if (vocalRangeModalOpen()) {
+  <app-vocal-range-modal
+    [microphoneDeviceId]="inputId()"
+    [existingProfile]="calibrationProfile()"
+    (closed)="closeVocalRangeCalibration()"
+  />
+}

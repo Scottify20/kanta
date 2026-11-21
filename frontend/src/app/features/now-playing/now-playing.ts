@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, input, signal, untracked, DOCUMENT } from '@angular/core';
+import { Component, Injector, OnDestroy, computed, effect, inject, input, signal, untracked, DOCUMENT } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -22,6 +22,8 @@ import { LyricsStage } from './ui/lyrics-stage/lyrics-stage';
 import { LyricsSizeControl } from './ui/lyrics-size-control/lyrics-size-control';
 import { LyricsTimingControl } from './ui/lyrics-timing-control/lyrics-timing-control';
 import { StemVolumeControl } from './ui/stem-volume-control/stem-volume-control';
+import { KeyAdjustmentControl } from './ui/key-adjustment-control/key-adjustment-control';
+import { PartyHeaderStrip } from './ui/party-header-strip/party-header-strip';
 import { findPlaybackStems } from '../../shared/services/playback-actions.service';
 import { AudioPlayerService } from '../../shared/services/audio-player.service';
 import { Tooltip } from '../../shared/directives/tooltip';
@@ -30,9 +32,11 @@ import { LyricsService } from '../../shared/services/lyrics';
 import { LyricsColorService } from '../../shared/services/lyrics-color.service';
 import { QueueItem, QueueSnapshot } from '../queue/interfaces/queue.models';
 import { QueueService } from '../queue/data-access/queue.service';
-import { SongManifest, SongsService } from '../../shared/services/songs.service';
+import { SongManifest, SongsService, hasVocalRange, hasVocalStem } from '../../shared/services/songs.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { PopupStateService } from '../../shared/services/popup-state.service';
+import { ToastService } from '../../shared/services/toast.service';
+import type { PartySessionService } from '../../shared/services/party-session.service';
 
 @Component({
   selector: 'app-now-playing',
@@ -43,6 +47,8 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
     LyricsTimingControl,
     LyricsSizeControl,
     StemVolumeControl,
+    KeyAdjustmentControl,
+    PartyHeaderStrip,
     LucideChevronLeft,
     LucideChevronRight,
     LucideListMusic,
@@ -65,6 +71,7 @@ export class NowPlaying implements OnDestroy {
   private readonly queueService = inject(QueueService);
   private readonly songsService = inject(SongsService);
   private readonly popupState = inject(PopupStateService);
+  private readonly injector = inject(Injector);
   private pointerInsideTrackArea = false;
   private readonly fullscreen = inject(FullscreenService);
   private readonly document = inject(DOCUMENT);
@@ -72,6 +79,7 @@ export class NowPlaying implements OnDestroy {
   readonly playlistsService = inject(PlaylistsService);
   private readonly entryActions = inject(EntryActionsService);
   private readonly library = inject(LibraryService);
+  private readonly toast = inject(ToastService);
   readonly lyricsColors = inject(LyricsColorService);
 
   // The song loaded in the player: its manifest, or the library record matching the selected queue item.
@@ -82,6 +90,12 @@ export class NowPlaying implements OnDestroy {
     if (!track || track.status !== 'completed') return null;
     const key = songKey({ artist: track.artist, album: track.album, title: track.title });
     return this.library.songs().find((song) => songKey(song) === key) ?? null;
+  });
+  readonly currentPlaybackKey = computed(() => {
+    const taskId = this.selectedTrack()?.task_id;
+    if (taskId) return taskId;
+    const song = this.currentSong();
+    return song ? songKey(song) : null;
   });
 
   openInLibrary(action: 'go-artist' | 'go-album'): void {
@@ -151,8 +165,14 @@ export class NowPlaying implements OnDestroy {
   private seekPointerId: number | null = null;
   private mediaNavigation = Promise.resolve();
   private manifestRequest = 0;
+  private partySessionPromise: Promise<PartySessionService> | null = null;
 
   constructor() {
+    this.audioPlayer.playbackIssues.pipe(takeUntilDestroyed()).subscribe((issue) => {
+      if (issue.kind === 'error') this.toast.error(issue.message);
+      else this.toast.show(issue.message, 'info');
+    });
+
     const savedSong = this.songsService.currentSong();
     if (savedSong) {
       this.restoreCurrentSong(savedSong);
@@ -320,6 +340,11 @@ export class NowPlaying implements OnDestroy {
     }
   }
 
+  private getPartySession(): Promise<PartySessionService> {
+    return this.partySessionPromise ??= import('../../shared/services/party-session.service')
+      .then(({ PartySessionService }) => this.injector.get(PartySessionService));
+  }
+
   startSeek(event: PointerEvent): void {
     if (event.button !== 0 || !this.audioPlayer.duration()) return;
     event.preventDefault();
@@ -463,6 +488,11 @@ export class NowPlaying implements OnDestroy {
     return items.findIndex((item) =>
       taskId ? item.task_id === taskId : !!song && this.sameSong(song, item),
     );
+  });
+  readonly upcomingQueueItem = computed(() => {
+    const items = this.queueItems();
+    const index = this.currentQueueIndex();
+    return items[index < 0 ? 0 : index + 1] ?? null;
   });
   readonly hasPrevious = computed(() => this.currentQueueIndex() > 0 || this.audioPlayer.currentTime() > 3);
   // Next is only available once the upcoming track has finished processing.
@@ -647,16 +677,23 @@ export class NowPlaying implements OnDestroy {
       return;
     }
 
+    this.playbackError.set('');
     try {
+      const resumeContext = this.audioPlayer.resumeAudioContext();
       const songKey = `${manifest.artist}/${manifest.album}/${manifest.title}`;
       if (this.loadedSongKey !== songKey) {
         const stems = findPlaybackStems(manifest.stems);
         if (!stems) {
-          throw new Error('This processed song is missing playback stems.');
+          const error = new Error('This processed song is missing playback stems.');
+          this.playbackError.set(error.message);
+          this.toast.error('This song is missing playback stems. Reprocess it before playing.');
+          return;
         }
+        await resumeContext;
         await this.audioPlayer.loadStems({
           vocals: stems.vocals.url,
           instrumental: stems.instrumental.url,
+          master: manifest.master,
           replayGain: {
             trackGain: manifest.replaygain_track_gain,
             trackPeak: manifest.replaygain_track_peak,
@@ -665,11 +702,47 @@ export class NowPlaying implements OnDestroy {
           },
         });
         this.loadedSongKey = songKey;
+        await this.applyAutomaticSongKey();
+      } else {
+        await resumeContext;
       }
-      this.playbackError.set('');
       await this.audioPlayer.play();
     } catch (error) {
-      this.playbackError.set(error instanceof Error ? error.message : 'Could not load this song.');
+      const message = error instanceof Error ? error.message : 'Could not load this song.';
+      console.error('Could not start playback:', error);
+      this.playbackError.set(message);
+    }
+  }
+
+  private async applyAutomaticSongKey(): Promise<void> {
+    const song = this.selectedManifest();
+    const taskId = this.selectedTrack()?.task_id ?? null;
+    if (song && !hasVocalRange(song) && hasVocalStem(song)) {
+      void this.library.requestVocalRangeAnalysis(song)
+        .then(async (updated) => {
+          if (updated && this.selectedTrack()?.task_id === taskId) {
+            this.selectedManifest.set(updated);
+            this.songsService.setNowPlaying(updated, taskId);
+            const partySession = await this.getPartySession();
+            if (partySession.autoAdjustKey()) {
+              if (taskId) await partySession.applyQueueItemKey(updated, taskId);
+              else await partySession.applyActiveKeyToPlayback();
+            }
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('Could not update the current song vocal range:', error);
+        });
+    }
+    try {
+      const partySession = await this.getPartySession();
+      if (partySession.autoAdjustKey()) {
+        if (song && taskId) await partySession.applyQueueItemKey(song, taskId);
+        else await partySession.applyActiveKeyToPlayback();
+      }
+    } catch (error) {
+      console.error('Could not apply the singer key for this song:', error);
+      this.playbackError.set('Could not automatically match the key.');
     }
   }
 

@@ -1,6 +1,8 @@
 import { AlbumEntry, ArtistEntry, songCover, songKey } from '../../../shared/services/library.service';
 import { Playlist } from '../../../shared/services/playlists.service';
 import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
+import type { UserProfile } from '../../../shared/services/party-session.service';
+import { recommendSoloKey } from '../../../shared/services/vocal-fit';
 import { DEFAULT_GENRE_DELIMITERS, splitMetadataValues } from '../../../shared/util/metadata-delimiters';
 
 export type LibraryTab = 'songs' | 'genres' | 'albums' | 'artists' | 'playlists';
@@ -9,6 +11,7 @@ export type SortMode =
   | 'az'
   | 'za'
   | 'recent'
+  | 'best-fit'
   | 'artist'
   | 'album'
   | 'year-new'
@@ -21,6 +24,7 @@ export const SORT_LABELS: Record<SortMode, string> = {
   az: 'A → Z',
   za: 'Z → A',
   recent: 'Recently added',
+  'best-fit': 'Best Fit for My Voice',
   artist: 'Artist',
   album: 'Album',
   'year-new': 'Year (newest)',
@@ -32,7 +36,7 @@ export const SORT_LABELS: Record<SortMode, string> = {
 
 // Sort options offered per content type; karaoke searches lean on artist and year.
 export const SORT_MODES: Record<LibraryTab, SortMode[]> = {
-  songs: ['az', 'za', 'artist', 'album', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
+  songs: ['best-fit', 'az', 'za', 'artist', 'album', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
   genres: ['az', 'za', 'most-songs', 'year-new', 'year-old', 'recent', 'shortest', 'longest'],
   albums: ['az', 'za', 'artist', 'year-new', 'year-old', 'recent', 'most-songs'],
   artists: ['az', 'za', 'most-songs', 'recent'],
@@ -171,6 +175,7 @@ export function sortEntries(entries: LibraryEntry[], mode: SortMode): LibraryEnt
     az: byTitle,
     za: (a, b) => byTitle(b, a),
     recent: byNumber((e) => e.added, true),
+    'best-fit': byTitle,
     artist: (a, b) => text(a.artist, b.artist) || text(a.album, b.album) || byTitle(a, b),
     album: (a, b) => text(a.album, b.album) || byTitle(a, b),
     'year-new': byNumber((e) => e.year, true),
@@ -180,6 +185,23 @@ export function sortEntries(entries: LibraryEntry[], mode: SortMode): LibraryEnt
     'most-songs': byNumber((e) => e.count, true),
   };
   return [...entries].sort(compare[mode]);
+}
+
+export function sortSongsByVocalFit(
+  songs: SongManifest[],
+  singer: UserProfile | null,
+): SongManifest[] {
+  const text = (a: string, b: string): number =>
+    a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+  if (!singer) return [...songs].sort((a, b) => text(songTitle(a), songTitle(b)));
+  const rank = { natural: 0, adjusted: 1, reach: 2, uncalibrated: 3, unanalyzed: 4 } as const;
+  return [...songs].sort((a, b) => {
+    const fitA = recommendSoloKey(a, singer);
+    const fitB = recommendSoloKey(b, singer);
+    return rank[fitA.status] - rank[fitB.status]
+      || Math.abs(fitA.semitones) - Math.abs(fitB.semitones)
+      || text(songTitle(a), songTitle(b));
+  });
 }
 
 export function sortArtistSongs(songs: SongManifest[]): SongManifest[] {

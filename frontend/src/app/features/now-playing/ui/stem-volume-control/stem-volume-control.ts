@@ -2,10 +2,11 @@ import { Component, inject } from '@angular/core';
 import { LucideGuitar, LucideMicVocal } from '@lucide/angular';
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { AudioPlayerService } from '../../../../shared/services/audio-player.service';
+import { Tooltip } from '../../../../shared/directives/tooltip';
 
 @Component({
   selector: 'app-stem-volume-control',
-  imports: [PopupPanel, LucideGuitar, LucideMicVocal],
+  imports: [PopupPanel, Tooltip, LucideGuitar, LucideMicVocal],
   templateUrl: './stem-volume-control.html',
   styleUrl: './stem-volume-control.scss',
 })

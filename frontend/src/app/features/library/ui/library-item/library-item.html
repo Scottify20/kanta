@@ -35,6 +35,9 @@
       @if (entry().kind === 'song' && entry().songs[0]?.is_duet) {
         <span class="lyrics-chip duet">Duet</span>
       }
+      @if (vocalFitLabel(); as fitLabel) {
+        <span class="fit-pill" [class]="'fit-pill fit-' + vocalFit()?.status">{{ fitLabel }}</span>
+      }
     </div>
     <small>{{ entry().subtitle }}</small>
   </div>

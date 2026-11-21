@@ -37,6 +37,7 @@ export class QueueService {
 
   // Emits the removed task id, or null when the whole karaoke queue was cleared.
   readonly karaokeRemoved$ = new Subject<string | null>();
+  readonly trackAdded$ = new Subject<QueueItem>();
 
   // Live snapshot: SSE when the backend supports it, otherwise non-overlapping polling.
   // Failed or slow requests never replace the last known snapshot with an empty one.
@@ -88,7 +89,10 @@ export class QueueService {
     if (lyrics) formData.append('lyrics', lyrics, lyrics.name);
     return this.http
       .post<{ item: QueueItem | null; skipped?: 'already_in_library' | 'already_queued' | null }>(`${API_URL}/api/queue/add`, formData)
-      .pipe(tap(() => this.refresh()));
+      .pipe(tap(({ item }) => {
+        if (item) this.trackAdded$.next(item);
+        this.refresh();
+      }));
   }
 
   addProcessedTrack(
@@ -102,7 +106,10 @@ export class QueueService {
         play_next: playNext,
         after_task_id: afterTaskId,
       })
-      .pipe(tap(() => this.refresh()));
+      .pipe(tap(({ item }) => {
+        this.trackAdded$.next(item);
+        this.refresh();
+      }));
   }
 
   promoteTrack(taskId: string): Observable<{ item: QueueItem }> {

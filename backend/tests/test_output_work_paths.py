@@ -165,11 +165,21 @@ class OutputWorkPathTests(unittest.IsolatedAsyncioTestCase):
                  patch.object(separator, "fetch_and_save_lyrics"), \
                  patch.object(separator, "create_compressed_original_with_cover"), \
                  patch.object(separator, "convert_and_tag_stem"), \
+                 patch.object(separator, "analyze_and_save_vocal_range") as analyze_vocal_range, \
                  patch.object(separator, "_create_separator", side_effect=create):
                 for pipeline in (separator.run_basic_pipeline, separator.run_karaoke_pipeline):
                     self.assertEqual(pipeline(input_path), root / "Artist" / "Album" / "Song")
                     self.assertEqual(list(processing_dir(root).iterdir()), [])
             self.assertEqual(len(work_dirs), 2)
+            self.assertEqual(analyze_vocal_range.call_count, 2)
+            expected_vocal_stems = ("(Vocals)", "(Lead Vocals)")
+            for call, expected_stem in zip(
+                analyze_vocal_range.call_args_list, expected_vocal_stems, strict=True
+            ):
+                song_dir, vocal_path = call.args
+                self.assertEqual(song_dir, root / "Artist" / "Album" / "Song")
+                self.assertEqual(vocal_path.parent, song_dir / "stems")
+                self.assertIn(expected_stem, vocal_path.name)
 
     def test_private_work_files_are_not_public_media(self):
         with tempfile.TemporaryDirectory() as temp:

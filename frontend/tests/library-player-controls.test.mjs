@@ -10,17 +10,20 @@ import { EntryActionsService } from '../src/app/shared/services/entry-actions.se
 import { LibraryService } from '../src/app/shared/services/library.service.ts';
 import { PlaylistsService } from '../src/app/shared/services/playlists.service.ts';
 import { SettingsService } from '../src/app/shared/services/settings.service.ts';
+import { ToastService } from '../src/app/shared/services/toast.service.ts';
 import { SongsService } from '../src/app/shared/services/songs.service.ts';
 import { MetadataEditor } from '../src/app/features/library/ui/metadata-editor/metadata-editor.ts';
 import { LibraryToolbar } from '../src/app/features/library/ui/library-toolbar/library-toolbar.ts';
 import { MiniLyrics } from '../src/app/features/now-playing/ui/mini-lyrics/mini-lyrics.ts';
 import { AudioPlayerService, clampVolumeBoostDb, replayGainFactor } from '../src/app/shared/services/audio-player.service.ts';
 import { ArtistInfoService } from '../src/app/shared/services/artist-info.service.ts';
-import { genreEntries, songEntry } from '../src/app/features/library/data/library-entries.ts';
+import { genreEntries, songEntry, sortSongsByVocalFit, SORT_MODES } from '../src/app/features/library/data/library-entries.ts';
+import { createProfileFromPreset } from '../src/app/shared/services/party-session.service.ts';
 import { DEFAULT_ARTIST_DELIMITERS, DEFAULT_GENRE_DELIMITERS, splitMetadataValues } from '../src/app/shared/util/metadata-delimiters.ts';
 
 const song = {
   artist: 'Artist', album: 'Album', title: 'Title',
+  musical_key: 'F',
   stems: [{ name: 'Title (Vocals).mp3', url: '/vocals' }, { name: 'Title (Instrumental).mp3', url: '/instrumental' }],
   covers: [], lyrics: [], replaygain_track_gain: -3.2, replaygain_track_peak: 0.9,
 };
@@ -53,7 +56,22 @@ describe('library song filters', () => {
     expect(toolbar.tabs.map(({ id }) => id)).toEqual(['songs', 'albums', 'artists', 'genres', 'playlists']);
     expect(toolbar.sortModes()).toContain('most-songs');
     expect(toolbar.sortModes()).not.toContain('artist');
+    expect(SORT_MODES.songs).toContain('best-fit');
     injector.destroy();
+  });
+
+  it('ranks vocal fits before reach and unanalyzed songs for the active singer', () => {
+    const singer = { ...createProfileFromPreset('Tenor', 'Singer'), tessituraMaxHz: 400 };
+    const songs = [
+      { ...song, title: 'Unanalyzed', vocal_max_hz: null },
+      { ...song, title: 'Reach', vocal_max_hz: 800 },
+      { ...song, title: 'Adjusted', vocal_max_hz: 450 },
+      { ...song, title: 'Natural', vocal_max_hz: 400 },
+    ];
+
+    expect(sortSongsByVocalFit(songs, singer).map(({ title }) => title)).toEqual([
+      'Natural', 'Adjusted', 'Reach', 'Unanalyzed',
+    ]);
   });
 
   it('lists unique genres as openable entries containing their songs', () => {
@@ -121,6 +139,18 @@ describe('artist photos', () => {
 });
 
 describe('metadata editor', () => {
+  it('loads the key, shows its Camelot code, and saves picker selections', () => {
+    const editor = Object.create(MetadataEditor.prototype);
+    const draft = editor.toDraft(song);
+    editor.draft = signal(draft);
+    editor.saveStatus = signal('');
+    editor.keyPickerOpen = signal(true);
+    editor.selectMusicalKey('F#');
+    expect(editor.draft().musical_key).toBe('F#');
+    expect(editor.camelotCode()).toBe('2B');
+    expect(editor.keyPickerOpen()).toBe(false);
+  });
+
   it('accepts numeric ReplayGain values returned by the library', () => {
     const editor = Object.create(MetadataEditor.prototype);
     const draft = editor.toDraft(song);
@@ -135,17 +165,91 @@ describe('metadata editor', () => {
     editor.draft = signal(editor.toDraft(song));
     editor.baseline = signal(editor.toDraft(song));
     editor.saving = signal(false);
+    editor.analyzingVocalRange = signal(false);
+    editor.analyzingMusicalKey = signal(false);
     editor.error = signal('');
     editor.saveStatus = signal('');
+    editor.keyPickerOpen = signal(true);
     editor.saved = { emit: vi.fn() };
     editor.songs = { updateSongMetadata: vi.fn(() => of(song)) };
     editor.setText('genre', 'Pop');
+    editor.selectMusicalKey('F#');
     editor.saveMetadata();
     expect(editor.songs.updateSongMetadata).toHaveBeenCalledWith(song, expect.objectContaining({
-      genre: 'Pop', replaygain_track_gain: -3.2,
+      genre: 'Pop', musical_key: 'F#', replaygain_track_gain: -3.2,
     }));
     expect(editor.saveStatus()).toBe('Changes saved.');
     expect(editor.saved.emit).toHaveBeenCalledWith(song);
+  });
+
+  it('does not send an unchanged metadata draft', () => {
+    const editor = Object.create(MetadataEditor.prototype);
+    const draft = editor.toDraft(song);
+    editor.manifest = signal(song);
+    editor.draft = signal(draft);
+    editor.baseline = signal(draft);
+    editor.saving = signal(false);
+    editor.analyzingVocalRange = signal(false);
+    editor.analyzingMusicalKey = signal(false);
+    editor.songs = { updateSongMetadata: vi.fn() };
+    editor.saveMetadata();
+    expect(editor.songs.updateSongMetadata).not.toHaveBeenCalled();
+  });
+
+  it('refreshes vocal range without clobbering unsaved metadata edits', async () => {
+    const editor = Object.create(MetadataEditor.prototype);
+    const draft = editor.toDraft(song);
+    const updated = {
+      ...song,
+      vocal_min_hz: 110,
+      vocal_max_hz: 220,
+      vocal_min_note: 'A2',
+      vocal_max_note: 'A3',
+      vocal_voice_type: 'Baritone',
+    };
+    editor.manifest = signal(song);
+    editor.draft = signal({ ...draft, genre: 'Unsaved genre' });
+    editor.baseline = signal(draft);
+    editor.analyzingVocalRange = signal(false);
+    editor.analyzingMusicalKey = signal(false);
+    editor.saving = signal(false);
+    editor.vocalRangeError = signal('');
+    editor.saveStatus = signal('');
+    editor.saved = { emit: vi.fn() };
+    editor.library = { requestVocalRangeAnalysis: vi.fn().mockResolvedValue(updated) };
+
+    await editor.analyzeVocalRange();
+
+    expect(editor.library.requestVocalRangeAnalysis).toHaveBeenCalledWith(song, true);
+    expect(editor.manifest()).toMatchObject({ vocal_min_note: 'A2', vocal_max_note: 'A3' });
+    expect(editor.draft().genre).toBe('Unsaved genre');
+    expect(editor.baseline().genre).toBe('');
+    expect(editor.dirty()).toBe(true);
+    expect(editor.saved.emit).toHaveBeenCalledWith(updated);
+  });
+
+  it('re-analyzes musical key without replacing unsaved draft fields', async () => {
+    const editor = Object.create(MetadataEditor.prototype);
+    const draft = editor.toDraft(song);
+    const updated = { ...song, musical_key: 'G', camelot_key: '9B' };
+    editor.manifest = signal(song);
+    editor.draft = signal({ ...draft, genre: 'Unsaved genre' });
+    editor.baseline = signal(draft);
+    editor.analyzingVocalRange = signal(false);
+    editor.analyzingMusicalKey = signal(false);
+    editor.saving = signal(false);
+    editor.musicalKeyError = signal('');
+    editor.saveStatus = signal('');
+    editor.saved = { emit: vi.fn() };
+    editor.songs = { analyzeSongMusicalKey: vi.fn().mockResolvedValue(updated) };
+
+    await editor.analyzeMusicalKey();
+
+    expect(editor.songs.analyzeSongMusicalKey).toHaveBeenCalledWith(song);
+    expect(editor.manifest().musical_key).toBe('G');
+    expect(editor.draft().genre).toBe('Unsaved genre');
+    expect(editor.dirty()).toBe(true);
+    expect(editor.saved.emit).toHaveBeenCalledWith(updated);
   });
 });
 
@@ -473,6 +577,7 @@ describe('library processing', () => {
             getSettings: () => of({ artist_delimiters: '&,;/+', genre_delimiters: ',;/|' }),
           },
         },
+        { provide: ToastService, useValue: { error: vi.fn() } },
       ], Injector.NULL);
       const library = runInInjectionContext(injector, () => new LibraryService());
       library.songs.set([
@@ -505,6 +610,7 @@ describe('library processing', () => {
             getSettings: () => of({ artist_delimiters: '&', genre_delimiters: ',' }),
           },
         },
+        { provide: ToastService, useValue: { error: vi.fn() } },
       ], Injector.NULL);
       const library = runInInjectionContext(injector, () => new LibraryService());
       library.songs.set([{ ...song, display_artist: 'Alice & Bob' }]);

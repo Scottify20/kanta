@@ -63,8 +63,12 @@
       <div class="color-modes" role="group" aria-label="Lyrics color">
         <button type="button" [class.active]="colors.mode() === 'white'" [attr.aria-pressed]="colors.mode() === 'white'" (click)="colors.setMode('white')">White</button>
         <button type="button" [class.active]="colors.mode() === 'automatic'" [attr.aria-pressed]="colors.mode() === 'automatic'" (click)="colors.setMode('automatic')">Auto</button>
+        <button type="button" [class.active]="colors.mode() === 'singer'" [attr.aria-pressed]="colors.mode() === 'singer'" (click)="colors.setMode('singer')">Singer</button>
         <button type="button" [class.active]="colors.mode() === 'custom'" [attr.aria-pressed]="colors.mode() === 'custom'" (click)="colors.setMode('custom')">Custom</button>
       </div>
+      @if (colors.mode() === 'singer') {
+        <p>Using the active singer's profile color, adjusted for readable lyrics.</p>
+      }
       @if (colors.mode() === 'automatic' && colors.automaticUsesCustom()) {
         <p>Using custom duet colors when album colors are unavailable or not distinct enough.</p>
       }

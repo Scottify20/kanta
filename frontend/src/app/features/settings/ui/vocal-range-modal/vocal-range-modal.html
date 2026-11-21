@@ -1,0 +1,165 @@
+<div class="backdrop" role="presentation" (click)="closeFromBackdrop($event)">
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="range-title">
+    <header class="dialog-header">
+      <div>
+        <p class="eyebrow">Voice profile</p>
+        <h2 id="range-title">Find your comfortable range</h2>
+      </div>
+      <button class="close-button" type="button" aria-label="Close" (click)="skip()">
+        <svg lucideX [size]="18"></svg>
+      </button>
+    </header>
+
+    @if (view() === 'measure') {
+      <div class="mode-switch" role="group" aria-label="Choose how to set your range">
+        <button class="selected" type="button" aria-pressed="true"><svg lucideMic [size]="15"></svg>Use microphone</button>
+        <button type="button" (click)="showPresets()">Choose Voice Preset</button>
+      </div>
+
+      <div class="step-copy" aria-live="polite">
+        @if (step() === 'lowest') {
+          <p class="step-label">Lowest Note</p>
+          <p class="instruction">Sing or hum your lowest comfortable note...</p>
+        } @else {
+          <p class="step-label">Highest Note</p>
+          <p class="instruction">Glide up to your highest comfortable note...</p>
+        }
+      </div>
+
+      <div class="tracking-area">
+        @if (noiseCheckComplete()) {
+          <div class="pitch-rail" aria-label="Live pitch rail">
+            @if (lowPosition() !== null) {
+              <span class="range-boundary low-boundary" [style.left.%]="lowPosition()">
+                <i></i><small>Low {{ midiToNote(lowMidi()!) }}</small>
+              </span>
+            }
+            @if (highPosition() !== null) {
+              <span class="range-boundary high-boundary" [style.left.%]="highPosition()">
+                <i></i><small>High {{ midiToNote(highMidi()!) }}</small>
+              </span>
+            }
+            @for (anchor of anchors; track anchor.note) {
+              <span class="anchor" [style.left.%]="anchor.position">
+                <i></i><small>{{ anchor.note }}</small>
+              </span>
+            }
+            @if (bubblePosition() !== null) {
+              <span class="live-note-label" [style.left.%]="bubblePosition()">
+                {{ partySession.activeSinger()?.name || profileName() }} · Currently humming {{ detectedNote() }}
+              </span>
+              <div class="tracking-bubble" [style.left.%]="bubblePosition()">
+                <svg class="hold-ring" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle class="ring-track" cx="20" cy="20" r="17"></circle>
+                  <circle
+                    class="ring-progress"
+                    cx="20"
+                    cy="20"
+                    r="17"
+                    [attr.stroke-dasharray]="holdRingCircumference"
+                    [attr.stroke-dashoffset]="holdRingOffset()"
+                  ></circle>
+                </svg>
+                <span>{{ detectedNote() }}</span>
+              </div>
+            }
+          </div>
+          <p class="rail-hint">Hold a comfortable note steady until the ring fills.</p>
+          <div class="range-step-actions" role="group" aria-label="Choose which range boundary to check">
+            <button type="button" [class.selected]="step() === 'lowest'" (click)="selectRangeStep('lowest')">
+              Lowest{{ lowMidi() === null ? '' : ': ' + midiToNote(lowMidi()!) }}
+            </button>
+            <button type="button" [class.selected]="step() === 'highest'" (click)="selectRangeStep('highest')">
+              Highest{{ highMidi() === null ? '' : ': ' + midiToNote(highMidi()!) }}
+            </button>
+          </div>
+          <div class="manual-range">
+            <label>Set lowest note
+              <select [value]="lowMidi() ?? ''" (change)="setManualNote('lowest', $event)">
+                <option value="">Choose note</option>
+                @for (note of manualNotes; track note.midi) { <option [value]="note.midi">{{ note.note }}</option> }
+              </select>
+            </label>
+            <label>Set highest note
+              <select [value]="highMidi() ?? ''" (change)="setManualNote('highest', $event)">
+                <option value="">Choose note</option>
+                @for (note of manualNotes; track note.midi) { <option [value]="note.midi">{{ note.note }}</option> }
+              </select>
+            </label>
+          </div>
+        } @else {
+          <div class="noise-check" role="status">
+            <span class="noise-pulse"></span>
+            <p>Listening to the room for a moment. Please stay quiet.</p>
+          </div>
+        }
+      </div>
+
+      @if (noiseWarning()) {
+        <p class="notice">It sounds noisy here. A voice preset may work better.</p>
+      }
+      @if (mic.error()) {
+        <p class="error" role="alert">
+          @switch (mic.error()) {
+            @case ('permission-denied') { Microphone access is off. Allow access in your device settings, or choose a voice preset. }
+            @case ('no-device') { No microphone was found. Choose a voice preset instead. }
+            @case ('device-unplugged') { The microphone disconnected. Reconnect it or choose a voice preset. }
+            @default { Microphone testing is unavailable. You can still choose a voice preset. }
+          }
+        </p>
+      }
+      @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+
+      <footer>
+        <button class="secondary" type="button" (click)="skip()">Skip</button>
+        @if (lowMidi() !== null && highMidi() !== null) {
+          <button class="primary" type="button" (click)="reviewRange()">Review this range</button>
+        }
+        @if (!mic.running()) {
+          <button class="primary" type="button" (click)="showMicrophone()">
+            <svg lucideMic [size]="16"></svg>Try microphone
+          </button>
+        }
+      </footer>
+    } @else if (view() === 'presets') {
+      <div class="preset-view">
+        <button class="back-link" type="button" (click)="showMicrophone()">
+          <svg lucideArrowLeft [size]="15"></svg>Try with your microphone
+        </button>
+        <p class="instruction">Choose the range that feels most comfortable. You can change it later.</p>
+        <app-settings-option-group
+          label="Voice range presets"
+          [columns]="3"
+          [options]="presets"
+          [selected]="selectedPreset()"
+          (selectedChange)="choosePreset($event)"
+        />
+      </div>
+      <footer>
+        <button class="secondary" type="button" (click)="skip()">Skip</button>
+        @if (lowMidi() !== null && highMidi() !== null) {
+          <button class="secondary" type="button" (click)="continueTesting()">Keep testing</button>
+        }
+      </footer>
+    } @else {
+      <div class="result-view">
+        <div class="detected-pill">Detected Voice: {{ resultVoiceType() }}</div>
+        <div class="range-result">
+          <p class="range-label">Your comfortable range</p>
+          <p class="range-notes"><span>{{ resultMinNote() }}</span><i></i><span>{{ resultMaxNote() }}</span></p>
+          <p class="comfort-zone">Comfort zone <strong>{{ resultComfortZone() }}</strong></p>
+        </div>
+        <label class="name-field">
+          <span>Name for this profile</span>
+          <input [ngModel]="profileName()" (ngModelChange)="profileName.set($event)" maxlength="40" />
+        </label>
+        @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+      </div>
+      <footer>
+        <button class="secondary" type="button" (click)="skip()">Skip</button>
+        <button class="secondary" type="button" (click)="view.set('presets')">Choose another preset</button>
+        <button class="primary" type="button" (click)="saveProfile()">Save profile</button>
+      </footer>
+    }
+  </section>
+</div>

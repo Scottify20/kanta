@@ -32,6 +32,18 @@ ASSET_HIT_TTL = 30.0
 ASSET_MISS_TTL = 3.0
 SIDECAR_NAME = ".kanta.json"
 MEDIA_PREFIX = "/media-roots/"
+VOCAL_RANGE_FIELDS = {
+    "vocal_min_hz": "min_hz",
+    "vocal_max_hz": "max_hz",
+    "vocal_min_note": "min_note",
+    "vocal_max_note": "max_note",
+    "vocal_tessitura_min_hz": "tessitura_min_hz",
+    "vocal_tessitura_max_hz": "tessitura_max_hz",
+    "vocal_tessitura_min_note": "tessitura_min_note",
+    "vocal_tessitura_max_note": "tessitura_max_note",
+    "vocal_voice_type": "voice_type",
+}
+ANALYSIS_FIELDS = ("musical_key_mode", "camelot_key")
 logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
@@ -70,7 +82,7 @@ def _load_root_cache(root: Path) -> None:
             if (
                 song_dir.is_relative_to(root)
                 and isinstance(signature, list)
-                and len(signature) == 7
+                and len(signature) == 8
                 and all(isinstance(value, int) for value in signature)
                 and isinstance(record, dict)
                 and record.get("path") == str(song_dir)
@@ -78,6 +90,9 @@ def _load_root_cache(root: Path) -> None:
                     "_root_index", "root_index", "artist", "album", "title",
                     "stems", "lyrics", "covers", "master", "cover_url", "is_duet",
                 ))
+                and all(field in record for field in EXTENDED_FIELDS)
+                and all(field in record for field in VOCAL_RANGE_FIELDS)
+                and all(field in record for field in ANALYSIS_FIELDS)
                 and all(isinstance(record[key], list) for key in ("stems", "lyrics", "covers"))
             ):
                 with _lock:
@@ -139,20 +154,31 @@ def reference_audio(song_dir: Path) -> Optional[Path]:
 
 def _date_added(song_dir: Path, reference: Optional[Path]) -> float:
     sidecar = song_dir / SIDECAR_NAME
+    sidecar_data: dict[str, Any] = {}
+    sidecar_writable = True
     try:
-        value = json.loads(sidecar.read_text(encoding="utf-8")).get("date_added")
+        loaded = json.loads(sidecar.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("sidecar must contain a JSON object")
+        sidecar_data = loaded
+        value = sidecar_data.get("date_added")
         if isinstance(value, (int, float)):
             return float(value)
-    except (OSError, ValueError, AttributeError):
+    except FileNotFoundError:
         pass
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not read song sidecar %s: %s", sidecar, exc)
+        sidecar_writable = False
     try:
         value = round(min((reference or song_dir).stat().st_mtime, song_dir.stat().st_mtime), 3)
     except OSError:
         value = round(time.time(), 3)
-    try:
-        atomic_write_json(sidecar, {"date_added": value}, indent=None)
-    except OSError:
-        pass
+    if sidecar_writable:
+        sidecar_data["date_added"] = value
+        try:
+            atomic_write_json(sidecar, sidecar_data, indent=None)
+        except OSError as exc:
+            logger.warning("Could not update song sidecar %s: %s", sidecar, exc)
     return value
 
 
@@ -169,7 +195,78 @@ def _signature(song_dir: Path, reference: Optional[Path]) -> tuple:
         _mtime(song_dir / "lyrics" / "timing.json"),
         _mtime(song_dir / "covers" / "cover.jpg"),
         _mtime(reference) if reference else 0,
+        _mtime(song_dir / SIDECAR_NAME),
     )
+
+
+def _vocal_range_fields(song_dir: Path) -> dict[str, Any]:
+    try:
+        sidecar_data = json.loads((song_dir / SIDECAR_NAME).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {field: None for field in VOCAL_RANGE_FIELDS}
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not read vocal range from song sidecar %s: %s", song_dir / SIDECAR_NAME, exc)
+        return {field: None for field in VOCAL_RANGE_FIELDS}
+    vocal_range = sidecar_data.get("vocal_range") if isinstance(sidecar_data, dict) else None
+    if not isinstance(vocal_range, dict):
+        return {field: None for field in VOCAL_RANGE_FIELDS}
+    return {
+        field: vocal_range.get(source)
+        for field, source in VOCAL_RANGE_FIELDS.items()
+    }
+
+
+def _song_analysis_fields(song_dir: Path, tags: dict[str, Any]) -> dict[str, Any]:
+    try:
+        sidecar_data = json.loads((song_dir / SIDECAR_NAME).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        sidecar_data = {}
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "Could not read analysis metadata from song sidecar %s: %s",
+            song_dir / SIDECAR_NAME,
+            exc,
+        )
+        sidecar_data = {}
+    if not isinstance(sidecar_data, dict):
+        sidecar_data = {}
+    analysis_fields = {
+        "musical_key_mode": sidecar_data.get("musical_key_mode"),
+        "camelot_key": sidecar_data.get("camelot_key"),
+    }
+    for field in ("musical_key", "bpm"):
+        if field in tags or sidecar_data.get(field) is not None:
+            analysis_fields[field] = (
+                sidecar_data[field]
+                if sidecar_data.get(field) is not None
+                else tags.get(field)
+            )
+    return analysis_fields
+
+
+def update_sidecar_analysis_fields(song_dir: Path, fields: dict[str, Any]) -> None:
+    updates = {name: fields[name] for name in ("musical_key", "bpm") if name in fields}
+    if not updates:
+        return
+    sidecar_path = song_dir / SIDECAR_NAME
+    try:
+        data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        data = {}
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Could not read song sidecar {sidecar_path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"Song sidecar must contain a JSON object: {sidecar_path}")
+    data.update(updates)
+    if "musical_key" in updates:
+        key = updates["musical_key"]
+        data["musical_key_mode"] = (
+            "Minor" if isinstance(key, str) and key.casefold().endswith("m")
+            else "Major" if key
+            else None
+        )
+        data["camelot_key"] = None
+    atomic_write_json(sidecar_path, data, indent=None)
 
 
 def build_song_record(
@@ -179,7 +276,14 @@ def build_song_record(
     signature = _signature(song_dir, reference)
     with _lock:
         cached = _song_cache.get(song_dir)
-        if cached and cached[0] == signature and "is_duet" in cached[1]:
+        if (
+            cached
+            and cached[0] == signature
+            and "is_duet" in cached[1]
+            and all(field in cached[1] for field in EXTENDED_FIELDS)
+            and all(field in cached[1] for field in VOCAL_RANGE_FIELDS)
+            and all(field in cached[1] for field in ANALYSIS_FIELDS)
+        ):
             record = cached[1]
             if (record["_root_index"], record["artist"], record["album"], record["title"]) == (
                 root_index,
@@ -232,6 +336,8 @@ def build_song_record(
         "root_index": root_index,
         "_root_index": root_index,
         **tags,
+        **_song_analysis_fields(song_dir, tags),
+        **_vocal_range_fields(song_dir),
     }
     with _lock:
         _song_cache[song_dir] = (signature, record)

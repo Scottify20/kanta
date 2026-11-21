@@ -83,7 +83,11 @@ export class MiniLyrics {
     const stems = song ? findPlaybackStems(song.stems) : null;
     return !this.playerVisible() && !!taskId && !!stems && this.audio.playbackStarted()
       && (this.queue()?.karaoke_queue.some((item) => item.task_id === taskId && item.status === 'completed') ?? false)
-      && this.audio.hasLoadedSources({ vocals: stems.vocals.url, instrumental: stems.instrumental.url });
+      && this.audio.hasLoadedSources({
+        vocals: stems.vocals.url,
+        instrumental: stems.instrumental.url,
+        master: song?.master,
+      });
   }
   readonly selectedTrack = computed(() => {
     const items = this.queue()?.karaoke_queue ?? [];
@@ -142,7 +146,11 @@ export class MiniLyrics {
       const song = this.song();
       const stems = song ? findPlaybackStems(song.stems) : null;
       if (this.songs.currentQueueTaskId() === track.task_id && stems
-          && this.audio.hasLoadedSources({ vocals: stems.vocals.url, instrumental: stems.instrumental.url })) {
+          && this.audio.hasLoadedSources({
+            vocals: stems.vocals.url,
+            instrumental: stems.instrumental.url,
+            master: song?.master,
+          })) {
         await this.audio.play();
       } else {
         this.songs.requestQueueTrack(track);
