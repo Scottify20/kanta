@@ -1,210 +1,48 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, effect, inject, Injectable, signal, untracked } from '@angular/core';
 import type { SongManifest } from './songs.service';
 import { SongsService } from './songs.service';
 import { AudioPlayerService } from './audio-player.service';
-import { clampKeyShift, recommendSoloKey, singerHitsLimit } from './vocal-fit';
-import type { SoloKeyRecommendation, SongVocalRange } from './vocal-fit';
+import { clampKeyShift, recommendSoloKey } from './vocal-fit';
+import {
+  UserProfile,
+  QueueSingerAssignment,
+  ProfileVoiceType,
+  KeyRecommendation,
+} from './party-session.models';
+import {
+  createProfileFromPreset,
+  classifyVocalRange,
+  recommendDuetKey,
+} from './vocal-classification';
+import {
+  loadSavedProfiles,
+  loadSessionRoster,
+  saveSessionRoster,
+  loadSessionActiveSingerId,
+  saveSessionActiveSingerId,
+  loadSessionDuetSingerId,
+  saveSessionDuetSingerId,
+  loadSessionQueueAssignments,
+  saveSessionQueueAssignments,
+  loadSessionLastRoundRobinId,
+  loadAutoAdjustKey,
+  loadRoundRobinEnabled,
+  PROFILE_STORAGE_KEY,
+  AUTO_ADJUST_STORAGE_KEY,
+  ROUND_ROBIN_STORAGE_KEY,
+  SESSION_LAST_ROUND_ROBIN_KEY,
+} from './party-storage';
 
+export * from './party-session.models';
+export * from './vocal-classification';
 export { clampKeyShift, recommendSoloKey } from './vocal-fit';
 export type { SoloFitStatus, SoloKeyRecommendation } from './vocal-fit';
-
-export type VoiceType = 'Bass' | 'Baritone' | 'Tenor' | 'Alto' | 'Mezzo-Soprano' | 'Soprano';
-export type ProfileVoiceType = VoiceType | 'Uncalibrated';
-
-export interface UserProfile {
-  id: string;
-  name: string;
-  avatar: string | null;
-  initials: string;
-  accentColor: string;
-  voiceType: ProfileVoiceType;
-  minHz: number | null;
-  maxHz: number | null;
-  minNote: string | null;
-  maxNote: string | null;
-  tessituraMinHz: number | null;
-  tessituraMaxHz: number | null;
-  isGuest: boolean;
-}
-
-export interface QueueSingerAssignment {
-  primarySingerId: string | null;
-  secondarySingerId: string | null;
-  prioritySingerId: string | null;
-}
-
-export interface VocalProfilePreset {
-  voiceType: ProfileVoiceType;
-  minHz: number | null;
-  maxHz: number | null;
-  minNote: string | null;
-  maxNote: string | null;
-  tessituraMinHz: number | null;
-  tessituraMaxHz: number | null;
-  tessituraMinNote: string | null;
-  tessituraMaxNote: string | null;
-  accentColor: string;
-}
-
-const PROFILE_STORAGE_KEY = 'kanta.party.profiles';
-const AUTO_ADJUST_STORAGE_KEY = 'kanta.party.autoAdjustKey';
-const ROUND_ROBIN_STORAGE_KEY = 'kanta.party.roundRobin';
-const VOICE_TYPES: readonly VoiceType[] = [
-  'Bass',
-  'Baritone',
-  'Tenor',
-  'Alto',
-  'Mezzo-Soprano',
-  'Soprano',
-];
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-const PRESET_RANGES: Record<
-  VoiceType,
-  { min: number; max: number; tessituraMin: number; tessituraMax: number; accentColor: string }
-> = {
-  Bass: { min: 40, max: 64, tessituraMin: 43, tessituraMax: 60, accentColor: '#4f7cac' },
-  Baritone: { min: 45, max: 69, tessituraMin: 48, tessituraMax: 65, accentColor: '#597a55' },
-  Tenor: { min: 48, max: 72, tessituraMin: 52, tessituraMax: 69, accentColor: '#4a8f8c' },
-  Alto: { min: 53, max: 77, tessituraMin: 57, tessituraMax: 74, accentColor: '#9b6aa0' },
-  'Mezzo-Soprano': { min: 55, max: 79, tessituraMin: 59, tessituraMax: 76, accentColor: '#c0784b' },
-  Soprano: { min: 60, max: 84, tessituraMin: 64, tessituraMax: 79, accentColor: '#b85c73' },
-};
-
-const midiToHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
-const midiToNote = (midi: number): string =>
-  `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
-
-export const VOCAL_PROFILE_PRESETS: readonly VocalProfilePreset[] = VOICE_TYPES.map((voiceType) => {
-  const range = PRESET_RANGES[voiceType];
-  return {
-    voiceType,
-    minHz: midiToHz(range.min),
-    maxHz: midiToHz(range.max),
-    minNote: midiToNote(range.min),
-    maxNote: midiToNote(range.max),
-    tessituraMinHz: midiToHz(range.tessituraMin),
-    tessituraMaxHz: midiToHz(range.tessituraMax),
-    tessituraMinNote: midiToNote(range.tessituraMin),
-    tessituraMaxNote: midiToNote(range.tessituraMax),
-    accentColor: range.accentColor,
-  };
-});
-
-export const UNCALIBRATED_PROFILE_PRESET: VocalProfilePreset = {
-  voiceType: 'Uncalibrated',
-  minHz: null,
-  maxHz: null,
-  minNote: null,
-  maxNote: null,
-  tessituraMinHz: null,
-  tessituraMaxHz: null,
-  tessituraMinNote: null,
-  tessituraMaxNote: null,
-  accentColor: '#777777',
-};
-export const PROFILE_COLOR_PRESETS = [
-  '#4f7cac', '#597a55', '#4a8f8c', '#9b6aa0',
-  '#c0784b', '#b85c73', '#d2a84a', '#718096',
-] as const;
-
-export interface DuetKeyRecommendation {
-  kind: 'duet';
-  semitones: number;
-  shift1: number;
-  shift2: number;
-  conflict: boolean;
-  unanalyzed: boolean;
-  uncalibrated: boolean;
-  hitsPhysicalLimit: boolean;
-  biasedToward: string | null;
-}
-
-export type KeyRecommendation = SoloKeyRecommendation | DuetKeyRecommendation;
-
-export function createProfileFromPreset(
-  voiceType: ProfileVoiceType,
-  name: string,
-  id = createProfileId(),
-): UserProfile {
-  const preset = voiceType === 'Uncalibrated'
-    ? UNCALIBRATED_PROFILE_PRESET
-    : VOCAL_PROFILE_PRESETS.find((item) => item.voiceType === voiceType);
-  if (!preset) throw new Error(`Unknown vocal profile preset: ${voiceType}`);
-
-  return {
-    id,
-    name: name.trim() || 'Singer',
-    avatar: null,
-    initials: getInitials(name),
-    accentColor: preset.accentColor,
-    voiceType: preset.voiceType,
-    minHz: preset.minHz,
-    maxHz: preset.maxHz,
-    minNote: preset.minNote,
-    maxNote: preset.maxNote,
-    tessituraMinHz: preset.tessituraMinHz,
-    tessituraMaxHz: preset.tessituraMaxHz,
-    isGuest: false,
-  };
-}
-
-export function recommendDuetKey(
-  song: SongVocalRange,
-  singer1: UserProfile,
-  singer2: UserProfile,
-): DuetKeyRecommendation | null {
-  if (!song.is_duet) return null;
-
-  const fit1 = recommendSoloKey(song, singer1);
-  const fit2 = recommendSoloKey(song, singer2);
-  const unanalyzed = fit1.unanalyzed || fit2.unanalyzed;
-  const uncalibrated = fit1.status === 'uncalibrated' || fit2.status === 'uncalibrated';
-  if (unanalyzed || uncalibrated) {
-    return {
-      kind: 'duet',
-      semitones: 0,
-      shift1: fit1.semitones,
-      shift2: fit2.semitones,
-      conflict: false,
-      unanalyzed,
-      uncalibrated,
-      hitsPhysicalLimit: false,
-      biasedToward: null,
-    };
-  }
-
-  const hitsPhysicalLimit = singerHitsLimit(song, singer1, fit1.semitones)
-    || singerHitsLimit(song, singer2, fit2.semitones);
-  let semitones = Math.round((fit1.semitones + fit2.semitones) / 2);
-  let biasedToward: string | null = null;
-  if (hitsPhysicalLimit) {
-    const singer1Width = profileRangeWidth(singer1);
-    const singer2Width = profileRangeWidth(singer2);
-    const narrower = singer1Width <= singer2Width ? singer1 : singer2;
-    const narrowerShift = narrower.id === singer1.id ? fit1.semitones : fit2.semitones;
-    const widerShift = narrower.id === singer1.id ? fit2.semitones : fit1.semitones;
-    semitones = Math.round((2 * narrowerShift + widerShift) / 3);
-    biasedToward = narrower.id;
-  }
-
-  return {
-    kind: 'duet',
-    semitones: clampKeyShift(semitones),
-    shift1: fit1.semitones,
-    shift2: fit2.semitones,
-    conflict: Math.abs(fit1.semitones - fit2.semitones) > 5,
-    unanalyzed: false,
-    uncalibrated: false,
-    hitsPhysicalLimit,
-    biasedToward,
-  };
-}
 
 @Injectable({ providedIn: 'root' })
 export class PartySessionService {
   private readonly songs = inject(SongsService);
   private readonly audio = inject(AudioPlayerService);
+
   private readonly _savedProfiles = signal(loadSavedProfiles());
   readonly savedProfiles = this._savedProfiles.asReadonly();
   private readonly _autoAdjustKey = signal(loadAutoAdjustKey());
@@ -212,43 +50,117 @@ export class PartySessionService {
   private readonly _roundRobinEnabled = signal(loadRoundRobinEnabled());
   readonly roundRobinEnabled = this._roundRobinEnabled.asReadonly();
 
-  private readonly _roster = signal<UserProfile[]>([]);
+  private readonly _roster = signal<UserProfile[]>(loadSessionRoster());
   readonly roster = this._roster.asReadonly();
-  private readonly _activeSingerId = signal<string | null>(null);
+
+  private readonly _activeSingerId = signal<string | null>(loadSessionActiveSingerId());
   readonly activeSingerId = this._activeSingerId.asReadonly();
   readonly activeSinger = computed(() =>
     this.roster().find((singer) => singer.id === this.activeSingerId()) ?? null,
   );
-  private readonly _duetSingerId = signal<string | null>(null);
+
+  private readonly _duetSingerId = signal<string | null>(loadSessionDuetSingerId());
   readonly duetSingerId = this._duetSingerId.asReadonly();
   readonly duetSinger = computed(() =>
     this.roster().find((singer) => singer.id === this.duetSingerId()) ?? null,
   );
+
+  private readonly _singerForFitSorting = signal<UserProfile | null>(null);
+  readonly singerForFitSorting = computed(() => this._singerForFitSorting() ?? null);
+
+  private readonly _queueAssignments = signal<Record<string, QueueSingerAssignment>>(
+    loadSessionQueueAssignments(),
+  );
+  readonly queueAssignments = this._queueAssignments.asReadonly();
+
+  private readonly _lastAssignedSingerId = signal<string | null>(
+    loadSessionLastRoundRobinId(),
+  );
+
+  readonly currentSinger = computed<UserProfile | null>(() => {
+    const currentTaskId = this.songs.currentQueueTaskId();
+    if (currentTaskId) {
+      const assignment = this.queueAssignment(currentTaskId);
+      if (assignment.primarySingerId) {
+        const singer = this.roster().find((s) => s.id === assignment.primarySingerId);
+        if (singer) return singer;
+      }
+    }
+    return this.activeSinger();
+  });
+
+  readonly currentSingerId = computed<string | null>(() =>
+    this.currentSinger()?.id ?? this.activeSingerId(),
+  );
+
+  readonly currentDuetSinger = computed<UserProfile | null>(() => {
+    const song = this.songs.currentSong();
+    if (!song?.is_duet) return null;
+
+    const currentTaskId = this.songs.currentQueueTaskId();
+    if (currentTaskId) {
+      const assignment = this.queueAssignment(currentTaskId);
+      if (assignment.secondarySingerId) {
+        const singer = this.roster().find((s) => s.id === assignment.secondarySingerId);
+        if (singer) return singer;
+      }
+    }
+    return this.duetSinger();
+  });
+
   readonly keyRecommendation = computed<KeyRecommendation | null>(() => {
     const song = this.songs.currentSong();
-    const singer = this.activeSinger();
-    if (!song || !singer) return null;
-    const duetSinger = this.duetSinger();
+    if (!song) return null;
+    const taskId = this.songs.currentQueueTaskId();
+    if (taskId) {
+      const queueRec = this.recommendQueueItem(taskId, song);
+      if (queueRec) return queueRec;
+    }
+    const singer = this.currentSinger();
+    if (!singer) return null;
+    const duetSinger = this.currentDuetSinger();
     if (song.is_duet && duetSinger) return recommendDuetKey(song, singer, duetSinger);
     return recommendSoloKey(song, singer);
   });
+
   readonly appliedSemitones = computed(() =>
     this.autoAdjustKey() ? this.keyRecommendation()?.semitones ?? 0 : 0,
   );
-  private readonly _queueAssignments = signal<Record<string, QueueSingerAssignment>>({});
-  readonly queueAssignments = this._queueAssignments.asReadonly();
 
-  private primaryHostId: string | null = null;
+  private primaryHostId: string | null = this._roster()[0]?.id ?? null;
   private guestNumber = 0;
-  private roundRobinCursor = 0;
+
+  constructor() {
+    effect(() => {
+      const taskId = this.songs.currentQueueTaskId();
+      if (!taskId) return;
+
+      untracked(() => {
+        const song = this.songs.currentSong();
+        const assignment = this.ensureQueueAssignment(taskId, song?.is_duet === true);
+        const singerId = assignment.primarySingerId;
+        if (singerId && singerId !== this._activeSingerId()) {
+          this._activeSingerId.set(singerId);
+        }
+        if (song?.is_duet) {
+          this._duetSingerId.set(assignment.secondarySingerId ?? null);
+        } else {
+          this._duetSingerId.set(null);
+        }
+      });
+    });
+
+    effect(() => saveSessionRoster(this.roster()));
+    effect(() => saveSessionActiveSingerId(this.activeSingerId()));
+    effect(() => saveSessionDuetSingerId(this.duetSingerId()));
+    effect(() => saveSessionQueueAssignments(this.queueAssignments()));
+  }
 
   setAutoAdjustKey(enabled: boolean): void {
     this._autoAdjustKey.set(enabled);
     try {
       globalThis.localStorage?.setItem(AUTO_ADJUST_STORAGE_KEY, String(enabled));
-    } catch (error) {
-      console.warn('Could not save the auto-adjust key setting:', error);
-    }
+    } catch {}
     this.syncPlaybackKey();
   }
 
@@ -256,9 +168,7 @@ export class PartySessionService {
     this._roundRobinEnabled.set(enabled);
     try {
       globalThis.localStorage?.setItem(ROUND_ROBIN_STORAGE_KEY, String(enabled));
-    } catch (error) {
-      console.warn('Could not save the round-robin setting:', error);
-    }
+    } catch {}
   }
 
   async applyActiveKeyToPlayback(): Promise<void> {
@@ -272,7 +182,7 @@ export class PartySessionService {
         await this.audio.setSemitoneShift(this.appliedSemitones());
       }
     } catch (error) {
-      console.warn('Could not apply the party key recommendation:', error);
+      console.warn('Could not apply party key recommendation:', error);
     }
   }
 
@@ -284,7 +194,7 @@ export class PartySessionService {
         this.autoAdjustKey() ? recommendation?.semitones ?? 0 : 0,
       );
     } catch (error) {
-      console.warn('Could not apply the queued singer key:', error);
+      console.warn('Could not apply queued singer key:', error);
     }
   }
 
@@ -297,7 +207,7 @@ export class PartySessionService {
     this._savedProfiles.set([...profiles, saved]);
     this.persistProfiles();
     this._roster.update((roster) =>
-      roster.map((item) => item.id === saved.id ? saved : item),
+      roster.map((item) => (item.id === saved.id ? saved : item)),
     );
     this.syncPlaybackKey();
     return saved;
@@ -315,9 +225,8 @@ export class PartySessionService {
     const guest = this.roster().find((item) => item.id === profile.id && item.isGuest);
     if (!guest) throw new Error(`Quick guest not found: ${profile.id}`);
     const updated = { ...profile, name: profile.name.trim(), isGuest: true };
-    if (!updated.name) throw new Error('A singer profile needs a name.');
     this._roster.update((roster) =>
-      roster.map((item) => item.id === updated.id ? updated : item),
+      roster.map((item) => (item.id === updated.id ? updated : item)),
     );
     this.syncPlaybackKey();
     return updated;
@@ -336,13 +245,24 @@ export class PartySessionService {
     name = '',
     voiceType: ProfileVoiceType = 'Uncalibrated',
     accentColor?: string,
+    avatar?: string | null,
+    calibratedRange?: {
+      minHz: number | null;
+      maxHz: number | null;
+      minNote: string | null;
+      maxNote: string | null;
+      tessituraMinHz: number | null;
+      tessituraMaxHz: number | null;
+    } | null,
   ): UserProfile {
     this.guestNumber += 1;
-    const guest = createProfileFromPreset(voiceType, name.trim() || `Guest ${this.guestNumber}`);
-    const sessionGuest = {
-      ...guest,
-      accentColor: accentColor === undefined ? guest.accentColor : validateAccentColor(accentColor),
+    const base = createProfileFromPreset(voiceType, name.trim() || `Guest ${this.guestNumber}`);
+    const sessionGuest: UserProfile = {
+      ...base,
+      accentColor: accentColor ?? base.accentColor,
+      avatar: avatar ?? null,
       isGuest: true,
+      ...(calibratedRange ?? {}),
     };
     this.addSingerToRoster(sessionGuest);
     return sessionGuest;
@@ -401,7 +321,10 @@ export class PartySessionService {
         ...(assignment.prioritySingerId === singerId ? {} : { prioritySingerId: null }),
       },
     }));
-    if (this.songs.currentQueueTaskId() === taskId) this.syncPlaybackKey();
+    if (this.songs.currentQueueTaskId() === taskId) {
+      if (part === 'primary') this._activeSingerId.set(singerId);
+      this.syncPlaybackKey();
+    }
     return true;
   }
 
@@ -422,6 +345,7 @@ export class PartySessionService {
     const assignment = this.ensureQueueAssignment(taskId);
     if (
       singerId !== null
+      && singerId !== 'original'
       && singerId !== assignment.primarySingerId
       && singerId !== assignment.secondarySingerId
     ) return false;
@@ -444,6 +368,10 @@ export class PartySessionService {
 
   clearQueueAssignments(): void {
     this._queueAssignments.set({});
+    this._lastAssignedSingerId.set(null);
+    try {
+      globalThis.sessionStorage?.removeItem(SESSION_LAST_ROUND_ROBIN_KEY);
+    } catch {}
   }
 
   recommendQueueItem(taskId: string, song: SongManifest): KeyRecommendation | null {
@@ -451,14 +379,23 @@ export class PartySessionService {
     const primary = this.roster().find((singer) => singer.id === assignment.primarySingerId);
     if (!primary) return null;
     const secondary = this.roster().find((singer) => singer.id === assignment.secondarySingerId);
+
     if (song.is_duet && secondary) {
       const duet = recommendDuetKey(song, primary, secondary);
-      if (!duet || !duet.conflict || !assignment.prioritySingerId) return duet;
+      if (!duet) return null;
+
+      if (assignment.prioritySingerId === 'original') {
+        return { ...duet, semitones: 0, biasedToward: 'original' };
+      }
+
+      if (!duet.conflict || !assignment.prioritySingerId) return duet;
       const priority = this.roster().find((singer) => singer.id === assignment.prioritySingerId);
       if (!priority) return duet;
+
       const fit = recommendSoloKey(song, priority);
       return { ...duet, semitones: fit.semitones, biasedToward: priority.id };
     }
+
     return recommendSoloKey(song, primary);
   }
 
@@ -467,7 +404,7 @@ export class PartySessionService {
     if (!guest) throw new Error(`Quick guest not found: ${guestId}`);
     const saved = this.saveProfile({ ...guest, isGuest: false });
     this._roster.update((roster) =>
-      roster.map((item) => item.id === guestId ? saved : item),
+      roster.map((item) => (item.id === guestId ? saved : item)),
     );
     this.syncPlaybackKey();
     return saved;
@@ -497,6 +434,11 @@ export class PartySessionService {
   setActiveSinger(singerId: string): boolean {
     if (!this.roster().some((singer) => singer.id === singerId)) return false;
     this._activeSingerId.set(singerId);
+    this._lastAssignedSingerId.set(singerId);
+    try {
+      globalThis.sessionStorage?.setItem(SESSION_LAST_ROUND_ROBIN_KEY, singerId);
+    } catch {}
+
     if (this.duetSingerId() === singerId) this._duetSingerId.set(null);
     this.assignUnclaimedQueueItems(singerId);
     const currentTaskId = this.songs.currentQueueTaskId();
@@ -516,19 +458,14 @@ export class PartySessionService {
     return true;
   }
 
-  assignDuetSinger(singerId: string | null): boolean {
-    if (singerId === null) {
-      this._duetSingerId.set(null);
-      this.syncPlaybackKey();
-      return true;
-    }
-    if (
-      singerId === this.activeSingerId()
-      || !this.roster().some((singer) => singer.id === singerId)
-    ) return false;
-    this._duetSingerId.set(singerId);
-    this.syncPlaybackKey();
+  setSingerforFitSortingId(profile: UserProfile | null): boolean {
+    if (!this.roster().some((singerInRoster) => singerInRoster?.id === profile?.id)) return false;
+    this._singerForFitSorting.set(profile ?? null);
     return true;
+  }
+
+  clearSingerforFitSortingId(): void {
+    this._singerForFitSorting.set(null);
   }
 
   private addSingerToRoster(singer: UserProfile): void {
@@ -558,11 +495,20 @@ export class PartySessionService {
     const singers = this.roster();
     if (!singers.length) return null;
     if (!this.roundRobinEnabled() || singers.length === 1) {
-      return this.activeSingerId();
+      return this.activeSingerId() ?? singers[0]?.id ?? null;
     }
-    const singer = singers[this.roundRobinCursor % singers.length];
-    this.roundRobinCursor = (this.roundRobinCursor + 1) % singers.length;
-    return singer.id;
+
+    const anchorId = this._lastAssignedSingerId() ?? this.activeSingerId();
+    const anchorIndex = singers.findIndex((s) => s.id === anchorId);
+    const nextIndex = anchorIndex >= 0 ? (anchorIndex + 1) % singers.length : 0;
+    const chosen = singers[nextIndex];
+
+    this._lastAssignedSingerId.set(chosen.id);
+    try {
+      globalThis.sessionStorage?.setItem(SESSION_LAST_ROUND_ROBIN_KEY, chosen.id);
+    } catch {}
+
+    return chosen.id;
   }
 
   private updateRoster(roster: UserProfile[], removedIds: Set<string>): void {
@@ -587,6 +533,9 @@ export class PartySessionService {
     if (removedIds.has(this.activeSingerId() ?? '')) {
       this._activeSingerId.set(roster[0]?.id ?? null);
     }
+    if (removedIds.has(this._lastAssignedSingerId() ?? '')) {
+      this._lastAssignedSingerId.set(null);
+    }
     if (removedIds.has(this.duetSingerId() ?? '')) this._duetSingerId.set(null);
     this.syncPlaybackKey();
   }
@@ -605,79 +554,4 @@ export class PartySessionService {
       console.warn('Could not save singer profiles:', error);
     }
   }
-}
-
-function validateAccentColor(value: string): string {
-  if (!/^#[\da-f]{6}$/i.test(value)) throw new Error('Guest accent color must be a six-digit hex color.');
-  return value;
-}
-
-function profileRangeWidth(profile: UserProfile): number {
-  return profile.minHz == null || profile.maxHz == null
-    ? Number.POSITIVE_INFINITY
-    : profile.maxHz - profile.minHz;
-}
-
-function createProfileId(): string {
-  return globalThis.crypto?.randomUUID?.()
-    ?? `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 2).map((word) => word[0].toUpperCase()).join('') || '?';
-}
-
-function loadSavedProfiles(): UserProfile[] {
-  try {
-    const stored = globalThis.localStorage?.getItem(PROFILE_STORAGE_KEY);
-    if (!stored) return [];
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) throw new TypeError('Saved singer profiles must be an array.');
-    return parsed.filter(isUserProfile).map((profile) => ({ ...profile, isGuest: false }));
-  } catch (error) {
-    console.warn('Could not load saved singer profiles:', error);
-    return [];
-  }
-}
-
-function loadAutoAdjustKey(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(AUTO_ADJUST_STORAGE_KEY) !== 'false';
-  } catch (error) {
-    console.warn('Could not load the auto-adjust key setting:', error);
-    return true;
-  }
-}
-
-function loadRoundRobinEnabled(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(ROUND_ROBIN_STORAGE_KEY) === 'true';
-  } catch (error) {
-    console.warn('Could not load the round-robin setting:', error);
-    return false;
-  }
-}
-
-function isUserProfile(value: unknown): value is UserProfile {
-  if (typeof value !== 'object' || value === null) return false;
-  const profile = value as Partial<UserProfile>;
-  const nullableNumbers = [
-    profile.minHz,
-    profile.maxHz,
-    profile.tessituraMinHz,
-    profile.tessituraMaxHz,
-  ];
-  const nullableNotes = [profile.minNote, profile.maxNote];
-  return typeof profile.id === 'string'
-    && typeof profile.name === 'string'
-    && (profile.avatar === null || typeof profile.avatar === 'string')
-    && typeof profile.initials === 'string'
-    && typeof profile.accentColor === 'string'
-    && [...VOICE_TYPES, 'Uncalibrated'].includes(profile.voiceType as ProfileVoiceType)
-    && nullableNumbers.every((number) =>
-      number === null || (typeof number === 'number' && Number.isFinite(number)),
-    )
-    && nullableNotes.every((note) => note === null || typeof note === 'string')
-    && typeof profile.isGuest === 'boolean';
 }

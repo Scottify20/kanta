@@ -37,7 +37,7 @@
     <button popup-trigger class="queue-menu-trigger" type="button" aria-label="Item options">
       <svg lucideMoreHorizontal [size]="16"></svg>
     </button>
-    <div popup-content class="queue-item-menu-content" role="menu">
+    <app-context-menu popup-content minWidth="12rem" ariaLabel="Item options">
       @if (queue() === 'karaoke_queue' && item().status !== 'failed' && item().status !== 'cancelled' && item().status !== 'cancelling') {
         <button type="button" role="menuitem" (click)="select.emit()">Play</button>
       }
@@ -48,12 +48,14 @@
       }
       @if (queue() === 'karaoke_queue') {
         <button type="button" role="menuitem" (click)="assignSingers()">Assign singers</button>
-        <button type="button" role="menuitem" (click)="remove.emit()">
+        <hr />
+        <button type="button" role="menuitem" class="danger" (click)="remove.emit()">
           Remove from Karaoke Queue
         </button>
       } @else if (item().status !== 'cancelled') {
-        <button type="button" role="menuitem" (click)="remove.emit()">Cancel processing</button>
+        <hr />
+        <button type="button" role="menuitem" class="danger" (click)="remove.emit()">Cancel processing</button>
       }
-    </div>
+    </app-context-menu>
   </app-popup-panel>
 </div>

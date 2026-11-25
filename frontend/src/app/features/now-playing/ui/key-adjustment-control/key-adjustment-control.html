@@ -11,22 +11,25 @@
   <section popup-content class="key-adjustment-popover">
     <header>
       <strong>Adjust Key</strong>
-      @if (partySession.activeSinger(); as singer) {
-        <span>Matched to {{ singer.name }}</span>
+      @if (partySession.currentSinger(); as singer) {
+        @if (song()?.is_duet && partySession.currentDuetSinger(); as duetSinger) {
+          <span>Matched to {{ singer.name }} &amp; {{ duetSinger.name }}</span>
+        } @else {
+          <span>Matched to {{ singer.name }}</span>
+        }
       } @else {
         <span>Original Pitch</span>
       }
     </header>
     <label class="key-toggle">
       <span>Apply Key Change</span>
-        <input
+      <input
         class="switch"
         type="checkbox"
         role="switch"
         [checked]="partySession.autoAdjustKey()"
         (change)="partySession.setAutoAdjustKey($any($event.target).checked)"
-        />
-
+      />
     </label>
     <div
       class="key-adjustment-controls"
@@ -68,14 +71,13 @@
       </div>
     </div>
     
-    <!-- <p class="key-footer">Adjusting both vocals and music to keep them in key.</p> -->
-      <div class="key-results">
-    @if (keyTransition(); as transition) {
-      <p class="key-result"><span>Key</span><strong>{{ transition }}</strong></p>
-    }
-    @if (rangeTransition(); as range) {
-      <p class="key-result"><span>Vocal range</span><strong>{{ range }}</strong></p>
-    }
-     </div>
+    <div class="key-results">
+      @if (keyTransition(); as transition) {
+        <p class="key-result"><span>Key</span><strong>{{ transition }}</strong></p>
+      }
+      @if (rangeTransition(); as range) {
+        <p class="key-result"><span>Vocal range</span><strong>{{ range }}</strong></p>
+      }
+    </div>
   </section>
 </app-popup-panel>

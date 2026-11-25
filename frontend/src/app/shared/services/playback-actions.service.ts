@@ -40,10 +40,10 @@ export class PlaybackActions {
     let firstTaskId: string | null = null;
     for (const song of playable) {
       const result: { item: QueueItem } = await firstValueFrom(
-        this.queue.addProcessedTrack(song, false, afterTaskId),
+        this.queue.addProcessedTrack(song, false, afterTaskId, true),
       );
       const item = result.item;
-      this.party.ensureQueueAssignment(item.task_id, song.is_duet === true);
+      this.party.ensureQueueAssignment(item.task_id, song.is_duet);
       firstTaskId ??= item.task_id;
       afterTaskId = item.task_id;
     }
@@ -51,13 +51,12 @@ export class PlaybackActions {
     void this.router.navigateByUrl('/');
   }
 
-  /** Inserts songs into the karaoke queue after `afterTaskId` (front when null and `atFront`). */
   async enqueue(songs: SongRef[], afterTaskId: string | null = null, atFront = false): Promise<void> {
     let anchor = afterTaskId;
     let first = true;
     for (const song of songs) {
       const result: { item: QueueItem } = await firstValueFrom(
-        this.queue.addProcessedTrack(song, atFront && first && !anchor, anchor),
+        this.queue.addProcessedTrack(song, atFront && first && !anchor, anchor, true),
       );
       this.party.ensureQueueAssignment(result.item.task_id, song.is_duet === true);
       anchor = result.item.task_id;

@@ -171,7 +171,7 @@ export class Library {
           return filter === 'all' || (filter === 'duet' ? song.is_duet === true : level === filter);
         });
         if (this.sort() === 'best-fit') {
-          return sortSongsByVocalFit(songs, this.partySession.activeSinger()).map(songEntry);
+          return sortSongsByVocalFit(songs, this.partySession.singerForFitSorting()).map(songEntry);
         }
         return sortEntries(songs.map(songEntry), this.sort());
       }

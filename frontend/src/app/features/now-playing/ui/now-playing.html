@@ -122,7 +122,7 @@
             @if (artistName && currentSong()) {
               <button type="button" class="track-link" (click)="openInLibrary('go-artist')">{{ artistName }}</button>
             } @else {
-              {{ artistName ?? 'Drop an audio file into the queue' }}
+              {{ artistName ?? 'Drop a song into the queue' }}
             }
             @if (albumName) {
               <span>•</span>

@@ -86,3 +86,23 @@ img {
   white-space: nowrap;
   // overflow: hidden;
 }
+
+
+/* ---remove the blue touch highlight for touchscreens--- */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-tap-highlight-color: transparent;
+}
+
+// remove outline for all elements on focus and increase brightness to 200% for all elements except images
+*:not(img):focus {
+  outline: none;
+  filter: brightness(150%);
+  background-color: rgba(255, 255, 255, 0.075);
+}
+
+/* Cancel out the 200% brightness on child images (200% * 50% = 100%) */
+*:focus {
+  img, .lyrics-chip, .fit-pill {
+  filter: brightness(66.67%);}
+}

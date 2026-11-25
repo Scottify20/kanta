@@ -1,33 +1,8 @@
 :host {
+  --panel-width-queue: min(34rem, 90vw);
   display: block;
   height: 100dvh;
   overflow: hidden;
-}
-
-.context-menu {
-  position: fixed;
-  z-index: 2000;
-  display: grid;
-  min-width: 11rem;
-  padding: 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.7rem;
-  background: #222;
-  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
-  color: #fff;
-  font-size: 0.85rem;
-
-  button, span {
-    padding: 0.6rem 0.8rem;
-    border: 0;
-    border-radius: 0.4rem;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    text-align: left;
-  }
-  button { cursor: pointer; }
-  button:hover, button:focus-visible { background: rgba(255, 255, 255, 0.14); }
 }
 
 .shell {

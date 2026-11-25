@@ -7,6 +7,7 @@
   display: block;
   width: 2.75rem;
   height: 2.75rem;
+  flex-shrink: 0;
 }
 
 .cover-image,
@@ -29,32 +30,32 @@
   justify-content: center;
   gap: 0.2rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .track-title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  width: 100%;
+  min-width: 0;
 }
 
 .track-title-row strong {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: rgba(255, 255, 255, 0.95);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .track-info small {
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 0.8rem;
-  font-weight: 400;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.76rem;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -63,29 +64,30 @@
 .lyrics-chip {
   display: inline-block;
   flex-shrink: 0;
-  padding: 0.15rem 0.4rem;
+  padding: 0.12rem 0.35rem;
   border-radius: 0.25rem;
-  font-size: 0.65rem;
-  font-weight: 600;
+  font-size: 0.62rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 
   &.level-word {
-    background: rgba(167, 139, 250, 0.15);
+    background: rgba(167, 139, 250, 0.18);
     color: #c4b5fd;
   }
 
   &.level-line {
-    background: rgba(96, 165, 250, 0.15);
+    background: rgba(96, 165, 250, 0.18);
     color: #93c5fd;
   }
 
   &.level-none {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.4);
   }
+
   &.duet {
-    background: rgba(244, 114, 182, 0.15);
+    background: rgba(244, 114, 182, 0.18);
     color: #f9a8d4;
   }
 }

@@ -37,12 +37,10 @@
 </div>
 
 @if (variant() === 'karaoke') {
-  @defer (on idle) {
-    <app-queue-party-controls
-      [item]="item()"
-      [isDuet]="isDuet()"
-      [showDuetPrompt]="duetPrompt()"
-      (duetPromptHandled)="duetPromptHandled.emit()"
-    />
-  }
+  <app-queue-party-controls
+    [item]="item()"
+    [isDuet]="isDuet()"
+    [showDuetPrompt]="duetPrompt()"
+    (duetPromptHandled)="duetPromptHandled.emit()"
+  />
 }

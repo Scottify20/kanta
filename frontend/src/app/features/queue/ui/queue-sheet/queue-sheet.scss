@@ -11,26 +11,35 @@
   overflow: hidden;
   box-sizing: border-box;
   border-radius: 1.5rem 0 0 1.5rem;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: var(--glass-blur);
-  padding: 1.5rem;
+  background: rgba(14, 17, 22, 0.7);
+  backdrop-filter: var(--glass-blur, blur(24px));
+  -webkit-backdrop-filter: var(--glass-blur, blur(24px));
+  padding: 1.25rem 1rem;
   gap: 1rem;
   color: rgba(255, 255, 255, 0.9);
 }
 
 .section-header {
+  position: sticky;
+  top: 0;
+  z-index: 15;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 2.5rem;
-  padding: 0.5rem;
+  min-height: 2.6rem;
+  padding: 0.5rem 0.65rem;
   cursor: pointer;
   user-select: none;
-  border-radius: 0.5rem;
+  border-radius: 0.65rem;
+  background: rgba(18, 22, 28, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   transition: background-color 0.2s ease;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(26, 30, 38, 0.96);
   }
 }
 
@@ -42,23 +51,23 @@
 
 .section-title h2 {
   margin: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 1);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
   text-transform: uppercase;
-  letter-spacing: 0px;
+  letter-spacing: 0.04em;
 }
 
 .queue-total {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .collapse-icon {
-  color: rgba(255, 255, 255, 1);
+  color: rgba(255, 255, 255, 0.9);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
   &.is-collapsed {
@@ -69,7 +78,7 @@
 .section-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .icon-button {
@@ -83,8 +92,8 @@
   background: transparent;
   cursor: pointer;
   transition:
-    background-color var(--dur-fast) var(--ease-out),
-    opacity var(--dur-fast) var(--ease-out);
+    background-color var(--dur-fast, 0.15s) var(--ease-out, ease-out),
+    opacity var(--dur-fast, 0.15s) var(--ease-out, ease-out);
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15);
@@ -106,10 +115,9 @@
   border-radius: 0.75rem;
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.8rem;
-  animation: queue-gap-open var(--dur-drag) var(--ease-drag) forwards;
+  animation: queue-gap-open var(--dur-drag, 0.2s) var(--ease-drag, ease) forwards;
 }
 
-// One queue row tall: 2.75rem cover + 2 * 0.6rem padding.
 @keyframes queue-gap-open {
   to { height: 3.95rem; }
 }
@@ -120,7 +128,7 @@
 }
 
 .insert-gap.gap-leave {
-  animation: queue-gap-close var(--dur-drag) var(--ease-drag) forwards;
+  animation: queue-gap-close var(--dur-drag, 0.2s) var(--ease-drag, ease) forwards;
 }
 
 .queue-panel.committing .insert-gap.gap-leave {
@@ -138,10 +146,11 @@
   gap: 0.5rem;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 0.25rem;
+  scroll-behavior: smooth;
 }
 
-/* Karaoke takes the remaining space; processing sizes to its content (capped) and stays fully visible. */
 .queue-section.karaoke {
   flex: 1 1 0;
   min-height: 7rem;
@@ -160,7 +169,7 @@
 .queue-section.processing {
   flex: 0 1 auto;
   max-height: calc(100% - 9rem);
-  padding-top: 1rem;
+  padding-top: 0.75rem;
 
   &.is-empty {
     flex: 1 1 0;
@@ -179,7 +188,7 @@
   display: grid;
   flex: 1 0 auto;
   grid-template-rows: 1fr;
-  transition: grid-template-rows var(--dur-base) var(--ease-out);
+  transition: grid-template-rows var(--dur-base, 0.2s) var(--ease-out, ease-out);
 
   &.is-collapsed {
     grid-template-rows: 0fr;
@@ -194,7 +203,7 @@
   padding: 0;
   list-style: none;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 
   .drop-zone {
     flex: 1 1 auto;
@@ -203,7 +212,7 @@
 
 .track-list li.queue-row {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr) minmax(4.5rem, max-content) max-content;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.75rem;
   box-sizing: border-box;
@@ -211,18 +220,19 @@
   border-radius: 0.75rem;
   cursor: grab;
   background: transparent;
+  min-width: 0;
 
   &.is-static {
     cursor: default;
   }
-  transition: background-color var(--dur-fast) var(--ease-out);
+  transition: background-color var(--dur-fast, 0.15s) var(--ease-out, ease-out);
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.08);
   }
 
   &.is-entering {
-    animation: queue-row-in var(--dur-drag) var(--ease-drag) both;
+    animation: queue-row-in var(--dur-drag, 0.2s) var(--ease-drag, ease) both;
   }
 
   &:active {
@@ -230,8 +240,8 @@
   }
 
   &.is-current {
-    background-color: rgba(255, 255, 255, 0.15);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 0 0 1.5px rgba(150, 236, 215, 0.3);
   }
 
   &.is-active {
@@ -243,20 +253,17 @@
   }
 }
 
-/* --- ANGULAR CDK DRAG AND DROP STYLES --- */
-
-/* 1. The item being actively dragged */
 .cdk-drag-preview {
   box-sizing: border-box;
   display: grid !important;
-  grid-template-columns: 2.75rem minmax(0, 1fr) max-content;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem;
   border-radius: 0.75rem;
   z-index: 1000 !important;
 
-  background-color: rgba(30, 34, 38, 0.95) !important;
+  background-color: rgba(26, 30, 36, 0.96) !important;
   box-shadow:
     0 16px 32px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -264,31 +271,20 @@
   cursor: grabbing !important;
 }
 
-/* 2. The empty space left behind in the list */
 .cdk-drag-placeholder {
-  opacity: 0 !important; /* Forces the auto-cloned node to be invisible, preventing jumpy resizes */
+  opacity: 0 !important;
 }
 
-/* 3. CRITICAL FIX: High-specificity classes to ensure the transform animation is NEVER overridden */
 .track-list li.cdk-drag-animating {
   transition:
-    transform var(--dur-base) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out) !important;
+    transform var(--dur-base, 0.2s) var(--ease-out, ease-out),
+    background-color var(--dur-fast, 0.15s) var(--ease-out, ease-out) !important;
 }
 
 .track-list.cdk-drop-list-dragging li:not(.cdk-drag-preview) {
   transition:
-    transform var(--dur-base) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out) !important;
-}
-/* ---------------------------------------- */
-
-.cover-progress-overlay {
-  position: absolute;
-  inset: 0;
-  border-radius: 0.4rem;
-  background: conic-gradient(transparent var(--progress), rgba(0, 0, 0, 0.7) var(--progress));
-  pointer-events: none;
+    transform var(--dur-base, 0.2s) var(--ease-out, ease-out),
+    background-color var(--dur-fast, 0.15s) var(--ease-out, ease-out) !important;
 }
 
 .drop-zone {
@@ -298,13 +294,12 @@
   min-height: 6rem;
   padding: 1rem;
   transition:
-    border-color var(--dur-base) var(--ease-out),
-    background-color var(--dur-base) var(--ease-out),
-    color var(--dur-base) var(--ease-out);
+    border-color var(--dur-base, 0.2s) var(--ease-out, ease-out),
+    background-color var(--dur-base, 0.2s) var(--ease-out, ease-out),
+    color var(--dur-base, 0.2s) var(--ease-out, ease-out);
   border: 2px dashed rgba(255, 255, 255, 0.2);
   border-radius: 0.75rem;
   color: rgba(255, 255, 255, 0.5);
-  font-family: 'Inter', sans-serif;
   font-size: 0.85rem;
   text-align: center;
   background: rgba(255, 255, 255, 0.02);
@@ -327,7 +322,7 @@
 @media (max-width: 700px) {
   .queue-panel {
     border-radius: 1.5rem 0 0 1.5rem;
-    padding: 1.25rem 1rem;
+    padding: 1rem 0.75rem;
   }
 }
 

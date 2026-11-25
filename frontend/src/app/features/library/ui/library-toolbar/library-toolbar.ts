@@ -42,7 +42,7 @@ export class LibraryToolbar {
     this.lyricsFilters.find((option) => option.value === this.lyricsFilter())?.label ?? 'All songs',
   );
 
-  readonly fitSinger = computed(() => this.party?.activeSinger() ?? null);
+  readonly fitSinger = computed(() => this.party?.singerForFitSorting() ?? null);
   
   readonly fitProfiles = computed(() => {
     const roster = this.party?.roster() ?? [];
@@ -55,7 +55,7 @@ export class LibraryToolbar {
     if (!this.party.roster().some((singer) => singer.id === profile.id)) {
       this.party.addSavedProfile(profile.id);
     }
-    this.party.setActiveSinger(profile.id);
+    this.party.setSingerforFitSortingId(profile);
   }
 
   selectFilter(value: LyricsFilter): void {

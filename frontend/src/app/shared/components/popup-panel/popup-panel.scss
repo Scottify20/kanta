@@ -8,3 +8,9 @@
   position: relative;
   display: inline-flex;
 }
+
+.popup-content {
+  background: var(--popup-bg, var(--popup-panel-bg, var(--popup-menu-bg, rgba(18, 22, 28, 0.88))));
+  backdrop-filter: var(--popup-blur, blur(24px));
+  -webkit-backdrop-filter: var(--popup-blur, blur(24px));
+}

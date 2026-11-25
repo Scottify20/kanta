@@ -37,8 +37,13 @@
   <app-metadata-editor [song]="song" (closed)="entryActions.editingSong.set(null)" (saved)="onMetadataSaved($event)" />
 }
 }
+
 @if (contextMenu(); as menu) {
-  <div class="context-menu" role="menu" aria-label="Context options" [style.left.px]="menu.x" [style.top.px]="menu.y" (mousedown)="$event.preventDefault()" (click)="$event.stopPropagation()">
+  <app-context-menu
+    [x]="menu.x"
+    [y]="menu.y"
+    ariaLabel="Context options"
+  >
     @if (menu.selection) {
       <button type="button" role="menuitem" (click)="clipboardAction('copy')">Copy</button>
       @if (menu.input && !menu.input.readOnly && !menu.input.disabled) {
@@ -52,16 +57,22 @@
       <button type="button" role="menuitem" (click)="selectContextInput()">Select all</button>
     }
     @if (!logsWindow) {
-      @if (menu.page !== 'library') {
-        <button type="button" role="menuitem" (click)="openContextLibrary()">Open library</button>
+      @if (menu.selection || menu.input) {
+        <hr />
       }
       @if (menu.page === 'library' || menu.page === 'settings') {
         <button type="button" role="menuitem" (click)="openContextPlayer()">Open player</button>
       }
-      <button type="button" role="menuitem" (click)="openContextQueue()">Toggle queue</button>
+      @if (menu.page !== 'library') {
+        <button type="button" role="menuitem" (click)="openContextLibrary()">Go to library</button>
+      }
+      @if (menu.page !== 'settings') {
+        <button type="button" role="menuitem" (click)="openContextSettings()">Go to settings</button>
+      }
+      <button type="button" role="menuitem" (click)="openContextQueue()">Show Queue</button>
     } @else if (!menu.selection && !menu.input) {
-      <span>No actions available</span>
+      <span class="menu-empty">No actions available</span>
     }
-  </div>
+  </app-context-menu>
 }
 <app-toast-host />

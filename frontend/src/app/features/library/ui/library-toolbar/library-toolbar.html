@@ -29,9 +29,14 @@
           <svg lucideChevronDown [size]="16"></svg>
         </button>
         <div popup-content class="sort-list fit-profile-list" role="menu">
+            <button type="button" role="menuitemradio" [attr.aria-checked]="fitSinger()?.id === null"
+              [class.active]="!fitSinger()" (click)="this.party?.clearSingerforFitSortingId()">
+              <i [style.background]="'gray'">X</i>
+              <span>None</span>
+            </button>
           @for (profile of fitProfiles(); track profile.id) {
             <button type="button" role="menuitemradio" [attr.aria-checked]="fitSinger()?.id === profile.id"
-              [class.active]="fitSinger()?.id === profile.id" (click)="selectSinger(profile)">
+              [class.active]="fitSinger()?.id === profile.id && fitSinger()?.id !== null" (click)="selectSinger(profile)">
               <i [style.background]="profile.accentColor">{{ profile.initials }}</i>
               <span>{{ profile.name }}</span>
               <small>{{ profile.minNote && profile.maxNote ? profile.minNote + '–' + profile.maxNote : 'Uncalibrated' }}</small>

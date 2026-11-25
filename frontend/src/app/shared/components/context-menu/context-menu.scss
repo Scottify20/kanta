@@ -1,0 +1,114 @@
+app-context-menu {
+  display: contents;
+}
+
+.context-menu-list {
+  display: grid;
+  min-width: 11rem;
+  max-height: min(70vh, 26rem);
+  padding: 0.35rem;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--context-menu-bg, var(--popup-menu-bg, transparent));
+
+  &.is-floating {
+    position: fixed;
+    z-index: 2000;
+    border: 0;
+    border-radius: 0.85rem;
+    background: var(--context-menu-bg, var(--popup-menu-bg, rgba(18, 22, 28, 0.4)));
+    backdrop-filter: var(--context-menu-blur, blur(24px));
+    -webkit-backdrop-filter: var(--context-menu-blur, blur(24px));
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    color: #fff;
+    transform-origin: top left;
+    animation: context-menu-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  hr {
+    width: 100%;
+    margin: 0.3rem 0;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  button,
+  a,
+  span.menu-empty {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.92);
+    background: transparent;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--motion-fast, 0.15s ease), color var(--motion-fast, 0.15s ease);
+  }
+
+  button,
+  a {
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--surface-hover, rgba(255, 255, 255, 0.1));
+      color: #fff;
+      outline: none;
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: transparent !important;
+    }
+
+    &.submenu,
+    &.back {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    &.back {
+      justify-content: flex-start;
+      color: rgba(255, 255, 255, 0.85);
+
+      span {
+        font-weight: 600;
+      }
+    }
+
+    &.danger {
+      color: #ff8a80;
+
+      &:hover,
+      &:focus-visible {
+        background: rgba(255, 80, 80, 0.15);
+        color: #ffd0c4;
+      }
+    }
+  }
+
+  span.menu-empty {
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+    user-select: none;
+  }
+}
+
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

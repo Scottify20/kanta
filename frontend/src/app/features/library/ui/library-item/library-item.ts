@@ -1,8 +1,9 @@
 import { Component, computed, inject, input, output } from '@angular/core';
 import { EntryAction, EntryMenu } from '../../../../shared/components/entry-menu/entry-menu';
-import { PartySessionService, recommendSoloKey } from '../../../../shared/services/party-session.service';
+import { PartySessionService} from '../../../../shared/services/party-session.service';
 import { Playlist } from '../../../../shared/services/playlists.service';
 import { LibraryEntry } from '../../data/library-entries';
+import { recommendSoloKey } from '../../../../shared/services/vocal-fit';
 
 export type { EntryAction };
 
@@ -39,11 +40,11 @@ export class LibraryItem {
 
   readonly vocalFit = computed(() => {
     const entry = this.entry();
-    const singer = this.partySession.activeSinger();
+    const singer = this.partySession.singerForFitSorting();
     return entry.kind === 'song' && singer
       ? recommendSoloKey(entry.songs[0], singer)
       : null;
-  });
+  })
   readonly vocalFitLabel = computed(() => {
     const fit = this.vocalFit();
     if (!fit || fit.unanalyzed || fit.status === 'uncalibrated') return null;

@@ -8,6 +8,7 @@ import { QueueSheet } from './features/queue/ui/queue-sheet/queue-sheet';
 import { MiniLyrics } from './features/now-playing/ui/mini-lyrics/mini-lyrics';
 import { NowPlaying } from './features/now-playing/now-playing';
 import { Backdrop } from './shared/components/backdrop/backdrop';
+import { ContextMenu } from './shared/components/context-menu/context-menu';
 import { ToastHost } from './shared/components/toast-host/toast-host';
 import { SetupModal } from './shared/components/setup-modal/setup-modal';
 import { Sidebar } from './shared/components/sidebar/sidebar';
@@ -27,7 +28,18 @@ import { ToastService } from './shared/services/toast.service';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, Backdrop, Sidebar, QueueSheet, SetupModal, ToastHost, MetadataEditor, MiniLyrics, NowPlaying],
+  imports: [
+    RouterOutlet,
+    Backdrop,
+    Sidebar,
+    QueueSheet,
+    SetupModal,
+    ToastHost,
+    MetadataEditor,
+    MiniLyrics,
+    NowPlaying,
+    ContextMenu,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -82,7 +94,6 @@ export class App implements OnDestroy {
     end: number;
     value: string;
   } | null>(null);
-  // The developer log window loads /logs directly and shows only the log viewer, without the app chrome.
   readonly logsWindow = typeof location !== 'undefined' && location.pathname.startsWith('/logs');
 
   constructor() {
@@ -238,6 +249,11 @@ export class App implements OnDestroy {
     void this.router.navigateByUrl('/library');
   }
 
+  openContextSettings(): void {
+    this.contextMenu.set(null);
+    void this.router.navigateByUrl('/settings');
+  }
+
   openContextPlayer(): void {
     this.contextMenu.set(null);
     void this.router.navigateByUrl('/');
@@ -281,7 +297,6 @@ export class App implements OnDestroy {
     }
   }
 
-  // Clicking the content area dismisses open panels; overlays, toggles and drags are ignored.
   @HostListener('document:pointerdown', ['$event'])
   onOutsidePointer(event: PointerEvent): void {
     if (!this.layout.sidebarOpen() && !this.layout.queueOpen()) return;
@@ -291,7 +306,6 @@ export class App implements OnDestroy {
     if (target.closest('.panel, .cdk-overlay-container, [aria-expanded], [role="dialog"], dialog')) return;
     if (this.overlayScrollbar.isScrollbarInside(target, '.panel')) return;
     this.layout.closeSidebar();
-    // Pressing a draggable item may be the start of a drag towards the queue, so it must not dismiss the sheet.
     if (target.closest('[draggable="true"]')) return;
     this.layout.closeQueue();
   }

@@ -5,6 +5,7 @@
   <div
     class="popup-content"
     [class.leaving]="leaving()"
+    [style.background]="background()"
     role="dialog"
     [attr.aria-label]="label()"
     (click)="onContentClick($event)"

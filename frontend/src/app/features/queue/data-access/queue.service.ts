@@ -95,21 +95,25 @@ export class QueueService {
       }));
   }
 
-  addProcessedTrack(
+addProcessedTrack(
     song: Pick<QueueItem, 'artist' | 'album' | 'title'>,
     playNext = false,
     afterTaskId: string | null = null,
+    allowDuplicate = true,
   ): Observable<{ item: QueueItem }> {
     return this.http
       .post<{ item: QueueItem }>(`${API_URL}/api/queue/add-processed`, {
         ...song,
         play_next: playNext,
         after_task_id: afterTaskId,
+        allow_duplicate: allowDuplicate,
       })
-      .pipe(tap(({ item }) => {
-        this.trackAdded$.next(item);
-        this.refresh();
-      }));
+      .pipe(
+        tap(({ item }) => {
+          this.trackAdded$.next(item);
+          this.refresh();
+        }),
+      );
   }
 
   promoteTrack(taskId: string): Observable<{ item: QueueItem }> {

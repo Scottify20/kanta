@@ -1,0 +1,57 @@
+<div class="note-selector" role="group" [attr.aria-label]="label()">
+  <div class="stepper-row">
+    <button
+      type="button"
+      class="btn-step"
+      [disabled]="currentMidi() <= minMidi()"
+      (click)="stepSemitone(-1)"
+      aria-label="Lower one semitone"
+    >
+      −
+    </button>
+
+    <div class="current-note-display">
+      <strong class="note-name">{{ currentNote() }}</strong>
+      <span class="note-octave-hint">Octave {{ currentOctave() }}</span>
+    </div>
+
+    <button
+      type="button"
+      class="btn-step"
+      [disabled]="currentMidi() >= maxMidi()"
+      (click)="stepSemitone(1)"
+      aria-label="Raise one semitone"
+    >
+      +
+    </button>
+  </div>
+
+  <!-- Interactive Octave Strip -->
+  <div class="octaves-strip" role="radiogroup" aria-label="Octave selection">
+    @for (oct of octaves; track oct) {
+      <button
+        type="button"
+        class="octave-btn"
+        [class.selected]="currentOctave() === oct"
+        (click)="setOctave(oct)"
+      >
+        {{ oct }}
+      </button>
+    }
+  </div>
+
+  <!-- Interactive Pitch Matrix -->
+  <div class="pitches-grid" role="radiogroup" aria-label="Pitch class selection">
+    @for (pitch of pitchNames; track pitch) {
+      <button
+        type="button"
+        class="pitch-btn"
+        [class.accidental]="pitch.includes('#')"
+        [class.selected]="currentPitch() === pitch"
+        (click)="setPitch(pitch)"
+      >
+        {{ pitch }}
+      </button>
+    }
+  </div>
+</div>

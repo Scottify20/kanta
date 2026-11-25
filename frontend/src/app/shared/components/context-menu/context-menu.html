@@ -1,0 +1,23 @@
+<div
+  class="context-menu-list"
+  [class.is-floating]="isFloating()"
+  [style.left.px]="x()"
+  [style.top.px]="y()"
+  [style.min-width]="minWidth()"
+  [style.max-width]="maxWidth()"
+  [style.background]="background()"
+  role="menu"
+  [attr.aria-label]="ariaLabel()"
+  (mousedown)="onMouseDown($event)"
+  (click)="onClick($event)"
+>
+  @if (isSubmenu()) {
+    <button type="button" class="back" (click)="back()">
+      <svg lucideChevronLeft [size]="16"></svg>
+      <span>{{ currentTitle() }}</span>
+    </button>
+    <hr />
+  }
+
+  <ng-content></ng-content>
+</div>

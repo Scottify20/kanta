@@ -1,9 +1,10 @@
-import { Component, ViewEncapsulation, input, output, signal, viewChild } from '@angular/core';
-import { LucideChevronLeft, LucideChevronRight, LucideMoreHorizontal } from '@lucide/angular';
+import { Component, ViewEncapsulation, input, output, viewChild } from '@angular/core';
+import { LucideChevronRight, LucideMoreHorizontal } from '@lucide/angular';
 
 import { Playlist } from '../../services/playlists.service';
 import { PlaylistPicker } from '../playlist-picker/playlist-picker';
 import { PopupPanel } from '../popup-panel/popup-panel';
+import { ContextMenu } from '../context-menu/context-menu';
 
 export type EntryKind = 'song' | 'album' | 'artist' | 'genre' | 'playlist';
 
@@ -23,10 +24,9 @@ export type EntryAction =
   | `playlist:${string}`
   | `new-playlist:${string}`;
 
-/** The "…" options menu shared by library items and search results. */
 @Component({
   selector: 'app-entry-menu',
-  imports: [PopupPanel, PlaylistPicker, LucideMoreHorizontal, LucideChevronLeft, LucideChevronRight],
+  imports: [PopupPanel, PlaylistPicker, ContextMenu, LucideMoreHorizontal, LucideChevronRight],
   templateUrl: './entry-menu.html',
   styleUrl: './entry-menu.scss',
   encapsulation: ViewEncapsulation.None,
@@ -42,22 +42,21 @@ export class EntryMenu {
   readonly revealOnHover = input(false);
   readonly action = output<EntryAction>();
 
-  // Nested menu: "Add to playlist" swaps the list for the playlist picker in place.
-  readonly view = signal<'main' | 'playlists'>('main');
   private readonly popup = viewChild.required(PopupPanel);
+  private readonly contextMenu = viewChild<ContextMenu>('menu');
 
   openAt(event: MouseEvent): void {
-    this.view.set('main');
+    this.contextMenu()?.reset();
     this.popup().openAt(event);
   }
 
-  pickPlaylist(id: string): void {
+  pickPlaylist(id: string, menu: ContextMenu): void {
     this.action.emit(`playlist:${id}`);
-    this.view.set('main');
+    menu.reset();
   }
 
-  createPlaylist(name: string): void {
+  createPlaylist(name: string, menu: ContextMenu): void {
     this.action.emit(`new-playlist:${name}`);
-    this.view.set('main');
+    menu.reset();
   }
 }

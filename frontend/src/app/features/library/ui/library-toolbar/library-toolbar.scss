@@ -13,11 +13,10 @@
 .tabs {
   display: inline-flex;
   padding: 0.25rem;
-  border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
-  background: rgba(12,14,18,.38);
+  border: 1.5px solid rgba(134, 134, 134, 0.12);
+  background: rgba(83, 83, 83, 0.38);
   backdrop-filter: blur(12px);
-
 
   button {
     padding: 0.5rem 1.25rem;
@@ -55,10 +54,10 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 1rem;
-  border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
   color: #fff;
-  background: rgba(12,14,18,.38);
+  border: 1.5px solid rgba(134, 134, 134, 0.12);
+  background: rgba(83, 83, 83, 0.38);
   backdrop-filter: blur(12px);
   cursor: pointer;
   font: inherit;

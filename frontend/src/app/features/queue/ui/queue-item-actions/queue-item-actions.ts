@@ -1,6 +1,7 @@
 import { Component, inject, input, output, viewChild } from '@angular/core';
 import { LucideMoreHorizontal, LucidePause, LucidePlay } from '@lucide/angular';
 
+import { ContextMenu } from '../../../../shared/components/context-menu/context-menu';
 import { PopupPanel } from '../../../../shared/components/popup-panel/popup-panel';
 import { PopupStateService } from '../../../../shared/services/popup-state.service';
 import { Tooltip } from '../../../../shared/directives/tooltip';
@@ -8,7 +9,7 @@ import { QueueItem } from '../../interfaces/queue.models';
 
 @Component({
   selector: 'app-queue-item-actions',
-  imports: [PopupPanel, Tooltip, LucideMoreHorizontal, LucidePause, LucidePlay],
+  imports: [PopupPanel, Tooltip, ContextMenu, LucideMoreHorizontal, LucidePause, LucidePlay],
   templateUrl: './queue-item-actions.html',
   styleUrl: './queue-item-actions.scss',
 })

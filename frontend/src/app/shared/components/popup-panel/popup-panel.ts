@@ -38,6 +38,8 @@ export class PopupPanel {
   readonly label = input('Options');
   readonly placement = input<'above' | 'below'>('above');
   readonly closeOnContentClick = input(false);
+  readonly background = input<string | null>(null);
+
   readonly isOpen = computed(() => this.popupState.isOpen(this.group(), this.popupId()));
   readonly leaving = signal(false);
 
@@ -78,9 +80,15 @@ export class PopupPanel {
   onContentClick(event: MouseEvent): void {
     event.stopPropagation();
     const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    if (target.closest('[popup-close]')) {
+      this.popupState.close(this.group(), this.popupId());
+      return;
+    }
+
     if (
       this.closeOnContentClick() &&
-      target instanceof Element &&
       target.closest('button,[role="menuitem"]') &&
       !target.closest('[data-keep-open]')
     ) {

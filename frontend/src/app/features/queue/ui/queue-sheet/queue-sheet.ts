@@ -1,7 +1,7 @@
-import { ApplicationRef, Component, DestroyRef, ElementRef, Injector, OnInit, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { ApplicationRef, Component, DestroyRef, ElementRef, Injector, OnInit, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LucideChevronDown, LucideFilePlus, LucideFolderPlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
+import { LucideChevronDown, LucideCrosshair, LucideFilePlus, LucideFolderPlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { EMPTY, catchError, from, mergeMap, tap } from 'rxjs';
@@ -42,6 +42,7 @@ const UPLOAD_PREFIX = 'upload:';
     QueueTrackSummary,
     Tooltip,
     LucideChevronDown,
+    LucideCrosshair,
     LucideFilePlus,
     LucideFolderPlus,
     LucidePause,
@@ -56,6 +57,7 @@ const UPLOAD_PREFIX = 'upload:';
 export class QueueSheet implements OnInit {
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private readonly folderInput = viewChild<ElementRef<HTMLInputElement>>('folderInput');
+  private readonly karaokeSection = viewChild<ElementRef<HTMLElement>>('karaokeSection');
   private browseTarget: QueueName = 'karaoke_queue';
   private readonly queueService = inject(QueueService);
   private readonly injector = inject(Injector);
@@ -66,7 +68,6 @@ export class QueueSheet implements OnInit {
   private readonly lastStatus = new Map<string, string>();
   private readonly destroyRef = inject(DestroyRef);
 
-  // While true, polled server orders are ignored so optimistic local order is not overwritten.
   private isDragging = false;
   private isReordering = false;
   private reorderTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,6 +75,8 @@ export class QueueSheet implements OnInit {
   private readonly entering = new Map<string, number>();
   private readonly assignedQueueTasks = new Set<string>();
   private partySessionPromise: Promise<PartySessionService> | null = null;
+  private dragScrollRaf: number | null = null;
+  private lastDragClientY = 0;
 
   readonly processedDrag = signal(false);
   readonly processedItemDrag = input(false);
@@ -94,7 +97,6 @@ export class QueueSheet implements OnInit {
   );
   readonly karaokeTotalLabel = computed(() => formatPlaytime(this.karaokeTotalSeconds()));
   readonly processingPaused = signal(false);
-  // Optimistic rows for files that are still uploading, so a drop morphs into a queue item immediately.
   private readonly uploads = signal<QueueItem[]>([]);
   readonly processingView = computed(() => {
     const base = this.processingItems().filter((item) => ACTIVE_STATUSES.has(item.status));
@@ -105,11 +107,25 @@ export class QueueSheet implements OnInit {
   readonly committing = signal(false);
   private processingLocked = false;
   readonly canSortProcessing = (index: number): boolean => this.processingView()[index]?.status === 'pending';
-  // Index at which an externally dragged item would be inserted; renders a gap that shifts rows.
   readonly dropIndex = signal<number | null>(null);
 
   readonly close = output<void>();
   readonly trackSelected = output<QueueItem>();
+
+  constructor() {
+    effect(() => {
+      const activeId = this.activeTaskId();
+      const isPlaying = this.playbackActive();
+      const items = this.karaokeItems();
+
+      // Only auto-scroll when the song has actually started playing
+      if (!isPlaying || !activeId || items.length === 0) return;
+
+      untracked(() => {
+        setTimeout(() => this.scrollToCurrentTrack(true), 60);
+      });
+    });
+  }
 
   ngOnInit(): void {
     this.queueService.trackAdded$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((item) => {
@@ -165,20 +181,43 @@ export class QueueSheet implements OnInit {
     });
   }
 
+  scrollToCurrentTrack(smooth = true): void {
+    const activeId = this.activeTaskId();
+    if (!activeId) return;
+    const container = this.karaokeSection()?.nativeElement;
+    if (!container) return;
+    const targetRow = container.querySelector(`li[data-task-id="${activeId}"]`) as HTMLElement | null;
+    if (!targetRow) return;
+
+    const header = container.querySelector('.section-header') as HTMLElement | null;
+    const headerHeight = header ? header.offsetHeight : 44;
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = targetRow.getBoundingClientRect();
+    const targetScrollTop = container.scrollTop + (rowRect.top - containerRect.top) - headerHeight - 6;
+
+    container.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }
+
   clearDuetAssignmentPrompt(taskId: string): void {
     if (this.duetAssignmentTaskId() === taskId) this.duetAssignmentTaskId.set(null);
   }
 
   private initializeQueueAssignment(item: QueueItem, promptForNewTrack: boolean): void {
     if (item.priority !== 1) return;
-    if (this.assignedQueueTasks.has(item.task_id)) return;
+    const isNew = !this.assignedQueueTasks.has(item.task_id);
     this.assignedQueueTasks.add(item.task_id);
     const song = this.library.songs().find((candidate) => songKey(candidate) === songKey(item));
     const isDuet = item.is_duet === true || song?.is_duet === true;
+
     void this.getPartySession()
       .then((party) => {
-        party.ensureQueueAssignment(item.task_id, isDuet);
-        if (promptForNewTrack && party.roster().length >= 2) {
+        if (isNew) {
+          party.ensureQueueAssignment(item.task_id, isDuet);
+        }
+        if (promptForNewTrack && party.roster().length >= 1) {
           this.duetAssignmentTaskId.set(item.task_id);
         }
       })
@@ -198,7 +237,6 @@ export class QueueSheet implements OnInit {
       .then(({ PartySessionService }) => this.injector.get(PartySessionService));
   }
 
-  // Toasts once per task when it moves from an in-progress status to completed.
   private announceCompleted(items: QueueItem[]): void {
     for (const item of items) {
       const previous = this.lastStatus.get(item.task_id);
@@ -238,10 +276,43 @@ export class QueueSheet implements OnInit {
 
   onDragStarted(): void {
     this.isDragging = true;
+    window.addEventListener('pointermove', this.onPointerMoveDuringDrag, { passive: true });
+    this.startDragAutoScrollLoop();
   }
 
   onDragEnded(): void {
     this.isDragging = false;
+    window.removeEventListener('pointermove', this.onPointerMoveDuringDrag);
+    if (this.dragScrollRaf) {
+      cancelAnimationFrame(this.dragScrollRaf);
+      this.dragScrollRaf = null;
+    }
+  }
+
+  private onPointerMoveDuringDrag = (event: PointerEvent): void => {
+    this.lastDragClientY = event.clientY;
+  };
+
+  private startDragAutoScrollLoop(): void {
+    const loop = (): void => {
+      if (!this.isDragging) return;
+      const container = this.karaokeSection()?.nativeElement;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const topThreshold = rect.top + 70;
+        const bottomThreshold = rect.bottom - 70;
+
+        if (this.lastDragClientY > 0 && this.lastDragClientY < topThreshold) {
+          const intensity = Math.max(1, (topThreshold - this.lastDragClientY) / 6);
+          container.scrollTop -= intensity;
+        } else if (this.lastDragClientY > bottomThreshold && this.lastDragClientY < rect.bottom + 40) {
+          const intensity = Math.max(1, (this.lastDragClientY - bottomThreshold) / 6);
+          container.scrollTop += intensity;
+        }
+      }
+      this.dragScrollRaf = requestAnimationFrame(loop);
+    };
+    this.dragScrollRaf = requestAnimationFrame(loop);
   }
 
   onListDrop(event: CdkDragDrop<QueueItem[]>): void {
@@ -251,7 +322,6 @@ export class QueueSheet implements OnInit {
     const newArray = [...this.karaokeItems()];
     moveItemInArray(newArray, event.previousIndex, event.currentIndex);
     this.karaokeItems.set(newArray);
-    // Render the new order before CDK resets its transforms, otherwise the old order flashes.
     this.appRef.tick();
 
     const taskIds = newArray.map((item) => item.task_id);
@@ -306,7 +376,6 @@ export class QueueSheet implements OnInit {
     const list = event.currentTarget as HTMLElement;
     const rows = Array.from(list.querySelectorAll<HTMLElement>(':scope > li.queue-row'));
     let index = rows.length;
-    // Dropped files are appended by the server, so only library songs get a positional gap.
     for (let i = 0; types.includes(KANTA_DRAG_TYPE) && i < rows.length; i++) {
       const rect = rows[i].getBoundingClientRect();
       if (event.clientY < rect.top + rect.height / 2) {
@@ -332,7 +401,6 @@ export class QueueSheet implements OnInit {
     const index = this.dropIndex();
     this.dropIndex.set(null);
     this.overQueue.set(null);
-    // The gap is replaced by a row of the same height, so it must vanish instantly rather than animate out.
     this.committing.set(true);
     setTimeout(() => this.committing.set(false), 80);
 
@@ -424,7 +492,6 @@ export class QueueSheet implements OnInit {
       });
   }
 
-  // Holds optimistic state; `hold` keeps it until released, otherwise releases shortly after.
   private lockServerOrder(hold = false): void {
     this.isReordering = true;
     if (this.reorderTimer) clearTimeout(this.reorderTimer);

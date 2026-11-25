@@ -1,8 +1,7 @@
 import { AlbumEntry, ArtistEntry, songCover, songKey } from '../../../shared/services/library.service';
 import { Playlist } from '../../../shared/services/playlists.service';
 import { SongManifest, songAlbum, songArtist, songTitle } from '../../../shared/services/songs.service';
-import type { UserProfile } from '../../../shared/services/party-session.service';
-import { recommendSoloKey } from '../../../shared/services/vocal-fit';
+import { recommendSoloKey, type UserProfile } from '../../../shared/services/party-session.service';
 import { DEFAULT_GENRE_DELIMITERS, splitMetadataValues } from '../../../shared/util/metadata-delimiters';
 
 export type LibraryTab = 'songs' | 'genres' | 'albums' | 'artists' | 'playlists';
