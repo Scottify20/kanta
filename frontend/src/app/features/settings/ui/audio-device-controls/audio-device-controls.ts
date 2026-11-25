@@ -12,7 +12,7 @@ interface DeviceChoice { id: string; label: string; }
 
 @Component({
   selector: 'app-settings-audio-device-controls',
-  imports: [Select, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip, VocalRangeModal],
+  imports: [Select, LucideMic, LucideMicOff, LucideRefreshCw, LucideVolume2, Tooltip],
   templateUrl: './audio-device-controls.html',
   styleUrl: './audio-device-controls.scss',
 })

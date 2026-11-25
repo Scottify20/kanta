@@ -15,7 +15,9 @@
   padding: 0.25rem;
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
-  background: transparent;
+  background: rgba(12,14,18,.38);
+  backdrop-filter: blur(12px);
+
 
   button {
     padding: 0.5rem 1.25rem;
@@ -109,7 +111,8 @@
   padding: 0.2rem;
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 99rem;
-  background: transparent;
+  background: rgba(12,14,18,.38);
+  backdrop-filter: blur(12px);
 }
 
 .icon {

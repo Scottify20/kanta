@@ -44,7 +44,7 @@
   color: #ff8a80;
 }
 
-.back-button {
+.circle-button {
   display: grid;
   place-items: center;
   justify-self: start;
@@ -54,11 +54,12 @@
   border: 0;
   border-radius: 50%;
   color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
   background: var(--surface-hover);
   cursor: pointer;
   transition: background var(--motion-fast);
 }
-.back-button:hover {
+.circle-button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 

@@ -4,6 +4,7 @@
 }
 
 .search {
+  max-width: 300px;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -11,6 +12,7 @@
   padding: 0 1rem;
   border-radius: 99rem;
   color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
   background: var(--surface-hover);
   transition:
     background var(--motion-fast),

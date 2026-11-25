@@ -19,13 +19,14 @@
     </header>
     <label class="key-toggle">
       <span>Apply Key Change</span>
-      <input
+        <input
         class="switch"
         type="checkbox"
         role="switch"
-        [checked]="audioPlayer.isKeyShiftEnabled()"
-        (change)="setKeyShiftEnabled($event)"
-      />
+        [checked]="partySession.autoAdjustKey()"
+        (change)="partySession.setAutoAdjustKey($any($event.target).checked)"
+        />
+
     </label>
     <div
       class="key-adjustment-controls"
@@ -66,12 +67,15 @@
         <span>Lower</span><span>Original</span><span>Higher</span>
       </div>
     </div>
-    <p class="key-footer">Adjusting both vocals and music to keep them in key.</p>
+    
+    <!-- <p class="key-footer">Adjusting both vocals and music to keep them in key.</p> -->
+      <div class="key-results">
     @if (keyTransition(); as transition) {
-      <p class="key-result"><span>Original key</span><strong>{{ transition }}</strong></p>
+      <p class="key-result"><span>Key</span><strong>{{ transition }}</strong></p>
     }
     @if (rangeTransition(); as range) {
       <p class="key-result"><span>Vocal range</span><strong>{{ range }}</strong></p>
     }
+     </div>
   </section>
 </app-popup-panel>

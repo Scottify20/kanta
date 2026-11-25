@@ -138,6 +138,7 @@ app-root {
     box-shadow: var(--shadow-popup);
     color: #fff;
     scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
 
     li {
       display: flex;

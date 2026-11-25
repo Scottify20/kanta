@@ -44,7 +44,7 @@ export class KeyAdjustmentControl {
   readonly song = input<SongManifest | null>(null);
   readonly keyTransition = computed(() => {
     const key = this.song()?.musical_key;
-    return key ? `${key} → ${transposeKey(key, this.audioPlayer.effectiveSemitones())}` : null;
+    return key ? `${key}   →   ${transposeKey(key, this.audioPlayer.effectiveSemitones())}` : null;
   });
   readonly rangeTransition = computed(() => {
     const song = this.song();

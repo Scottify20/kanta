@@ -41,7 +41,9 @@ export class LibraryToolbar {
   readonly filterLabel = computed(() =>
     this.lyricsFilters.find((option) => option.value === this.lyricsFilter())?.label ?? 'All songs',
   );
+
   readonly fitSinger = computed(() => this.party?.activeSinger() ?? null);
+  
   readonly fitProfiles = computed(() => {
     const roster = this.party?.roster() ?? [];
     const ids = new Set(roster.map((profile) => profile.id));

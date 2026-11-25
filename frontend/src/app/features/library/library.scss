@@ -40,12 +40,13 @@
     flex: 0 1 20rem;
     min-width: 0;
   }
-  .header-right .back {
+  .header-right .circle-button {
     flex: none;
   }
 }
 
-.back {
+.circle-button {
+  backdrop-filter: blur(12px);
   display: grid;
   place-items: center;
   justify-self: start;

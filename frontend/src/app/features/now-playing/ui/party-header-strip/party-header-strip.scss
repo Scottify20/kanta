@@ -131,10 +131,8 @@
   width: min(20rem, calc(100vw - 2rem));
   gap: 1rem;
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 1rem;
   color: rgba(255, 255, 255, 0.92);
-  background: rgba(24, 26, 31, 0.88);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.36);
 }
