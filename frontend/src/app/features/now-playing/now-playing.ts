@@ -38,11 +38,6 @@ import { PopupStateService } from '../../shared/services/popup-state.service';
 import { ToastService } from '../../shared/services/toast.service';
 import type { PartySessionService } from '../../shared/services/party-session.service';
 
-function cleanTrackTitle(title: string): string {
-  return title.replace(/\s*[\(\[]\s*(?:instrumental|vocals?)\s*[\)\]]/gi, '').trim() || title;
-}
-
-
 @Component({
   selector: 'app-now-playing',
   imports: [
@@ -86,14 +81,6 @@ export class NowPlaying implements OnDestroy {
   private readonly library = inject(LibraryService);
   private readonly toast = inject(ToastService);
   readonly lyricsColors = inject(LyricsColorService);
-
-  readonly displayTitle = computed(() => {
-    const raw =
-      this.selectedTrack()?.raw_title ??
-      this.selectedManifest()?.display_title ??
-      this.selectedManifest()?.title;
-    return raw ? cleanTrackTitle(raw) : 'No track selected';
-  });
 
   // The song loaded in the player: its manifest, or the library record matching the selected queue item.
   readonly currentSong = computed<SongManifest | null>(() => {

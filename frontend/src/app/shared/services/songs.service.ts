@@ -1,7 +1,7 @@
 import type { QueueItem } from '../../features/queue/interfaces/queue.models';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, map } from 'rxjs';
 
 import { API_URL } from '../../app.config';
 
@@ -113,8 +113,22 @@ export interface SongManifest {
   vocal_voice_type?: 'Bass' | 'Baritone' | 'Tenor' | 'Alto' | 'Mezzo-Soprano' | 'Soprano' | null;
 }
 
+export function cleanStemTitle(title: string | null | undefined): string {
+  if (!title) return '';
+  const cleaned = title.replace(/\s*[\(\[]\s*(?:instrumental|vocals?)\s*[\)\]]/gi, '').trim();
+  return cleaned || title;
+}
+
+export function sanitizeManifest(song: SongManifest): SongManifest {
+  return {
+    ...song,
+    display_title: cleanStemTitle(song.display_title || song.title),
+  };
+}
+
 // Folder keys are sanitized; these return the real tag values for display.
-export const songTitle = (song: SongManifest): string => song.display_title || song.title;
+export const songTitle = (song: SongManifest): string =>
+  cleanStemTitle(song.display_title || song.title);
 export const songArtist = (song: SongManifest): string => song.display_artist || song.artist;
 export const songAlbum = (song: SongManifest): string => song.display_album || song.album;
 export const hasVocalRange = (
@@ -146,12 +160,13 @@ export class SongsService {
   }
 
   setNowPlaying(song: SongManifest | null, queueTaskId: string | null = null): void {
-    this.currentSong.set(song);
+    this.currentSong.set(song ? sanitizeManifest(song) : null);
     this.currentQueueTaskId.set(queueTaskId);
   }
 
   selectSong(song: SongManifest, playImmediately = false, queueTaskId: string | null = null): void {
-    this.selectedSong.set(song);
+    const clean = sanitizeManifest(song);
+    this.selectedSong.set(clean);
     this.selectedSongQueueTaskId.set(queueTaskId);
     this.playRequested.set(playImmediately);
   }
@@ -161,9 +176,11 @@ export class SongsService {
   }
 
   getManifest(artist: string, album: string, title: string): Observable<SongManifest> {
-    return this.http.get<SongManifest>(
-      `${API_URL}/api/songs/${encodeURIComponent(artist)}/${encodeURIComponent(album)}/${encodeURIComponent(title)}`,
-    );
+    return this.http
+      .get<SongManifest>(
+        `${API_URL}/api/songs/${encodeURIComponent(artist)}/${encodeURIComponent(album)}/${encodeURIComponent(title)}`,
+      )
+      .pipe(map(sanitizeManifest));
   }
 
   analyzeSongVocalRange(song: SongManifest, force = false): Promise<SongManifest | null> {
@@ -173,31 +190,39 @@ export class SongsService {
     const pending = this.vocalRangeRequests.get(key);
     if (pending) return pending;
 
-    const request = firstValueFrom(this.http.post<{ song: SongManifest }>(
-      `${this.songUrl(song)}/vocal-range/analyze`,
-      { vocal_range: true, replaygain: false },
-    )).then(({ song: updated }) => {
-      this.vocalRangeAttempts.add(key);
-      this.currentSong.update((current) =>
-        current && songIdentity(current) === key ? updated : current,
-      );
-      return updated;
-    }).finally(() => {
-      this.vocalRangeRequests.delete(key);
-    });
+    const request = firstValueFrom(
+      this.http.post<{ song: SongManifest }>(
+        `${this.songUrl(song)}/vocal-range/analyze`,
+        { vocal_range: true, replaygain: false },
+      ),
+    )
+      .then(({ song: updated }) => {
+        const clean = sanitizeManifest(updated);
+        this.vocalRangeAttempts.add(key);
+        this.currentSong.update((current) =>
+          current && songIdentity(current) === key ? clean : current,
+        );
+        return clean;
+      })
+      .finally(() => {
+        this.vocalRangeRequests.delete(key);
+      });
     this.vocalRangeRequests.set(key, request);
     return request;
   }
 
   analyzeSongMusicalKey(song: SongManifest): Promise<SongManifest> {
-    return firstValueFrom(this.http.post<{ song: SongManifest }>(
-      `${this.songUrl(song)}/vocal-range/analyze`,
-      { vocal_range: false, musical_key: true, bpm: false, replaygain: false },
-    )).then(({ song: updated }) => {
+    return firstValueFrom(
+      this.http.post<{ song: SongManifest }>(
+        `${this.songUrl(song)}/vocal-range/analyze`,
+        { vocal_range: false, musical_key: true, bpm: false, replaygain: false },
+      ),
+    ).then(({ song: updated }) => {
+      const clean = sanitizeManifest(updated);
       this.currentSong.update((current) =>
-        current && songIdentity(current) === songIdentity(song) ? updated : current,
+        current && songIdentity(current) === songIdentity(song) ? clean : current,
       );
-      return updated;
+      return clean;
     });
   }
 
@@ -228,7 +253,9 @@ export class SongsService {
   }
 
   listSongs(): Observable<SongManifest[]> {
-    return this.http.get<SongManifest[]>(`${API_URL}/api/songs`);
+    return this.http.get<SongManifest[]>(`${API_URL}/api/songs`).pipe(
+      map((songs) => songs.map(sanitizeManifest)),
+    );
   }
 
   // Reads the NDJSON stream; each line is a batch of songs, delivered while the backend is still scanning.
@@ -243,7 +270,12 @@ export class SongsService {
       pending += value ?? '';
       const lines = pending.split('\n');
       pending = done ? '' : (lines.pop() ?? '');
-      for (const line of lines) if (line.trim()) onBatch(JSON.parse(line) as SongManifest[]);
+      for (const line of lines) {
+        if (line.trim()) {
+          const batch = JSON.parse(line) as SongManifest[];
+          onBatch(batch.map(sanitizeManifest));
+        }
+      }
       if (done) return;
     }
   }
@@ -262,10 +294,9 @@ export class SongsService {
     song: Pick<SongManifest, 'artist' | 'album' | 'title'>,
     metadata: SongMetadataUpdate,
   ): Observable<SongManifest> {
-    return this.http.patch<SongManifest>(
-      `${this.songUrl(song)}/metadata`,
-      metadata,
-    );
+    return this.http
+      .patch<SongManifest>(`${this.songUrl(song)}/metadata`, metadata)
+      .pipe(map(sanitizeManifest));
   }
 
   uploadSongCover(song: Pick<SongManifest, 'artist' | 'album' | 'title'>, file: File): Observable<{ cover_url: string | null }> {
@@ -301,7 +332,8 @@ export class SongsService {
 
   analyzeSongReplayGain(song: Pick<SongManifest, 'artist' | 'album' | 'title'>): Observable<Pick<SongManifest, 'replaygain_track_gain' | 'replaygain_track_peak'>> {
     return this.http.post<Pick<SongManifest, 'replaygain_track_gain' | 'replaygain_track_peak'>>(
-      `${this.songUrl(song)}/replaygain/analyze`, {},
+      `${this.songUrl(song)}/replaygain/analyze`,
+      {},
     );
   }
 

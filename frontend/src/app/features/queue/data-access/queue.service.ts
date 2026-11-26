@@ -9,6 +9,7 @@ import {
   exhaustMap,
   filter,
   forkJoin,
+  map,
   merge,
   shareReplay,
   startWith,
@@ -19,7 +20,23 @@ import {
 
 import { QueueItem, QueuePriority, QueueSnapshot } from '../interfaces/queue.models';
 import { API_URL } from '../../../app.config';
+import { cleanStemTitle } from '../../../shared/services/songs.service';
 
+export function sanitizeQueueItem(item: QueueItem): QueueItem {
+  return {
+    ...item,
+    raw_title: cleanStemTitle(item.raw_title),
+  };
+}
+
+export function sanitizeQueueSnapshot(snapshot: QueueSnapshot): QueueSnapshot {
+  return {
+    ...snapshot,
+    karaoke_queue: (snapshot.karaoke_queue ?? []).map(sanitizeQueueItem),
+    processing_queue: (snapshot.processing_queue ?? []).map(sanitizeQueueItem),
+    current_task: snapshot.current_task ? sanitizeQueueItem(snapshot.current_task) : null,
+  };
+}
 
 const POLL_INTERVAL_MS = 1500;
 const REQUEST_TIMEOUT_MS = 20000;
@@ -48,7 +65,8 @@ export class QueueService {
       source.onopen = () => (streaming = true);
       source.onmessage = (event) => {
         try {
-          subscriber.next(JSON.parse(event.data) as QueueSnapshot);
+          const raw = JSON.parse(event.data) as QueueSnapshot;
+          subscriber.next(sanitizeQueueSnapshot(raw));
         } catch {
           // ignore malformed frames
         }
@@ -59,6 +77,7 @@ export class QueueService {
       .pipe(
         exhaustMap(() =>
           this.http.get<QueueSnapshot>(`${API_URL}/api/queue`).pipe(
+            map(sanitizeQueueSnapshot),
             timeout(REQUEST_TIMEOUT_MS),
             catchError(() => EMPTY),
           ),
@@ -89,13 +108,16 @@ export class QueueService {
     if (lyrics) formData.append('lyrics', lyrics, lyrics.name);
     return this.http
       .post<{ item: QueueItem | null; skipped?: 'already_in_library' | 'already_queued' | null }>(`${API_URL}/api/queue/add`, formData)
-      .pipe(tap(({ item }) => {
-        if (item) this.trackAdded$.next(item);
-        this.refresh();
-      }));
+      .pipe(
+        map((res) => (res.item ? { ...res, item: sanitizeQueueItem(res.item) } : res)),
+        tap(({ item }) => {
+          if (item) this.trackAdded$.next(item);
+          this.refresh();
+        }),
+      );
   }
 
-addProcessedTrack(
+  addProcessedTrack(
     song: Pick<QueueItem, 'artist' | 'album' | 'title'>,
     playNext = false,
     afterTaskId: string | null = null,
@@ -109,6 +131,7 @@ addProcessedTrack(
         allow_duplicate: allowDuplicate,
       })
       .pipe(
+        map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
         tap(({ item }) => {
           this.trackAdded$.next(item);
           this.refresh();
@@ -122,13 +145,17 @@ addProcessedTrack(
         `${API_URL}/api/queue/promote/${encodeURIComponent(taskId)}`,
         {},
       )
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
+        tap(() => this.refresh()),
+      );
   }
 
   removeTrack(taskId: string): Observable<{ item: QueueItem }> {
     return this.http
       .delete<{ item: QueueItem }>(`${API_URL}/api/queue/${encodeURIComponent(taskId)}`)
       .pipe(
+        map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
         tap(() => {
           this.karaokeRemoved$.next(taskId);
           this.refresh();
@@ -171,7 +198,10 @@ addProcessedTrack(
         `${API_URL}/api/queue/pause/${encodeURIComponent(taskId)}`,
         {},
       )
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
+        tap(() => this.refresh()),
+      );
   }
 
   resumeTrack(taskId: string): Observable<{ item: QueueItem }> {
@@ -180,7 +210,10 @@ addProcessedTrack(
         `${API_URL}/api/queue/resume/${encodeURIComponent(taskId)}`,
         {},
       )
-      .pipe(tap(() => this.refresh()));
+      .pipe(
+        map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
+        tap(() => this.refresh()),
+      );
   }
 
   pauseAll(): Observable<{ message: string }> {

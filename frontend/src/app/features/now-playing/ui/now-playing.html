@@ -42,9 +42,9 @@
     [class.fullscreen]="isFullScreen()"
     [class.collapsed]="trackAreaCollapsed()"
   >
-<app-lyrics-stage
+    <app-lyrics-stage
       [coverUrl]="coverUrl()"
-      [coverAlt]="displayTitle()"
+      [coverAlt]="selectedTrack()?.raw_title ?? selectedManifest()?.title ?? 'Current album cover'"
       [lyrics]="lyricsService.lyrics()"
       [songKey]="selectedTrack()?.task_id ?? selectedManifest()?.title ?? ''"
       [currentTime]="lyricsTimeSeconds()"
@@ -108,10 +108,9 @@
       <div class="track-footer-wrap">
       <div class="track-footer" [class.fullscreen]="isFullScreen()">
         <!-- Track details -->
-<!-- Track details -->
         <div class="track-details">
           <h1 class="track-title">
-            {{ displayTitle() }}
+            {{ selectedTrack()?.raw_title ?? selectedManifest()?.display_title ?? selectedManifest()?.title ?? 'No track selected' }}
           </h1>
           <p class="track-artist-album">
             @let artistName =
