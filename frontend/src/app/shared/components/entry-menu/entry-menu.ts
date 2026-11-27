@@ -1,10 +1,11 @@
-import { Component, ViewEncapsulation, input, output, viewChild } from '@angular/core';
+import { Component, ViewEncapsulation, inject, input, output, viewChild } from '@angular/core';
 import { LucideChevronRight, LucideMoreHorizontal } from '@lucide/angular';
 
 import { Playlist } from '../../services/playlists.service';
 import { PlaylistPicker } from '../playlist-picker/playlist-picker';
 import { PopupPanel } from '../popup-panel/popup-panel';
 import { ContextMenu } from '../context-menu/context-menu';
+import { EntryActionsService } from '../../services/entry-actions.service';
 
 export type EntryKind = 'song' | 'album' | 'artist' | 'genre' | 'playlist';
 
@@ -44,10 +45,16 @@ export class EntryMenu {
 
   private readonly popup = viewChild.required(PopupPanel);
   private readonly contextMenu = viewChild<ContextMenu>('menu');
+  private readonly entryActions = inject(EntryActionsService, { optional: true });
 
   openAt(event: MouseEvent): void {
     this.contextMenu()?.reset();
     this.popup().openAt(event);
+  }
+
+  triggerAction(act: EntryAction, event: MouseEvent): void {
+    this.entryActions?.setAnchor(event.currentTarget as HTMLElement);
+    this.action.emit(act);
   }
 
   pickPlaylist(id: string, menu: ContextMenu): void {

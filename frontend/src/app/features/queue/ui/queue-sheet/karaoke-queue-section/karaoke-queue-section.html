@@ -1,0 +1,231 @@
+<article
+  #karaokeSection
+  cdkScrollable
+  class="queue-section karaoke"
+  [class.collapsed]="collapsed()"
+  [class.is-empty]="items().length === 0"
+  (pointerdown)="startMarquee($event)"
+>
+  <!-- Content-Anchored Marquee Box -->
+  @if (marqueeActive() && marqueeBox(); as box) {
+    <div
+      class="marquee-selection"
+      [style.left.px]="box.left"
+      [style.top.px]="box.top"
+      [style.width.px]="box.width"
+      [style.height.px]="box.height"
+    ></div>
+  }
+
+  <header
+    class="section-header"
+    (click)="toggleCollapse.emit()"
+    role="button"
+    tabindex="0"
+  >
+    <div class="section-title">
+      <svg
+        lucideChevronDown
+        [size]="16"
+        class="collapse-icon"
+        [class.is-collapsed]="collapsed()"
+      ></svg>
+      <h2>Karaoke Queue</h2>
+      @if (totalLabel(); as total) {
+        <span class="queue-total" aria-label="Total playtime">{{ total }}</span>
+      }
+    </div>
+    <div class="section-actions" (click)="$event.stopPropagation()">
+      @if (activeTaskId()) {
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Scroll to playing"
+          aria-label="Scroll to currently playing track"
+          (click)="scrollToCurrentTrack(true)"
+        >
+          <svg lucideCrosshair [size]="16"></svg>
+        </button>
+      }
+
+      <!-- Animated Trash Can Drop Target -->
+      <div
+        cdkDropList
+        id="karaoke-trash-drop"
+        [cdkDropListSortingDisabled]="true"
+        (cdkDropListDropped)="onTrashDrop($event)"
+        (cdkDropListEntered)="trashHovered.set(true)"
+        (cdkDropListExited)="trashHovered.set(false)"
+        class="trash-drop-wrapper"
+      >
+        <button
+          class="icon-button trash-button"
+          [class.is-drop-target]="trashHovered()"
+          type="button"
+          appTooltip="Clear queue (or drop to remove)"
+          aria-label="Clear karaoke queue"
+          [disabled]="items().length === 0"
+          (click)="clear.emit()"
+        >
+          <svg class="animated-trash-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <g class="trash-lid-group">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </g>
+            <path class="trash-can-body" d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="track-list-wrapper" [class.is-collapsed]="collapsed()">
+    <ol
+      #trackListElement
+      class="track-list"
+      cdkDropList
+      id="karaoke-track-list"
+      [cdkDropListConnectedTo]="['karaoke-trash-drop']"
+      [cdkDropListData]="displayItems()"
+      (cdkDropListDropped)="onListDrop($event)"
+      (dragover)="onExternalDragOver($event)"
+      (dragleave)="onExternalDragLeave($event)"
+      (drop)="dropExternal($event)"
+    >
+      @if (items().length === 0) {
+        @if (overQueue() || pendingDropped()) {
+          @if (phantomSongs().length > 1 && !pendingDropped()) {
+            <li class="phantom-stack" aria-hidden="true">
+              @for (p of phantomItems().slice(0, 3); track p.task_id; let sIdx = $index) {
+                <div class="stack-card" [style.--depth]="sIdx">
+                  <app-queue-track-summary [item]="p" />
+                </div>
+              }
+              <span class="stack-badge">{{ phantomSongs().length }} tracks</span>
+            </li>
+          } @else {
+            @for (p of phantomItems(); track p.task_id) {
+              <li class="queue-row phantom-row" aria-hidden="true">
+                <app-queue-track-summary [item]="p" />
+              </li>
+            }
+          }
+        } @else {
+          <li class="drop-zone" [class.is-over]="overQueue()">
+            <span>Drop processed songs here</span>
+          </li>
+        }
+      }
+
+      @for (item of displayItems(); track item.task_id; let i = $index) {
+        @if (effectiveDropIndex() === i) {
+          @if (phantomSongs().length > 1 && !pendingDropped()) {
+            <li class="phantom-stack" aria-hidden="true">
+              @for (p of phantomItems().slice(0, 3); track p.task_id; let sIdx = $index) {
+                <div class="stack-card" [style.--depth]="sIdx">
+                  <app-queue-track-summary [item]="p" />
+                </div>
+              }
+              <span class="stack-badge">{{ phantomSongs().length }} tracks</span>
+            </li>
+          } @else {
+            @for (p of phantomItems(); track p.task_id) {
+              <li class="queue-row phantom-row" aria-hidden="true">
+                <app-queue-track-summary [item]="p" />
+              </li>
+            }
+          }
+        }
+
+        <li
+          cdkDrag
+          [cdkDragConstrainPosition]="constrainDragPosition"
+          [attr.data-task-id]="item.task_id"
+          [cdkDragDisabled]="item.status === 'cancelled' || ctrlPressed()"
+          (cdkDragStarted)="onDragStarted(item)"
+          (cdkDragEnded)="onDragEnded()"
+          class="queue-row"
+          [class.is-selected]="isItemSelected(item)"
+          [class.is-current]="activeTaskId() === item.task_id"
+          [class.is-paused]="item.status === 'paused'"
+          tabindex="0"
+          (click)="handleRowClick(item, i, $event)"
+          (contextmenu)="handleContextMenu(item, $event, actions)"
+          (keydown.enter)="trackSelected.emit(item)"
+        >
+          <!-- Full-Width Drag Preview that morphs into a smaller card on trash hover -->
+          <ng-template cdkDragPreview [matchSize]="true">
+            <div
+              class="cdk-drag-preview-shell"
+              [class.is-stack]="selectedTaskIds().size > 1"
+              [class.is-trash-hovered]="trashHovered()"
+            >
+              @if (selectedTaskIds().size > 1) {
+                <div class="drag-stack-visual">
+                  @for (s of selectedItemsPreview().slice(0, 3); track s.task_id; let depth = $index) {
+                    <div class="drag-stack-card" [style.--depth]="depth">
+                      <app-queue-track-summary [item]="s" />
+                    </div>
+                  }
+                  <span class="drag-stack-badge">{{ selectedTaskIds().size }} tracks</span>
+                </div>
+              } @else {
+                <div class="drag-single-card">
+                  <app-queue-track-summary [item]="item" />
+                </div>
+              }
+            </div>
+          </ng-template>
+
+          <app-queue-track-summary [item]="item" />
+          <app-queue-item-actions #actions
+            [item]="item"
+            queue="karaoke_queue"
+            [current]="activeTaskId() === item.task_id"
+            [playbackActive]="playbackActive()"
+            [selectedCount]="isItemSelected(item) ? selectedTaskIds().size : 0"
+            (batchRemove)="removeSelectedItems()"
+            (pause)="pause.emit(item)"
+            (resume)="resume.emit(item)"
+            (remove)="remove.emit(item)"
+            (select)="trackSelected.emit(item)"
+          />
+        </li>
+      }
+
+      @if (effectiveDropIndex() !== null && items().length > 0 && effectiveDropIndex() === items().length) {
+        @if (phantomSongs().length > 1 && !pendingDropped()) {
+          <li class="phantom-stack" aria-hidden="true">
+            @for (p of phantomItems().slice(0, 3); track p.task_id; let sIdx = $index) {
+              <div class="stack-card" [style.--depth]="sIdx">
+                <app-queue-track-summary [item]="p" />
+              </div>
+            }
+            <span class="stack-badge">{{ phantomSongs().length }} tracks</span>
+          </li>
+        } @else {
+          @for (p of phantomItems(); track p.task_id) {
+            <li class="queue-row phantom-row" aria-hidden="true">
+              <app-queue-track-summary [item]="p" />
+            </li>
+          }
+        }
+      }
+    </ol>
+  </div>
+
+  <!-- Shared Floating Selection Bar -->
+    @if (selectedTaskIds().size > 1) {
+      <div class="floating-selection-pill" role="status" aria-live="polite">
+        <span class="pill-bold">{{ selectedTaskIds().size }} selected</span>
+        <span class="pill-sep">·</span>
+        <span class="pill-text">drag to reorder / trash</span>
+        <span class="pill-sep">·</span>
+        <button type="button" class="pill-clear-btn" (click)="clearSelection()">
+          Esc to clear
+        </button>
+      </div>
+    }
+</article>

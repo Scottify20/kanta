@@ -1,0 +1,130 @@
+<app-popup-panel
+  popupId="party-roster-add"
+  group="player"
+  placement="below"
+  [closeOnContentClick]="false"
+  label="Add singer to session"
+>
+  <button
+    popup-trigger
+    class="add-singer"
+    type="button"
+    aria-label="Add singer or guest to the session"
+    title="Add singer"
+  >
+    <svg class="party-add-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <line x1="19" y1="8" x2="19" y2="14" />
+      <line x1="16" y1="11" x2="22" y2="11" />
+    </svg>
+  </button>
+
+  <section popup-content class="party-add-popover">
+    <header class="popover-header">
+      <strong>Add Singer</strong>
+      <span>Session roster</span>
+    </header>
+
+    @if (savedProfilesNotInRoom().length) {
+      <div class="saved-profiles-section">
+        <span class="sub-label">Saved singers</span>
+        <div class="saved-profiles-list">
+          @for (profile of savedProfilesNotInRoom(); track profile.id) {
+            <button type="button" class="saved-profile-chip" (click)="addSavedProfile(profile.id)">
+              <i [style.background]="profile.accentColor">{{ singerInitial(profile) }}</i>
+              <span>{{ profile.name }}</span>
+              <span class="chip-plus">+</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="guest-form">
+      <span class="sub-label">Quick guest</span>
+
+      <div class="guest-identity-row">
+        <div class="avatar-uploader" [style.background]="guestColor()">
+          @if (guestAvatar()) {
+            <img [src]="guestAvatar()" alt="Guest photo" />
+          } @else {
+            {{ guestName() ? guestName()[0].toUpperCase() : 'G' }}
+          }
+          <label class="avatar-file-label" title="Upload photo">
+            <input type="file" accept="image/*" (change)="chooseGuestPhoto($event)" />
+            <span>📷</span>
+          </label>
+        </div>
+
+        <label class="input-wrap flex-1">
+          <span>Name</span>
+          <input
+            type="text"
+            maxlength="32"
+            placeholder="Guest name"
+            [value]="guestName()"
+            (input)="updateGuestName($event)"
+          />
+        </label>
+      </div>
+
+      <div class="voice-row">
+        <label class="input-wrap flex-1">
+          <span>Voice preset</span>
+          <select [value]="guestVoice()" (change)="updateGuestVoice($event)">
+            @for (voice of voiceOptions; track voice) {
+              <option [value]="voice">{{ voice }}</option>
+            }
+          </select>
+        </label>
+
+        <button type="button" class="btn-calibrate" (click)="openCalibration()">
+          Calibrate Range
+        </button>
+      </div>
+
+      <div class="color-section">
+        <div class="color-header-row">
+          <span>Color</span>
+          <input
+            type="color"
+            class="native-color-picker"
+            [value]="guestColor()"
+            (input)="selectGuestColor($any($event.target).value)"
+          />
+        </div>
+        <div class="color-presets-row">
+          @for (color of guestColorPresets; track color) {
+            <button
+              type="button"
+              [style.background]="color"
+              [class.selected]="guestColor() === color"
+              (click)="selectGuestColor(color)"
+            ></button>
+          }
+        </div>
+      </div>
+
+      <button type="button" class="btn-action-primary" (click)="addGuest()">
+        Add Guest
+      </button>
+    </div>
+
+    <footer class="popover-footer">
+      <label class="round-robin-row">
+        <div class="toggle-text">
+          <strong>Take turns automatically</strong>
+          <small>Reorders queue based on singer turns</small>
+        </div>
+        <input
+          class="switch"
+          type="checkbox"
+          role="switch"
+          [checked]="party.roundRobinEnabled()"
+          (change)="party.setRoundRobinEnabled($any($event.target).checked)"
+        />
+      </label>
+    </footer>
+  </section>
+</app-popup-panel>

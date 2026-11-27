@@ -1,186 +1,28 @@
 <div class="queue-party-controls" [style.--singer-color]="primarySinger()?.accentColor ?? 'transparent'">
   <div class="assignment-content">
-    <app-popup-panel
-      [popupId]="popupId()"
-      group="queue-party"
-      placement="above"
-      [closeOnContentClick]="false"
-      label="Assign singers"
+    <button
+      type="button"
+      class="singer-buttons"
+      [attr.aria-label]="'Assign singers for ' + item().raw_title"
+      (click)="openAssignment($event)"
     >
-      <div
-        popup-trigger
-        class="singer-buttons"
-        role="button"
-        tabindex="0"
-        [attr.aria-label]="'Assign singers for ' + item().raw_title"
+      <span
+        class="singer-avatar"
+        [style.background]="primarySinger()?.accentColor ?? '#444'"
+        [title]="primarySinger()?.name ?? 'Assign singer'"
       >
+        {{ singerInitial(primarySinger()) }}
+      </span>
+      @if (isDuetMode()) {
         <span
-          class="singer-avatar"
-          [style.background]="primarySinger()?.accentColor ?? '#444'"
-          [title]="primarySinger()?.name ?? 'Assign singer'"
+          class="singer-avatar secondary"
+          [style.background]="secondarySinger()?.accentColor ?? '#444'"
+          [title]="secondarySinger()?.name ?? 'Assign second singer'"
         >
-          {{ singerInitial(primarySinger()) }}
+          {{ singerInitial(secondarySinger()) }}
         </span>
-        @if (isDuetMode()) {
-          <span
-            class="singer-avatar secondary"
-            [style.background]="secondarySinger()?.accentColor ?? '#444'"
-            [title]="secondarySinger()?.name ?? 'Assign second singer'"
-          >
-            {{ singerInitial(secondarySinger()) }}
-          </span>
-        }
-      </div>
-
-      <section popup-content class="singer-assignment-popover">
-        <header class="popover-header">
-          <strong>Assign Singer</strong>
-          <small>{{ item().raw_title }}</small>
-        </header>
-
-        <!-- Part 1 (Lead) -->
-        <div class="singer-slot">
-          <div class="slot-title-row">
-            <span>Part 1 (Lead)</span>
-            @if (primarySinger(); as s) {
-              <small class="slot-current-note">{{ rangeLabel(s) }}</small>
-            }
-          </div>
-          <div class="singer-options-list">
-            <button
-              type="button"
-              class="singer-option unassigned"
-              [class.selected]="assignment().primarySingerId === null"
-              (click)="clearSinger('primary')"
-            >
-              <i class="unassigned-icon">—</i>
-              <span class="singer-name">No assigned singer</span>
-            </button>
-            @for (singer of party.roster(); track singer.id) {
-              <button
-                type="button"
-                class="singer-option"
-                [class.selected]="assignment().primarySingerId === singer.id"
-                [disabled]="!canAssign(singer, 'primary')"
-                (click)="assignSinger(singer.id, 'primary')"
-              >
-                <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
-                <span class="singer-name">{{ singer.name }}</span>
-                <span class="singer-range-pill">{{ rangeLabel(singer) }}</span>
-                @if (assignment().primarySingerId === singer.id) {
-                  <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                }
-              </button>
-            }
-          </div>
-        </div>
-
-        <!-- Part 2 (Duet) -->
-        @if (isDuetMode()) {
-          <div class="singer-slot">
-            <div class="slot-title-row">
-              <span>Part 2 (Duet)</span>
-              @if (secondarySinger(); as s) {
-                <small class="slot-current-note">{{ rangeLabel(s) }}</small>
-              }
-            </div>
-            <div class="singer-options-list">
-              <button
-                type="button"
-                class="singer-option unassigned"
-                [class.selected]="assignment().secondarySingerId === null"
-                (click)="clearSinger('secondary')"
-              >
-                <i class="unassigned-icon">—</i>
-                <span class="singer-name">Single singer only</span>
-              </button>
-              @for (singer of party.roster(); track singer.id) {
-                <button
-                  type="button"
-                  class="singer-option"
-                  [class.selected]="assignment().secondarySingerId === singer.id"
-                  [disabled]="!canAssign(singer, 'secondary')"
-                  (click)="assignSinger(singer.id, 'secondary')"
-                >
-                  <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
-                  <span class="singer-name">{{ singer.name }}</span>
-                  <span class="singer-range-pill">{{ rangeLabel(singer) }}</span>
-                  @if (assignment().secondarySingerId === singer.id) {
-                    <svg class="check-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  }
-                </button>
-              }
-            </div>
-          </div>
-        }
-
-        <!-- Conflict Resolution Choices -->
-        @if (hasVocalConflict()) {
-          <div class="conflict-resolution-box">
-            <div class="conflict-header">
-              <span class="warning-dot">⚠️</span>
-              <div class="conflict-titles">
-                <strong>Vocal Range Conflict</strong>
-                <small>Singers differ by {{ conflictDifference() }} semitones. How should Kanta transpose?</small>
-              </div>
-            </div>
-
-            <div class="conflict-choices">
-              @if (primarySinger(); as s1) {
-                <button
-                  type="button"
-                  class="choice-btn"
-                  [class.selected]="assignment().prioritySingerId === s1.id"
-                  (click)="prioritizeSinger(s1.id)"
-                >
-                  <span>Prioritize {{ s1.name }}</span>
-                  <small>{{ s1ShiftLabel() }}</small>
-                </button>
-              }
-              @if (secondarySinger(); as s2) {
-                <button
-                  type="button"
-                  class="choice-btn"
-                  [class.selected]="assignment().prioritySingerId === s2.id"
-                  (click)="prioritizeSinger(s2.id)"
-                >
-                  <span>Prioritize {{ s2.name }}</span>
-                  <small>{{ s2ShiftLabel() }}</small>
-                </button>
-              }
-              <button
-                type="button"
-                class="choice-btn"
-                [class.selected]="assignment().prioritySingerId === null"
-                (click)="prioritizeSinger(null)"
-              >
-                <span>Balanced compromise</span>
-                <small>{{ compromiseShiftLabel() }}</small>
-              </button>
-              <button
-                type="button"
-                class="choice-btn"
-                [class.selected]="assignment().prioritySingerId === 'original'"
-                (click)="prioritizeSinger('original')"
-              >
-                <span>Original pitch</span>
-                <small>0 ST</small>
-              </button>
-            </div>
-          </div>
-        }
-
-        <footer class="popover-footer">
-          <button popup-close type="button" class="btn-done" aria-label="Close singer assignment">
-            Done
-          </button>
-        </footer>
-      </section>
-    </app-popup-panel>
+      }
+    </button>
 
     <div class="queue-fit-row">
       @if (keyShiftLabel(); as shift) {
@@ -199,7 +41,7 @@
       type="button"
       class="conflict-pill"
       [attr.aria-label]="'Vocal range conflict between singers. Click to resolve.'"
-      (click)="party.assignQueueSinger(item().task_id, assignment().primarySingerId ?? '', 'primary')"
+      (click)="openAssignment($event)"
     >
       Conflict
     </button>

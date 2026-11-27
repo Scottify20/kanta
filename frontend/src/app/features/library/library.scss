@@ -4,11 +4,13 @@
 }
 
 .library-page {
+  position: relative;
   display: grid;
   gap: 1.5rem;
   width: min(72rem, calc(100% - 3rem));
   margin: 0 auto;
-  padding-bottom: 3rem;
+  padding-bottom: 5rem;
+  user-select: none;
 }
 
 .library-header {
@@ -133,7 +135,6 @@
   }
 }
 
-.selection-bar,
 .empty,
 .loading,
 .error {
@@ -162,4 +163,57 @@
 
 @keyframes library-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Content-anchored marquee rectangle for the library */
+.marquee-selection {
+  position: absolute;
+  z-index: 90;
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.35rem;
+  pointer-events: none;
+}
+
+/* Floating selection pill anchored fixed to bottom-center of viewport */
+.library-floating-pill {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 1.15rem;
+  border-radius: 99rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(18, 22, 28, 0.94);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.82rem;
+  animation: pill-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  pointer-events: auto;
+
+  .pill-bold { font-weight: 700; color: #fff; }
+  .pill-sep { opacity: 0.4; }
+  .pill-text { opacity: 0.78; font-size: 0.78rem; }
+  .pill-clear-btn {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.4rem;
+    &:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+  }
+}
+
+@keyframes pill-pop-in {
+  from { opacity: 0; transform: translate(-50%, 10px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }

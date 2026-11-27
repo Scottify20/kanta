@@ -14,10 +14,11 @@ export class LibraryDetailHeader {
   readonly entry = input.required<LibraryEntry>();
   readonly artistInfo = input<ArtistInfo | null>(null);
   readonly bioExpanded = signal(false);
-  readonly playAll = output<void>();
-  readonly shuffle = output<void>();
-  readonly addToQueue = output<void>();
-  readonly playNext = output<void>();
+
+  readonly playAll = output<HTMLElement | void>();
+  readonly shuffle = output<HTMLElement | void>();
+  readonly addToQueue = output<HTMLElement | void>();
+  readonly playNext = output<HTMLElement | void>();
 
   readonly covers = computed(() => {
     const covers = this.entry().covers;

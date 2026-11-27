@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { KANTA_DRAG_TYPE } from '../services/layout.service';
 import { SongRef } from '../services/library.service';
 
@@ -6,10 +7,16 @@ export interface DragPreviewOptions {
   count?: number;
 }
 
-// Payload is always a JSON array of song refs so queues can insert one or many songs.
+// Global in-memory signal so drag-targets (like the Queue Sheet) can read the phantom payload during dragover
+export const activeDragSongs = signal<SongRef[]>([]);
+
 export function writeDragPayload(event: DragEvent, songs: SongRef[]): void {
   const transfer = event.dataTransfer;
   if (!transfer) return;
+
+  activeDragSongs.set(songs);
+  window.addEventListener('dragend', () => activeDragSongs.set([]), { once: true });
+
   transfer.setData(
     KANTA_DRAG_TYPE,
     JSON.stringify(songs.map(({ artist, album, title }) => ({ artist, album, title }))),
@@ -19,6 +26,7 @@ export function writeDragPayload(event: DragEvent, songs: SongRef[]): void {
 
 export function readDragPayload(event: DragEvent): SongRef[] {
   const raw = event.dataTransfer?.getData(KANTA_DRAG_TYPE);
+  activeDragSongs.set([]);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as SongRef | SongRef[];

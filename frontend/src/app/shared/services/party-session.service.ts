@@ -217,7 +217,7 @@ export class PartySessionService {
     if (!this.savedProfiles().some((profile) => profile.id === profileId)) return false;
     this._savedProfiles.update((profiles) => profiles.filter((profile) => profile.id !== profileId));
     this.persistProfiles();
-    if (profileId !== this.primaryHostId) this.removeSinger(profileId);
+    this.removeSinger(profileId);
     return true;
   }
 
@@ -266,6 +266,14 @@ export class PartySessionService {
     };
     this.addSingerToRoster(sessionGuest);
     return sessionGuest;
+  }
+
+  setExplicitQueueAssignment(taskId: string, assignment: QueueSingerAssignment): void {
+    this._queueAssignments.update((assignments) => ({
+      ...assignments,
+      [taskId]: assignment,
+    }));
+    if (this.songs.currentQueueTaskId() === taskId) this.syncPlaybackKey();
   }
 
   ensureQueueAssignment(taskId: string, isDuet = false): QueueSingerAssignment {
@@ -411,22 +419,25 @@ export class PartySessionService {
   }
 
   clearGuests(): number {
-    const remaining = this.roster().filter(
-      (singer) => !singer.isGuest || singer.id === this.primaryHostId,
-    );
+    const remaining = this.roster().filter((singer) => !singer.isGuest);
     const removedIds = new Set(
-      this.roster().filter((singer) => !remaining.some((item) => item.id === singer.id))
-        .map((singer) => singer.id),
+      this.roster().filter((singer) => singer.isGuest).map((singer) => singer.id),
     );
+    if (this.primaryHostId && removedIds.has(this.primaryHostId)) {
+      this.primaryHostId = remaining[0]?.id ?? null;
+    }
     this.updateRoster(remaining, removedIds);
     return removedIds.size;
   }
 
+  // Allows removing any singer, including the session host
   removeSinger(singerId: string): boolean {
-    if (singerId === this.primaryHostId) return false;
     const roster = this.roster();
     if (!roster.some((singer) => singer.id === singerId)) return false;
     const remaining = roster.filter((singer) => singer.id !== singerId);
+    if (singerId === this.primaryHostId) {
+      this.primaryHostId = remaining[0]?.id ?? null;
+    }
     this.updateRoster(remaining, new Set([singerId]));
     return true;
   }
@@ -459,8 +470,11 @@ export class PartySessionService {
   }
 
   setSingerforFitSortingId(profile: UserProfile | null): boolean {
-    if (!this.roster().some((singerInRoster) => singerInRoster?.id === profile?.id)) return false;
-    this._singerForFitSorting.set(profile ?? null);
+    if (!profile) {
+      this._singerForFitSorting.set(null);
+      return true;
+    }
+    this._singerForFitSorting.set(profile);
     return true;
   }
 

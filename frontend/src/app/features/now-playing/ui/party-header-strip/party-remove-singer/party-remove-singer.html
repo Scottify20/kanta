@@ -1,0 +1,63 @@
+<app-popup-panel
+  popupId="party-singer-remove"
+  group="player"
+  placement="below"
+  [closeOnContentClick]="false"
+  label="Remove Singer"
+>
+  <section popup-content class="party-remove-popover">
+    @if (singer(); as s) {
+      <header class="popover-header">
+        <strong>Remove Singer</strong>
+        <button
+          type="button"
+          class="close-icon-btn"
+          popup-close
+          aria-label="Close"
+          (click)="cancel()"
+        >
+          ×
+        </button>
+      </header>
+
+      <div class="popover-body">
+        <p>Remove <strong>{{ s.name }}</strong> from this session?</p>
+
+        @if (assignedSongs().length > 0) {
+          <div class="warning-callout">
+            <span class="warning-callout-title">
+              The following <strong>{{ assignedSongs().length }} assigned song{{ assignedSongs().length === 1 ? '' : 's' }}</strong> will be removed from the Karaoke Queue:
+            </span>
+            <ul class="warning-song-list">
+              @for (song of assignedSongs(); track song.task_id) {
+                <li>
+                  <span class="song-title">{{ song.raw_title || song.title }}</span>
+                  <small class="song-artist">{{ song.raw_artist || song.artist }}</small>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+
+      <footer class="popover-footer">
+        <button
+          type="button"
+          class="btn-action-secondary"
+          popup-close
+          (click)="cancel()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn-action-danger"
+          popup-close
+          (click)="confirm()"
+        >
+          Remove
+        </button>
+      </footer>
+    }
+  </section>
+</app-popup-panel>

@@ -1,0 +1,131 @@
+:host {
+  display: contents;
+}
+
+.party-remove-popover {
+  display: grid;
+  width: min(22rem, calc(100vw - 3rem));
+  padding: 1.25rem;
+  gap: 1.15rem;
+  color: #fff;
+}
+
+.popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+
+  strong {
+    font-size: 0.9rem;
+    font-weight: 650;
+  }
+
+  .close-icon-btn {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.1rem;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+}
+
+.popover-body {
+  display: grid;
+  gap: 0.75rem;
+
+  p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+.warning-callout {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.2);
+  color: #ffd0c4;
+}
+
+.warning-callout-title {
+  display: block;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  margin-bottom: 0.45rem;
+}
+
+.warning-song-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  max-height: 8rem;
+  overflow-y: auto;
+
+  li {
+    font-size: 0.72rem;
+    line-height: 1.3;
+
+    .song-title {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .song-artist {
+      margin-left: 0.35rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+  }
+}
+
+.popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.btn-action-secondary {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+}
+
+.btn-action-danger {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: rgba(255, 80, 80, 0.25);
+  color: #ffd0c4;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 80, 80, 0.35);
+    color: #fff;
+  }
+}

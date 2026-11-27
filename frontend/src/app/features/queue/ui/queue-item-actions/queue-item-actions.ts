@@ -18,12 +18,16 @@ export class QueueItemActions {
   readonly queue = input.required<'karaoke_queue' | 'processing_queue'>();
   readonly current = input(false);
   readonly playbackActive = input(false);
+  readonly selectedCount = input<number>(0);
+
   private readonly popups = inject(PopupStateService);
 
   readonly pause = output<void>();
   readonly resume = output<void>();
   readonly remove = output<void>();
   readonly select = output<void>();
+  readonly batchRemove = output<void>();
+
   private readonly popup = viewChild.required(PopupPanel);
 
   openAt(event: MouseEvent): void {

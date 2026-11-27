@@ -38,23 +38,29 @@
       <svg lucideMoreHorizontal [size]="16"></svg>
     </button>
     <app-context-menu popup-content minWidth="12rem" ariaLabel="Item options">
-      @if (queue() === 'karaoke_queue' && item().status !== 'failed' && item().status !== 'cancelled' && item().status !== 'cancelling') {
-        <button type="button" role="menuitem" (click)="select.emit()">Play</button>
-      }
-      @if (item().status === 'pending' || item().status === 'processing') {
-        <button type="button" role="menuitem" (click)="pause.emit()">Pause processing</button>
-      } @else if (item().status === 'paused') {
-        <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
-      }
-      @if (queue() === 'karaoke_queue') {
-        <button type="button" role="menuitem" (click)="assignSingers()">Assign singers</button>
-        <hr />
-        <button type="button" role="menuitem" class="danger" (click)="remove.emit()">
-          Remove from Karaoke Queue
+      @if (selectedCount() > 1) {
+        <button type="button" role="menuitem" class="danger" (click)="batchRemove.emit()">
+          Remove {{ selectedCount() }} songs from queue
         </button>
-      } @else if (item().status !== 'cancelled') {
-        <hr />
-        <button type="button" role="menuitem" class="danger" (click)="remove.emit()">Cancel processing</button>
+      } @else {
+        @if (queue() === 'karaoke_queue' && item().status !== 'failed' && item().status !== 'cancelled' && item().status !== 'cancelling') {
+          <button type="button" role="menuitem" (click)="select.emit()">Play</button>
+        }
+        @if (item().status === 'pending' || item().status === 'processing') {
+          <button type="button" role="menuitem" (click)="pause.emit()">Pause processing</button>
+        } @else if (item().status === 'paused') {
+          <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
+        }
+        @if (queue() === 'karaoke_queue') {
+          <button type="button" role="menuitem" (click)="assignSingers()">Assign singers</button>
+          <hr />
+          <button type="button" role="menuitem" class="danger" (click)="remove.emit()">
+            Remove from Karaoke Queue
+          </button>
+        } @else if (item().status !== 'cancelled') {
+          <hr />
+          <button type="button" role="menuitem" class="danger" (click)="remove.emit()">Cancel processing</button>
+        }
       }
     </app-context-menu>
   </app-popup-panel>

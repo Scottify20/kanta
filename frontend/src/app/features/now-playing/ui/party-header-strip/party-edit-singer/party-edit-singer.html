@@ -1,0 +1,103 @@
+<app-popup-panel
+  popupId="party-singer-edit"
+  group="player"
+  placement="below"
+  [closeOnContentClick]="false"
+  label="Edit Singer Profile"
+>
+  <section popup-content class="party-edit-popover">
+    @if (profile(); as p) {
+      <header class="popover-header">
+        <div>
+          <strong>Edit Profile</strong>
+          @if (p.isGuest) {
+            <span class="guest-badge">Guest</span>
+          }
+        </div>
+        <button type="button" class="close-icon-btn" popup-close aria-label="Close" (click)="close.emit()">×</button>
+      </header>
+
+      <div class="edit-identity-row">
+        <div class="avatar-uploader" [style.background]="editColorDraft()">
+          @if (editAvatarDraft()) {
+            <img [src]="editAvatarDraft()" alt="Profile photo" />
+          } @else {
+            {{ editNameDraft() ? editNameDraft()[0].toUpperCase() : singerInitial(p) }}
+          }
+          <label class="avatar-file-label" title="Change photo">
+            <input type="file" accept="image/*" (change)="choosePhoto($event)" />
+            <span>📷</span>
+          </label>
+        </div>
+
+        <label class="input-wrap flex-1">
+          <span>Name</span>
+          <input
+            type="text"
+            maxlength="40"
+            [value]="editNameDraft()"
+            (input)="editNameDraft.set($any($event.target).value)"
+          />
+        </label>
+      </div>
+
+      <div class="voice-row">
+        <label class="input-wrap flex-1">
+          <span>Voice preset</span>
+          <select [value]="editVoiceDraft()" (change)="onVoiceChange($event)">
+            @for (voice of voiceOptions; track voice) {
+              <option [value]="voice">{{ voice }}</option>
+            }
+          </select>
+        </label>
+
+        <button type="button" class="btn-calibrate" (click)="openCalibration()">
+          Calibrate Range
+        </button>
+      </div>
+
+      <div class="manual-notes-section">
+        <span class="sub-label">Manual Range</span>
+        <div class="manual-pickers-grid">
+          <app-note-selector
+            label="Lowest note"
+            [midi]="editLowMidi()"
+            (midiChange)="editLowMidi.set($event)"
+          />
+          <app-note-selector
+            label="Highest note"
+            [midi]="editHighMidi()"
+            (midiChange)="editHighMidi.set($event)"
+          />
+        </div>
+      </div>
+
+      <div class="color-section">
+        <div class="color-header-row">
+          <span>Accent color</span>
+          <input
+            type="color"
+            class="native-color-picker"
+            [value]="editColorDraft()"
+            (input)="editColorDraft.set($any($event.target).value)"
+          />
+        </div>
+        <div class="color-presets-row">
+          @for (color of guestColorPresets; track color) {
+            <button
+              type="button"
+              [style.background]="color"
+              [class.selected]="editColorDraft() === color"
+              (click)="editColorDraft.set(color)"
+            ></button>
+          }
+        </div>
+      </div>
+
+      <footer class="edit-popover-footer">
+        <button type="button" class="btn-action-secondary" popup-close (click)="close.emit()">Cancel</button>
+        <button type="button" class="btn-action-primary" (click)="save()">Save changes</button>
+      </footer>
+    }
+  </section>
+</app-popup-panel>

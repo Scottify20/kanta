@@ -1,0 +1,118 @@
+<article
+  cdkScrollable
+  class="queue-section processing"
+  [class.collapsed]="collapsed()"
+  [class.is-empty]="items().length === 0"
+  (dragover)="onDragOver($event)"
+  (dragleave)="onDragLeave($event)"
+  (drop)="onDropFiles($event)"
+>
+  <header
+    class="section-header"
+    (click)="toggleCollapse.emit()"
+    role="button"
+    tabindex="0"
+  >
+    <div class="section-title">
+      <svg
+        lucideChevronDown
+        [size]="16"
+        class="collapse-icon"
+        [class.is-collapsed]="collapsed()"
+      ></svg>
+      <h2>Processing Queue</h2>
+    </div>
+    <div class="section-actions" (click)="$event.stopPropagation()">
+      <button
+        class="icon-button"
+        type="button"
+        appTooltip="Browse a folder"
+        aria-label="Browse an audio folder"
+        (click)="browseFolder.emit()"
+      >
+        <svg lucideFolderPlus [size]="16"></svg>
+      </button>
+      <button
+        class="icon-button"
+        type="button"
+        appTooltip="Browse audio files"
+        aria-label="Browse audio files"
+        (click)="browseFiles.emit()"
+      >
+        <svg lucideFilePlus [size]="16"></svg>
+      </button>
+      @if (items().length > 0) {
+        <button
+          class="icon-button"
+          type="button"
+          [appTooltip]="paused() ? 'Resume all' : 'Pause all'"
+          [attr.aria-label]="paused() ? 'Resume all' : 'Pause all'"
+          (click)="togglePause.emit()"
+        >
+          @if (paused()) {
+            <svg lucidePlay [size]="16"></svg>
+          } @else {
+            <svg lucidePause [size]="16"></svg>
+          }
+        </button>
+      }
+      <button
+        class="icon-button"
+        type="button"
+        appTooltip="Clear queue"
+        aria-label="Clear processing queue"
+        [disabled]="items().length === 0"
+        (click)="clear.emit()"
+      >
+        <svg lucideTrash2 [size]="16"></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="track-list-wrapper" [class.is-collapsed]="collapsed()">
+    <ol
+      class="track-list"
+      cdkDropList
+      [cdkDropListData]="items()"
+      [cdkDropListSortPredicate]="canSortProcessing"
+      (cdkDropListDropped)="onDrop($event)"
+    >
+      @if (items().length === 0) {
+        <li
+          class="drop-zone"
+          [class.is-over]="isOver()"
+          role="button"
+          tabindex="0"
+          (click)="browseFiles.emit()"
+          (keydown.enter)="browseFiles.emit()"
+        >
+          <span>Drop audio files here, or click to browse</span>
+        </li>
+      }
+
+      @for (item of items(); track item.task_id) {
+        <li
+          cdkDrag
+          cdkDragLockAxis="y"
+          cdkDragPreviewContainer="parent"
+          [cdkDragDisabled]="!canDragProcessing(item)"
+          class="queue-row"
+          [class.is-active]="item.status === 'processing'"
+          [class.is-paused]="item.status === 'paused'"
+          [class.is-static]="!canDragProcessing(item)"
+          [class.is-entering]="isUpload(item)"
+          (contextmenu)="!isUpload(item) && actions.openAt($event)"
+        >
+          <app-queue-track-summary [item]="item" variant="processing" />
+          <app-queue-item-actions #actions
+            [item]="item"
+            queue="processing_queue"
+            (pause)="pause.emit(item)"
+            (resume)="resume.emit(item)"
+            (remove)="remove.emit(item)"
+          />
+        </li>
+      }
+    </ol>
+  </div>
+</article>

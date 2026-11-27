@@ -23,7 +23,7 @@ export const SORT_LABELS: Record<SortMode, string> = {
   az: 'A → Z',
   za: 'Z → A',
   recent: 'Recently added',
-  'best-fit': 'Best Fit for My Voice',
+  'best-fit': 'Best Fit for Voice',
   artist: 'Artist',
   album: 'Album',
   'year-new': 'Year (newest)',

@@ -16,10 +16,10 @@ app-context-menu {
     z-index: 2000;
     border: 0;
     border-radius: 0.85rem;
-    background: var(--context-menu-bg, var(--popup-menu-bg, rgba(18, 22, 28, 0.4)));
-    backdrop-filter: var(--context-menu-blur, blur(24px));
-    -webkit-backdrop-filter: var(--context-menu-blur, blur(24px));
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
     color: #fff;
     transform-origin: top left;
     animation: context-menu-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;

@@ -1,0 +1,324 @@
+<div class="frosted-card" [class.is-closing]="isClosing()" role="dialog" aria-modal="true">
+  <header class="dialog-header">
+    <div class="header-titles">
+      <span class="dialog-category">Assign Singer</span>
+      <h2 class="track-name">{{ song().display_title || song().title }}</h2>
+      <span class="track-artist">{{ song().display_artist || song().artist }}</span>
+    </div>
+
+    <!-- Neutral Monochrome Batch Progress Pill -->
+    @if (batchTotal() > 1) {
+      <div class="batch-progress-tag">
+        <span class="progress-counts">{{ batchIndex() }} / {{ batchTotal() }}</span>
+        @if (batchRemaining() > 0) {
+          <small class="progress-remaining">{{ batchRemaining() }} left</small>
+        }
+      </div>
+    }
+  </header>
+
+  <div class="dialog-body">
+    <!-- Part 1 (Lead) -->
+    <div class="singer-slot">
+      <div class="slot-title-row">
+        <span>Part 1 (Lead)</span>
+        @if (primarySinger(); as s) {
+          <small class="slot-current-note">{{ rangeLabel(s) }}</small>
+        }
+      </div>
+
+      @if (isCompactRow()) {
+        <!-- Single Row Selection (<= 3 Singers) -->
+        <div class="singer-row-list">
+          <button
+            type="button"
+            class="singer-pill"
+            [class.selected]="primarySingerId() === null"
+            (click)="selectSinger(null, 'primary')"
+          >
+            <i class="pill-avatar unassigned">—</i>
+            <span class="pill-name">Unassigned</span>
+            @if (primarySingerId() === null) {
+              <span class="pill-check-dot"></span>
+            }
+          </button>
+          @for (singer of party.roster(); track singer.id) {
+            <button
+              type="button"
+              class="singer-pill"
+              [class.selected]="primarySingerId() === singer.id"
+              [disabled]="!canAssign(singer, 'primary')"
+              [style.--singer-color]="singer.accentColor"
+              (click)="selectSinger(singer.id, 'primary')"
+            >
+              <i class="pill-avatar" [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+              <span class="pill-name">{{ singer.name }}</span>
+              @if (primarySingerId() === singer.id) {
+                <span class="pill-check-dot"></span>
+              }
+            </button>
+          }
+        </div>
+      } @else {
+        <!-- Custom Frosted Dropdown (> 3 Singers) -->
+        <div class="custom-select-container">
+          <button
+            type="button"
+            class="custom-select-trigger"
+            [class.is-open]="primaryDropdownOpen()"
+            (click)="toggleDropdown('primary')"
+          >
+            @if (primarySinger(); as s) {
+              <i class="select-avatar" [style.background]="s.accentColor">{{ singerInitial(s) }}</i>
+              <span class="select-label">{{ s.name }}</span>
+              <span class="select-range-badge">{{ rangeLabel(s) }}</span>
+            } @else {
+              <i class="select-avatar unassigned">—</i>
+              <span class="select-label unassigned-text">No assigned singer</span>
+            }
+
+            <svg
+              class="select-chevron"
+              [class.rotated]="primaryDropdownOpen()"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          @if (primaryDropdownOpen()) {
+            <div class="custom-select-menu" role="listbox">
+              <button
+                type="button"
+                class="select-menu-item"
+                [class.selected]="primarySingerId() === null"
+                (click)="selectSinger(null, 'primary')"
+              >
+                <i class="menu-avatar unassigned">—</i>
+                <span class="menu-name">No assigned singer</span>
+                @if (primarySingerId() === null) {
+                  <svg class="menu-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                }
+              </button>
+
+              @for (singer of party.roster(); track singer.id) {
+                <button
+                  type="button"
+                  class="select-menu-item"
+                  [class.selected]="primarySingerId() === singer.id"
+                  [disabled]="!canAssign(singer, 'primary')"
+                  [style.--singer-color]="singer.accentColor"
+                  (click)="selectSinger(singer.id, 'primary')"
+                >
+                  <i class="menu-avatar" [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+                  <span class="menu-name">{{ singer.name }}</span>
+                  <span class="menu-range-tag">{{ rangeLabel(singer) }}</span>
+                  @if (primarySingerId() === singer.id) {
+                    <svg class="menu-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Part 2 (Duet) -->
+    @if (isDuet()) {
+      <div class="singer-slot">
+        <div class="slot-title-row">
+          <span>Part 2 (Duet)</span>
+          @if (secondarySinger(); as s) {
+            <small class="slot-current-note">{{ rangeLabel(s) }}</small>
+          }
+        </div>
+
+        @if (isCompactRow()) {
+          <!-- Single Row Selection (<= 3 Singers) -->
+          <div class="singer-row-list">
+            <button
+              type="button"
+              class="singer-pill"
+              [class.selected]="secondarySingerId() === null"
+              (click)="selectSinger(null, 'secondary')"
+            >
+              <i class="pill-avatar unassigned">—</i>
+              <span class="pill-name">Single only</span>
+              @if (secondarySingerId() === null) {
+                <span class="pill-check-dot"></span>
+              }
+            </button>
+            @for (singer of party.roster(); track singer.id) {
+              <button
+                type="button"
+                class="singer-pill"
+                [class.selected]="secondarySingerId() === singer.id"
+                [disabled]="!canAssign(singer, 'secondary')"
+                [style.--singer-color]="singer.accentColor"
+                (click)="selectSinger(singer.id, 'secondary')"
+              >
+                <i class="pill-avatar" [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+                <span class="pill-name">{{ singer.name }}</span>
+                @if (secondarySingerId() === singer.id) {
+                  <span class="pill-check-dot"></span>
+                }
+              </button>
+            }
+          </div>
+        } @else {
+          <!-- Custom Frosted Dropdown (> 3 Singers) -->
+          <div class="custom-select-container">
+            <button
+              type="button"
+              class="custom-select-trigger"
+              [class.is-open]="secondaryDropdownOpen()"
+              (click)="toggleDropdown('secondary')"
+            >
+              @if (secondarySinger(); as s) {
+                <i class="select-avatar" [style.background]="s.accentColor">{{ singerInitial(s) }}</i>
+                <span class="select-label">{{ s.name }}</span>
+                <span class="select-range-badge">{{ rangeLabel(s) }}</span>
+              } @else {
+                <i class="select-avatar unassigned">—</i>
+                <span class="select-label unassigned-text">Single singer only</span>
+              }
+
+              <svg
+                class="select-chevron"
+                [class.rotated]="secondaryDropdownOpen()"
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            @if (secondaryDropdownOpen()) {
+              <div class="custom-select-menu" role="listbox">
+                <button
+                  type="button"
+                  class="select-menu-item"
+                  [class.selected]="secondarySingerId() === null"
+                  (click)="selectSinger(null, 'secondary')"
+                >
+                  <i class="menu-avatar unassigned">—</i>
+                  <span class="menu-name">Single singer only</span>
+                  @if (secondarySingerId() === null) {
+                    <svg class="menu-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  }
+                </button>
+
+                @for (singer of party.roster(); track singer.id) {
+                  <button
+                    type="button"
+                    class="select-menu-item"
+                    [class.selected]="secondarySingerId() === singer.id"
+                    [disabled]="!canAssign(singer, 'secondary')"
+                    [style.--singer-color]="singer.accentColor"
+                    (click)="selectSinger(singer.id, 'secondary')"
+                  >
+                    <i class="menu-avatar" [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+                    <span class="menu-name">{{ singer.name }}</span>
+                    <span class="menu-range-tag">{{ rangeLabel(singer) }}</span>
+                    @if (secondarySingerId() === singer.id) {
+                      <svg class="menu-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    }
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Duet Vocal Conflict Resolution -->
+    @if (hasVocalConflict()) {
+      <div class="conflict-resolution-box">
+        <div class="conflict-header">
+          <span class="warning-dot">⚠️</span>
+          <div class="conflict-titles">
+            <strong>Vocal Range Conflict</strong>
+            <small>Singers differ by {{ conflictDifference() }} semitones. How should Kanta transpose?</small>
+          </div>
+        </div>
+
+        <div class="conflict-choices">
+          @if (primarySinger(); as s1) {
+            <button
+              type="button"
+              class="choice-btn"
+              [class.selected]="prioritySingerId() === s1.id"
+              (click)="prioritizeSinger(s1.id)"
+            >
+              <span>Prioritize {{ s1.name }}</span>
+              <small>{{ s1ShiftLabel() }}</small>
+            </button>
+          }
+          @if (secondarySinger(); as s2) {
+            <button
+              type="button"
+              class="choice-btn"
+              [class.selected]="prioritySingerId() === s2.id"
+              (click)="prioritizeSinger(s2.id)"
+            >
+              <span>Prioritize {{ s2.name }}</span>
+              <small>{{ s2ShiftLabel() }}</small>
+            </button>
+          }
+          <button
+            type="button"
+            class="choice-btn"
+            [class.selected]="prioritySingerId() === null"
+            (click)="prioritizeSinger(null)"
+          >
+            <span>Balanced compromise</span>
+            <small>{{ compromiseShiftLabel() }}</small>
+          </button>
+          <button
+            type="button"
+            class="choice-btn"
+            [class.selected]="prioritySingerId() === 'original'"
+            (click)="prioritizeSinger('original')"
+          >
+            <span>Original pitch</span>
+            <small>0 ST</small>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Full-Width Bottom Confirm Button -->
+  <footer class="dialog-footer">
+    <button
+      type="button"
+      class="btn-confirm-full"
+      (click)="confirm()"
+    >
+      Confirm
+    </button>
+  </footer>
+</div>

@@ -10,12 +10,12 @@
         (create)="createPlaylist($event, menu)"
       />
     } @else {
-      <button type="button" role="menuitem" (click)="action.emit('play')">Play</button>
+      <button type="button" role="menuitem" (click)="triggerAction('play', $event)">Play</button>
       @if (kind() !== 'song') {
-        <button type="button" role="menuitem" (click)="action.emit('shuffle')">Shuffle</button>
+        <button type="button" role="menuitem" (click)="triggerAction('shuffle', $event)">Shuffle</button>
       }
-      <button type="button" role="menuitem" (click)="action.emit('play-next')">Play next</button>
-      <button type="button" role="menuitem" (click)="action.emit('queue')">Add to queue</button>
+      <button type="button" role="menuitem" (click)="triggerAction('play-next', $event)">Play next</button>
+      <button type="button" role="menuitem" (click)="triggerAction('queue', $event)">Add to queue</button>
 
       @if (kind() !== 'playlist') {
         <button type="button" role="menuitem" class="submenu" data-keep-open (click)="menu.openSubmenu('playlists', 'Add to playlist')">
@@ -26,36 +26,36 @@
       @switch (kind()) {
         @case ('song') {
           <hr />
-          <button type="button" role="menuitem" (click)="action.emit('go-album')">Go to album</button>
-          <button type="button" role="menuitem" (click)="action.emit('go-artist')">Go to artist</button>
-          <button type="button" role="menuitem" (click)="action.emit('edit')">Edit metadata</button>
+          <button type="button" role="menuitem" (click)="triggerAction('go-album', $event)">Go to album</button>
+          <button type="button" role="menuitem" (click)="triggerAction('go-artist', $event)">Go to artist</button>
+          <button type="button" role="menuitem" (click)="triggerAction('edit', $event)">Edit metadata</button>
           @if (inPlaylist()) {
-            <button type="button" role="menuitem" (click)="action.emit('remove-from-playlist')">Remove from playlist</button>
+            <button type="button" role="menuitem" (click)="triggerAction('remove-from-playlist', $event)">Remove from playlist</button>
           }
-          <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete song</button>
+          <button type="button" role="menuitem" class="danger" (click)="triggerAction('delete', $event)">Delete song</button>
         }
         @case ('album') {
           <hr />
-          <button type="button" role="menuitem" (click)="action.emit('open')">View album</button>
-          <button type="button" role="menuitem" (click)="action.emit('go-artist')">Go to artist</button>
-          <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete album</button>
+          <button type="button" role="menuitem" (click)="triggerAction('open', $event)">View album</button>
+          <button type="button" role="menuitem" (click)="triggerAction('go-artist', $event)">Go to artist</button>
+          <button type="button" role="menuitem" class="danger" (click)="triggerAction('delete', $event)">Delete album</button>
         }
         @case ('artist') {
           <hr />
-          <button type="button" role="menuitem" (click)="action.emit('open')">View artist</button>
-          <button type="button" role="menuitem" class="danger" (click)="action.emit('delete')">Delete artist’s songs</button>
+          <button type="button" role="menuitem" (click)="triggerAction('open', $event)">View artist</button>
+          <button type="button" role="menuitem" class="danger" (click)="triggerAction('delete', $event)">Delete artist’s songs</button>
         }
         @case ('genre') {
           <hr />
-          <button type="button" role="menuitem" (click)="action.emit('open')">View genre</button>
+          <button type="button" role="menuitem" (click)="triggerAction('open', $event)">View genre</button>
         }
         @case ('playlist') {
           <hr />
-          <button type="button" role="menuitem" (click)="action.emit('open')">View playlist</button>
+          <button type="button" role="menuitem" (click)="triggerAction('open', $event)">View playlist</button>
           @if (canRename()) {
-            <button type="button" role="menuitem" (click)="action.emit('rename-playlist')">Rename</button>
+            <button type="button" role="menuitem" (click)="triggerAction('rename-playlist', $event)">Rename</button>
           }
-          <button type="button" role="menuitem" class="danger" (click)="action.emit('delete-playlist')">Delete playlist</button>
+          <button type="button" role="menuitem" class="danger" (click)="triggerAction('delete-playlist', $event)">Delete playlist</button>
         }
       }
     }

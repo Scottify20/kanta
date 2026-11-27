@@ -1,4 +1,15 @@
-<div class="library-page">
+<div #libraryPage class="library-page" (pointerdown)="startMarquee($event)">
+  <!-- Content-Anchored Marquee Selection Box -->
+  @if (marqueeActive() && marqueeBox(); as box) {
+    <div
+      class="marquee-selection"
+      [style.left.px]="box.left"
+      [style.top.px]="box.top"
+      [style.width.px]="box.width"
+      [style.height.px]="box.height"
+    ></div>
+  }
+
   <header class="library-header">
     <button class="circle-button" type="button" [appTooltip]="detail() ? 'Back to library' : 'Menu'" [attr.aria-label]="detail() ? 'Back to library' : 'Toggle menu'" [attr.aria-expanded]="detail() ? null : layoutService.sidebarOpen()" (click)="detail() ? back() : layoutService.toggleSidebar()">
       @if (detail()) { <svg lucideChevronLeft [size]="20"></svg> } @else { <svg lucideMenu [size]="20"></svg> }
@@ -16,10 +27,10 @@
     <app-library-detail-header
       [entry]="current"
       [artistInfo]="detailBio()"
-      (playAll)="detailAction('play')"
-      (shuffle)="detailAction('shuffle')"
-      (addToQueue)="detailAction('queue')"
-      (playNext)="detailAction('next')"
+      (playAll)="detailAction('play', $event)"
+      (shuffle)="detailAction('shuffle', $event)"
+      (addToQueue)="detailAction('queue', $event)"
+      (playNext)="detailAction('next', $event)"
     />
   } @else {
     <app-library-toolbar
@@ -40,9 +51,6 @@
     </form>
   }
 
-  @if (selection().size > 1) {
-    <p class="selection-bar">{{ selection().size }} selected · drag to the queue, Enter to play, Esc to clear</p>
-  }
   @if (actionError()) {
     <p class="error" role="alert">{{ actionError() }}</p>
   }
@@ -96,4 +104,19 @@
   @if (library.loading()) {
     <p class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading songs…</p>
   }
+
+<!-- Floating Selection Pill -->
+    @if (selection().size > 1) {
+      <div class="library-floating-pill" role="status" aria-live="polite">
+        <span class="pill-bold">{{ selection().size }} selected</span>
+        <span class="pill-sep">·</span>
+        <span class="pill-text">drag to queue</span>
+        <span class="pill-sep">·</span>
+        <span class="pill-text">Enter to play</span>
+        <span class="pill-sep">·</span>
+        <button type="button" class="pill-clear-btn" (click)="clearSelection()">
+          Esc to clear
+        </button>
+      </div>
+    }
 </div>

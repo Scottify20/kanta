@@ -18,16 +18,16 @@
     </div>
   }
   <div class="actions">
-    <button type="button" class="primary" (click)="playAll.emit()">
+    <button type="button" #playBtn class="primary" (click)="playAll.emit(playBtn)">
       <svg lucidePlay [size]="16"></svg> Play All
     </button>
-    <button type="button" (click)="shuffle.emit()">
+    <button type="button" #shuffleBtn (click)="shuffle.emit(shuffleBtn)">
       <svg lucideShuffle [size]="16"></svg> Shuffle and Play
     </button>
-    <button type="button" (click)="playNext.emit()">
+    <button type="button" #playNextBtn (click)="playNext.emit(playNextBtn)">
       <svg lucideSkipForward [size]="16"></svg> Play Next
     </button>
-    <button type="button" (click)="addToQueue.emit()">
+    <button type="button" #queueBtn (click)="addToQueue.emit(queueBtn)">
       <svg lucideListPlus [size]="16"></svg> Add to Queue
     </button>
   </div>

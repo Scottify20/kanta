@@ -69,7 +69,7 @@
       @if (menu.page !== 'settings') {
         <button type="button" role="menuitem" (click)="openContextSettings()">Go to settings</button>
       }
-      <button type="button" role="menuitem" (click)="openContextQueue()">Show Queue</button>
+      <button type="button" role="menuitem" (click)="openContextQueue()">Toggle Queue</button>
     } @else if (!menu.selection && !menu.input) {
       <span class="menu-empty">No actions available</span>
     }

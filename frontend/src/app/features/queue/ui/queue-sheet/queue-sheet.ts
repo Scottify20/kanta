@@ -1,23 +1,26 @@
-import { ApplicationRef, Component, DestroyRef, ElementRef, Injector, OnInit, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  OnInit,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { LucideChevronDown, LucideCrosshair, LucideFilePlus, LucideFolderPlus, LucidePause, LucidePlay, LucideTrash2 } from '@lucide/angular';
-import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { ScrollingModule } from '@angular/cdk/scrolling';
 import { EMPTY, catchError, from, mergeMap, tap } from 'rxjs';
 
-import { Tooltip } from '../../../../shared/directives/tooltip';
-import { LibraryService, SongRef, songCover, songKey } from '../../../../shared/services/library.service';
-import { SongManifest, songAlbum, songArtist, songTitle } from '../../../../shared/services/songs.service';
-import { PlaybackActions } from '../../../../shared/services/playback-actions.service';
-import { KANTA_DRAG_TYPE } from '../../../../shared/services/layout.service';
-import { readDragPayload } from '../../../../shared/util/drag-payload';
-import { ToastService } from '../../../../shared/services/toast.service';
-import { QueueItemActions } from '../queue-item-actions/queue-item-actions';
-import { QueueTrackSummary } from '../queue-track-summary/queue-track-summary';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
+import { ToastService } from '../../../../shared/services/toast.service';
 import { filterImportFiles, matchImportFiles } from './import-files';
+import { KaraokeQueueSection } from './karaoke-queue-section/karaoke-queue-section';
+import { ProcessingQueueSection } from './processing-queue-section/processing-queue-section';
 import type { PartySessionService } from '../../../../shared/services/party-session.service';
 
 const formatPlaytime = (seconds: number): string => {
@@ -29,492 +32,169 @@ const formatPlaytime = (seconds: number): string => {
   return minutes ? `${minutes} min ${total % 60} s` : `${total} s`;
 };
 
-type QueueName = 'karaoke_queue' | 'processing_queue';
-
-const SERVER_TRUST_DELAY_MS = 1200;
 const ACTIVE_STATUSES = new Set(['pending', 'processing', 'paused', 'cancelling']);
 const UPLOAD_PREFIX = 'upload:';
 
 @Component({
   selector: 'app-queue-sheet',
-  imports: [
-    QueueItemActions,
-    QueueTrackSummary,
-    Tooltip,
-    LucideChevronDown,
-    LucideCrosshair,
-    LucideFilePlus,
-    LucideFolderPlus,
-    LucidePause,
-    LucidePlay,
-    LucideTrash2,
-    DragDropModule,
-    ScrollingModule,
-  ],
+  imports: [KaraokeQueueSection, ProcessingQueueSection],
   templateUrl: './queue-sheet.html',
   styleUrl: './queue-sheet.scss',
 })
 export class QueueSheet implements OnInit {
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private readonly folderInput = viewChild<ElementRef<HTMLInputElement>>('folderInput');
-  private readonly karaokeSection = viewChild<ElementRef<HTMLElement>>('karaokeSection');
-  private browseTarget: QueueName = 'karaoke_queue';
+
+  private browseTarget: 'karaoke' | 'processing' = 'karaoke';
   private readonly queueService = inject(QueueService);
   private readonly injector = inject(Injector);
-  private readonly actions = inject(PlaybackActions);
-  private readonly library = inject(LibraryService);
-  private readonly appRef = inject(ApplicationRef);
   private readonly toast = inject(ToastService);
-  private readonly lastStatus = new Map<string, string>();
   private readonly destroyRef = inject(DestroyRef);
+  private readonly lastStatus = new Map<string, string>();
 
-  private isDragging = false;
-  private isReordering = false;
-  private reorderTimer: ReturnType<typeof setTimeout> | null = null;
   private tempCounter = 0;
-  private readonly entering = new Map<string, number>();
-  private readonly assignedQueueTasks = new Set<string>();
   private partySessionPromise: Promise<PartySessionService> | null = null;
-  private dragScrollRaf: number | null = null;
-  private lastDragClientY = 0;
+  private isReordering = false;
+  private reorderLockTimer: ReturnType<typeof setTimeout> | null = null;
 
-  readonly processedDrag = signal(false);
-  readonly processedItemDrag = input(false);
-  readonly hideProcessingQueue = input(false);
   readonly activeTaskId = input<string | null>(null);
   readonly playbackActive = input(false);
+  readonly processedItemDrag = input(false);
+  readonly hideProcessingQueue = input(false);
 
   readonly karaokeCollapsed = signal(false);
   readonly processingCollapsed = signal(false);
 
   readonly karaokeItems = signal<QueueItem[]>([]);
-  readonly duetAssignmentTaskId = signal<string | null>(null);
   readonly processingItems = signal<QueueItem[]>([]);
+  readonly uploads = signal<QueueItem[]>([]);
+
   readonly karaokeTotalSeconds = computed(() =>
     this.karaokeItems()
       .filter((item) => !['failed', 'cancelled', 'cancelling'].includes(item.status))
       .reduce((sum, item) => sum + (item.duration_seconds ?? 0), 0),
   );
   readonly karaokeTotalLabel = computed(() => formatPlaytime(this.karaokeTotalSeconds()));
+
   readonly processingPaused = signal(false);
-  private readonly uploads = signal<QueueItem[]>([]);
   readonly processingView = computed(() => {
     const base = this.processingItems().filter((item) => ACTIVE_STATUSES.has(item.status));
     const known = new Set(base.map((item) => item.task_id));
     return [...base, ...this.uploads().filter((item) => !known.has(item.task_id))];
   });
-  readonly overQueue = signal<QueueName | null>(null);
-  readonly committing = signal(false);
-  private processingLocked = false;
-  readonly canSortProcessing = (index: number): boolean => this.processingView()[index]?.status === 'pending';
-  readonly dropIndex = signal<number | null>(null);
 
   readonly close = output<void>();
   readonly trackSelected = output<QueueItem>();
 
-  constructor() {
-    effect(() => {
-      const activeId = this.activeTaskId();
-      const isPlaying = this.playbackActive();
-      const items = this.karaokeItems();
-
-      // Only auto-scroll when the song has actually started playing
-      if (!isPlaying || !activeId || items.length === 0) return;
-
-      untracked(() => {
-        setTimeout(() => this.scrollToCurrentTrack(true), 60);
-      });
-    });
-  }
-
   ngOnInit(): void {
-    this.queueService.trackAdded$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((item) => {
-      this.initializeQueueAssignment(item, true);
-    });
-    this.queueService.karaokeRemoved$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((taskId) => {
-      if (taskId === null) {
-        this.assignedQueueTasks.clear();
-        this.duetAssignmentTaskId.set(null);
-        void this.getPartySession()
-          .then((party) => party.clearQueueAssignments())
-          .catch((error: unknown) => this.reportAssignmentError(error));
-      } else {
-        this.assignedQueueTasks.delete(taskId);
-        if (this.duetAssignmentTaskId() === taskId) this.duetAssignmentTaskId.set(null);
-        void this.getPartySession()
-          .then((party) => party.removeQueueAssignment(taskId))
-          .catch((error: unknown) => this.reportAssignmentError(error));
-      }
-    });
     this.queueService.queue$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((snapshot) => {
-      snapshot.karaoke_queue.forEach((item) => this.initializeQueueAssignment(item, false));
       this.announceCompleted([...snapshot.processing_queue, ...snapshot.karaoke_queue]);
-      if (!this.processingLocked) this.processingItems.set(snapshot.processing_queue);
+      this.processingItems.set(snapshot.processing_queue);
       this.uploads.update((list) =>
-        list.filter((item) => item.task_id.startsWith(UPLOAD_PREFIX) || !snapshot.processing_queue.some((queued) => queued.task_id === item.task_id)),
+        list.filter(
+          (item) =>
+            item.task_id.startsWith(UPLOAD_PREFIX) ||
+            !snapshot.processing_queue.some((queued) => queued.task_id === item.task_id),
+        ),
       );
       this.processingPaused.set(snapshot.processing_paused ?? false);
 
-      if (this.isDragging || this.isReordering) {
-        this.karaokeItems.update((items) =>
-          items.map((localItem) => {
-            const serverMatch = snapshot.karaoke_queue.find(
-              (item) => item.task_id === localItem.task_id,
-            );
-            return serverMatch
-              ? { ...localItem, status: serverMatch.status, progress: serverMatch.progress }
-              : localItem;
+      if (this.isReordering) {
+        // Update track metadata/status without reverting client list ordering
+        this.karaokeItems.update((current) =>
+          current.map((item) => {
+            const updated = snapshot.karaoke_queue.find((s) => s.task_id === item.task_id);
+            return updated ? { ...item, status: updated.status, progress: updated.progress } : item;
           }),
         );
         return;
       }
 
-      const currentItems = this.karaokeItems();
-      const sameOrder =
-        currentItems.length === snapshot.karaoke_queue.length &&
-        currentItems.every((item, index) => item.task_id === snapshot.karaoke_queue[index].task_id);
-      this.karaokeItems.set(
-        sameOrder
-          ? currentItems.map((item, index) => ({ ...item, ...snapshot.karaoke_queue[index] }))
-          : [...snapshot.karaoke_queue],
-      );
+      this.karaokeItems.set([...snapshot.karaoke_queue]);
     });
-  }
-
-  scrollToCurrentTrack(smooth = true): void {
-    const activeId = this.activeTaskId();
-    if (!activeId) return;
-    const container = this.karaokeSection()?.nativeElement;
-    if (!container) return;
-    const targetRow = container.querySelector(`li[data-task-id="${activeId}"]`) as HTMLElement | null;
-    if (!targetRow) return;
-
-    const header = container.querySelector('.section-header') as HTMLElement | null;
-    const headerHeight = header ? header.offsetHeight : 44;
-    const containerRect = container.getBoundingClientRect();
-    const rowRect = targetRow.getBoundingClientRect();
-    const targetScrollTop = container.scrollTop + (rowRect.top - containerRect.top) - headerHeight - 6;
-
-    container.scrollTo({
-      top: Math.max(0, targetScrollTop),
-      behavior: smooth ? 'smooth' : 'auto',
-    });
-  }
-
-  clearDuetAssignmentPrompt(taskId: string): void {
-    if (this.duetAssignmentTaskId() === taskId) this.duetAssignmentTaskId.set(null);
-  }
-
-  private initializeQueueAssignment(item: QueueItem, promptForNewTrack: boolean): void {
-    if (item.priority !== 1) return;
-    const isNew = !this.assignedQueueTasks.has(item.task_id);
-    this.assignedQueueTasks.add(item.task_id);
-    const song = this.library.songs().find((candidate) => songKey(candidate) === songKey(item));
-    const isDuet = item.is_duet === true || song?.is_duet === true;
-
-    void this.getPartySession()
-      .then((party) => {
-        if (isNew) {
-          party.ensureQueueAssignment(item.task_id, isDuet);
-        }
-        if (promptForNewTrack && party.roster().length >= 1) {
-          this.duetAssignmentTaskId.set(item.task_id);
-        }
-      })
-      .catch((error: unknown) => {
-        this.assignedQueueTasks.delete(item.task_id);
-        this.reportAssignmentError(error);
-      });
-  }
-
-  private reportAssignmentError(error: unknown): void {
-    console.error('Could not update queue singer assignments:', error);
-    this.toast.error('Could not update a queue singer assignment.');
-  }
-
-  private getPartySession(): Promise<PartySessionService> {
-    return this.partySessionPromise ??= import('../../../../shared/services/party-session.service')
-      .then(({ PartySessionService }) => this.injector.get(PartySessionService));
-  }
-
-  private announceCompleted(items: QueueItem[]): void {
-    for (const item of items) {
-      const previous = this.lastStatus.get(item.task_id);
-      if (previous && ACTIVE_STATUSES.has(previous) && item.status === 'completed') {
-        this.toast.success(`Finished processing “${item.title || item.raw_title}”`);
-      }
-      this.lastStatus.set(item.task_id, item.status);
-    }
   }
 
   clearQueue(priority: 1 | 2): void {
     if (priority === 1) {
       this.karaokeItems.set([]);
-      this.lockServerOrder();
     }
     this.queueService.clearQueue(priority).subscribe({
       error: (error: unknown) => {
-        const detail = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
-          ? ` ${error.error.detail}`
-          : '';
-        console.error('Could not clear the queue:', error);
+        const detail =
+          error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+            ? ` ${error.error.detail}`
+            : '';
         this.toast.error(`Could not clear the queue.${detail}`);
         this.queueService.refresh();
       },
     });
   }
 
-  toggleProcessingPause(isPaused: boolean): void {
-    (isPaused ? this.queueService.resumeAll() : this.queueService.pauseAll()).subscribe();
+  toggleProcessingPause(): void {
+    (this.processingPaused() ? this.queueService.resumeAll() : this.queueService.pauseAll()).subscribe();
   }
 
-  handleDragOver(event: DragEvent): void {
-    const types = event.dataTransfer?.types ?? [];
-    this.processedDrag.set(types.includes(KANTA_DRAG_TYPE));
-    event.preventDefault();
-  }
+  reorderKaraoke(taskIds: string[]): void {
+    // Optimistically reorder locally to eliminate momentary reversion
+    const map = new Map(this.karaokeItems().map((item) => [item.task_id, item]));
+    const next = taskIds.map((id) => map.get(id)!).filter(Boolean);
+    this.karaokeItems.set(next);
 
-  onDragStarted(): void {
-    this.isDragging = true;
-    window.addEventListener('pointermove', this.onPointerMoveDuringDrag, { passive: true });
-    this.startDragAutoScrollLoop();
-  }
-
-  onDragEnded(): void {
-    this.isDragging = false;
-    window.removeEventListener('pointermove', this.onPointerMoveDuringDrag);
-    if (this.dragScrollRaf) {
-      cancelAnimationFrame(this.dragScrollRaf);
-      this.dragScrollRaf = null;
-    }
-  }
-
-  private onPointerMoveDuringDrag = (event: PointerEvent): void => {
-    this.lastDragClientY = event.clientY;
-  };
-
-  private startDragAutoScrollLoop(): void {
-    const loop = (): void => {
-      if (!this.isDragging) return;
-      const container = this.karaokeSection()?.nativeElement;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const topThreshold = rect.top + 70;
-        const bottomThreshold = rect.bottom - 70;
-
-        if (this.lastDragClientY > 0 && this.lastDragClientY < topThreshold) {
-          const intensity = Math.max(1, (topThreshold - this.lastDragClientY) / 6);
-          container.scrollTop -= intensity;
-        } else if (this.lastDragClientY > bottomThreshold && this.lastDragClientY < rect.bottom + 40) {
-          const intensity = Math.max(1, (this.lastDragClientY - bottomThreshold) / 6);
-          container.scrollTop += intensity;
-        }
-      }
-      this.dragScrollRaf = requestAnimationFrame(loop);
-    };
-    this.dragScrollRaf = requestAnimationFrame(loop);
-  }
-
-  onListDrop(event: CdkDragDrop<QueueItem[]>): void {
-    if (event.previousIndex === event.currentIndex) return;
-
-    this.lockServerOrder(true);
-    const newArray = [...this.karaokeItems()];
-    moveItemInArray(newArray, event.previousIndex, event.currentIndex);
-    this.karaokeItems.set(newArray);
-    this.appRef.tick();
-
-    const taskIds = newArray.map((item) => item.task_id);
+    this.lockReorder();
     this.queueService.reorderKaraokeTracks(taskIds).subscribe({
-      next: () => this.lockServerOrder(),
+      next: () => this.unlockReorder(400),
       error: () => {
-        this.releaseServerOrder();
+        this.unlockReorder(0);
         this.queueService.refresh();
       },
     });
   }
 
-  isUpload(item: QueueItem): boolean {
-    return item.task_id.startsWith(UPLOAD_PREFIX);
+  private lockReorder(): void {
+    this.isReordering = true;
+    if (this.reorderLockTimer) clearTimeout(this.reorderLockTimer);
   }
 
-  canDragProcessing(item: QueueItem): boolean {
-    return item.status === 'pending' && !this.isUpload(item);
+  private unlockReorder(delayMs = 0): void {
+    if (this.reorderLockTimer) clearTimeout(this.reorderLockTimer);
+    this.reorderLockTimer = setTimeout(() => {
+      this.isReordering = false;
+    }, delayMs);
   }
 
-  onProcessingDrop(event: CdkDragDrop<QueueItem[]>): void {
-    if (event.previousIndex === event.currentIndex) return;
-    const view = this.processingView();
-    const reordered = [...view];
-    moveItemInArray(reordered, event.previousIndex, event.currentIndex);
-    this.processingLocked = true;
-    this.processingItems.set(reordered.filter((item) => !this.isUpload(item)));
-    this.appRef.tick();
-    const release = (): void => { setTimeout(() => (this.processingLocked = false), 400); };
-    this.queueService.reorderProcessingTracks(reordered.filter((item) => !this.isUpload(item)).map((item) => item.task_id)).subscribe({
-      next: release,
-      error: () => { this.processingLocked = false; this.queueService.refresh(); },
+  reorderProcessing(taskIds: string[]): void {
+    this.queueService.reorderProcessingTracks(taskIds).subscribe({
+      error: () => this.queueService.refresh(),
     });
   }
 
-  onProcessingDragOver(event: DragEvent): void {
-    if (!(event.dataTransfer?.types ?? []).includes('Files')) return;
-    event.preventDefault();
-    if (this.overQueue() !== 'processing_queue') this.overQueue.set('processing_queue');
-  }
-
-  onProcessingDragLeave(event: DragEvent): void {
-    const area = event.currentTarget as HTMLElement;
-    if (!area.contains(event.relatedTarget as Node | null)) this.overQueue.set(null);
-  }
-
-  onExternalDragOver(event: DragEvent): void {
-    const types = event.dataTransfer?.types ?? [];
-    if (!types.includes(KANTA_DRAG_TYPE) && !types.includes('Files')) return;
-    event.preventDefault();
-    if (this.overQueue() !== 'karaoke_queue') this.overQueue.set('karaoke_queue');
-    const list = event.currentTarget as HTMLElement;
-    const rows = Array.from(list.querySelectorAll<HTMLElement>(':scope > li.queue-row'));
-    let index = rows.length;
-    for (let i = 0; types.includes(KANTA_DRAG_TYPE) && i < rows.length; i++) {
-      const rect = rows[i].getBoundingClientRect();
-      if (event.clientY < rect.top + rect.height / 2) {
-        index = i;
-        break;
-      }
-    }
-    if (this.dropIndex() !== index) this.dropIndex.set(index);
-  }
-
-  onExternalDragLeave(event: DragEvent): void {
-    const list = event.currentTarget as HTMLElement;
-    if (!list.contains(event.relatedTarget as Node | null)) {
-      this.dropIndex.set(null);
-      this.overQueue.set(null);
-    }
-  }
-
-  dropExternal(event: DragEvent, targetQueue: QueueName): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.processedDrag.set(false);
-    const index = this.dropIndex();
-    this.dropIndex.set(null);
-    this.overQueue.set(null);
-    this.committing.set(true);
-    setTimeout(() => this.committing.set(false), 80);
-
-    const songs = readDragPayload(event);
-    if (songs.length) {
-      if (targetQueue === 'karaoke_queue') {
-        this.insertSongs(songs, index ?? this.karaokeItems().length);
-      }
-      return;
-    }
-
-    if (event.dataTransfer?.files.length) {
-      void this.addFiles(Array.from(event.dataTransfer.files), targetQueue);
-    }
-  }
-
-  isEntering(item: QueueItem): boolean {
-    return this.entering.has(item.task_id);
-  }
-
-  enteringDelay(item: QueueItem): number | null {
-    return this.entering.get(item.task_id) ?? null;
-  }
-
-  selectTrack(item: QueueItem): void {
-    if (this.isUpload(item)) return;
-    if (item.priority === 1 && !['failed', 'cancelled', 'cancelling'].includes(item.status)) {
-      this.trackSelected.emit(item);
-    }
-  }
-
   pause(item: QueueItem): void {
-    if (this.isUpload(item)) return;
+    if (item.task_id.startsWith(UPLOAD_PREFIX)) return;
     this.queueService.pauseTrack(item.task_id).subscribe();
   }
 
   resume(item: QueueItem): void {
-    if (this.isUpload(item)) return;
+    if (item.task_id.startsWith(UPLOAD_PREFIX)) return;
     this.queueService.resumeTrack(item.task_id).subscribe();
   }
 
-  remove(item: QueueItem, queue: QueueName): void {
-    if (this.isUpload(item)) return;
-    if (queue === 'karaoke_queue') {
-      this.karaokeItems.update((items) =>
-        items.filter((queued) => queued.task_id !== item.task_id),
-      );
-      this.lockServerOrder();
+  remove(item: QueueItem, queue: 'karaoke' | 'processing'): void {
+    if (item.task_id.startsWith(UPLOAD_PREFIX)) return;
+    if (queue === 'karaoke') {
+      this.karaokeItems.update((items) => items.filter((i) => i.task_id !== item.task_id));
       this.queueService.removeKaraokeTrack(item.task_id).subscribe();
     } else {
       this.queueService.removeTrack(item.task_id).subscribe();
     }
   }
 
-  private insertSongs(songs: SongRef[], index: number): void {
-    const items = this.karaokeItems();
-    const afterTaskId = index > 0 ? (items[index - 1]?.task_id ?? null) : null;
-    const known = new Map(this.library.songs().map((song) => [songKey(song), song]));
-    const temps = songs.map((song, offset): QueueItem => {
-      const taskId = `pending-drop:${++this.tempCounter}`;
-      this.entering.set(taskId, offset * 60);
-      return {
-        task_id: taskId,
-        file_path: '',
-        raw_title: songTitle(song as SongManifest),
-        raw_artist: songArtist(song as SongManifest),
-        raw_album: songAlbum(song as SongManifest),
-        ...song,
-        priority: 1,
-        status: 'completed',
-        progress: 100,
-        step: '',
-        position: 0,
-        cover_url: known.has(songKey(song)) ? songCover(known.get(songKey(song))!) : null,
-      };
-    });
-    const next = [...items];
-    next.splice(index, 0, ...temps);
-    this.karaokeItems.set(next);
-    this.lockServerOrder(true);
-
-    this.actions
-      .enqueue(songs, afterTaskId, index === 0)
-      .catch(() => undefined)
-      .finally(() => {
-        temps.forEach((temp) => this.entering.delete(temp.task_id));
-        this.lockServerOrder();
-        this.queueService.refresh();
-      });
-  }
-
-  private lockServerOrder(hold = false): void {
-    this.isReordering = true;
-    if (this.reorderTimer) clearTimeout(this.reorderTimer);
-    this.reorderTimer = hold
-      ? setTimeout(() => this.releaseServerOrder(), 8000)
-      : setTimeout(() => this.releaseServerOrder(), SERVER_TRUST_DELAY_MS);
-  }
-
-  private releaseServerOrder(): void {
-    this.isReordering = false;
-    if (this.reorderTimer) {
-      clearTimeout(this.reorderTimer);
-      this.reorderTimer = null;
-    }
-  }
-
-  browseFiles(target: QueueName): void {
+  browseFiles(target: 'karaoke' | 'processing'): void {
     this.browseTarget = target;
     this.fileInput()?.nativeElement.click();
   }
 
   browseFolder(): void {
-    this.browseTarget = 'processing_queue';
+    this.browseTarget = 'processing';
     this.folderInput()?.nativeElement.click();
   }
 
@@ -523,8 +203,8 @@ export class QueueSheet implements OnInit {
     input.value = '';
   }
 
-  private async addFiles(files: File[], targetQueue: QueueName, folder = false): Promise<void> {
-    const priority = targetQueue === 'karaoke_queue' ? 1 : 2;
+  async addFiles(files: File[], targetQueue: 'karaoke' | 'processing', folder = false): Promise<void> {
+    const priority = targetQueue === 'karaoke' ? 1 : 2;
     const filtered = await filterImportFiles(files);
     if (filtered.skipped.length) {
       this.toast.show(`Skipped ${filtered.skipped.length} non-audio file${filtered.skipped.length === 1 ? '' : 's'}.`);
@@ -534,63 +214,77 @@ export class QueueSheet implements OnInit {
     }
     const { matches, unmatchedLyrics } = matchImportFiles(filtered.files);
     if (folder && !matches.length) this.toast.error('No audio files found in the selected folder.');
+
     const pending = matches.flatMap(({ audio: file, lyrics, ambiguous }) => {
       if (ambiguous) {
         this.toast.error(`Cannot match lyrics for “${file.name}”: multiple files have the same name.`);
         return [];
       }
       const temp = this.uploadPlaceholder(file, priority);
-      if (priority === 1) {
-        this.entering.set(temp.task_id, 0);
-      }
       return [{ file, lyrics, temp }];
     });
+
     const placeholders = pending.map(({ temp }) => temp);
     if (placeholders.length) {
       this.uploads.update((list) => [...list, ...placeholders]);
       if (priority === 1) {
         this.karaokeItems.update((items) => [...items, ...placeholders]);
-        this.lockServerOrder(true);
       }
     }
-    from(pending).pipe(
-      mergeMap(({ file, lyrics, temp }) => this.queueService.addTrack(file, priority, lyrics).pipe(
-        tap(({ item, skipped }) => {
-          this.entering.delete(temp.task_id);
-          if (skipped || !item) {
-            this.uploads.update((list) => list.filter((entry) => entry !== temp));
-            this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
-            this.toast.show(
-              skipped === 'already_queued'
-                ? `Skipped “${file.name}”; it is already queued.`
-                : `Skipped “${file.name}”; it is already in the library.`,
-            );
-            this.releaseServerOrder();
-            return;
-          }
-          this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
-          if (priority === 1) {
-            this.karaokeItems.update((items) => items.map((entry) => (entry === temp ? item : entry)));
-            this.lockServerOrder();
-          }
-        }),
-        catchError((error: unknown) => {
-          const detail = error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
-            ? ` ${error.error.detail}`
-            : '';
-          this.toast.error(`Could not add “${file.name}” to the queue.${detail}`);
-          this.entering.delete(temp.task_id);
-          this.uploads.update((list) => list.filter((entry) => entry !== temp));
-          this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
-          this.releaseServerOrder();
-          return EMPTY;
-        }),
-      ), 3),
-    ).subscribe();
+
+    from(pending)
+      .pipe(
+        mergeMap(
+          ({ file, lyrics, temp }) =>
+            this.queueService.addTrack(file, priority, lyrics).pipe(
+              tap(({ item, skipped }) => {
+                if (skipped || !item) {
+                  this.uploads.update((list) => list.filter((entry) => entry !== temp));
+                  this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
+                  this.toast.show(
+                    skipped === 'already_queued'
+                      ? `Skipped “${file.name}”; it is already queued.`
+                      : `Skipped “${file.name}”; it is already in the library.`,
+                  );
+                  return;
+                }
+                this.uploads.update((list) => list.map((entry) => (entry === temp ? item : entry)));
+                if (priority === 1) {
+                  this.karaokeItems.update((items) =>
+                    items.map((entry) => (entry === temp ? item : entry)),
+                  );
+                }
+              }),
+              catchError((error: unknown) => {
+                const detail =
+                  error instanceof HttpErrorResponse && typeof error.error?.detail === 'string'
+                    ? ` ${error.error.detail}`
+                    : '';
+                this.toast.error(`Could not add “${file.name}” to the queue.${detail}`);
+                this.uploads.update((list) => list.filter((entry) => entry !== temp));
+                this.karaokeItems.update((items) => items.filter((entry) => entry !== temp));
+                return EMPTY;
+              }),
+            ),
+          3,
+        ),
+      )
+      .subscribe();
+
     if (!folder) {
       for (const lyrics of unmatchedLyrics) {
         this.toast.error(`No matching audio selected for “${lyrics.name}”.`);
       }
+    }
+  }
+
+  private announceCompleted(items: QueueItem[]): void {
+    for (const item of items) {
+      const previous = this.lastStatus.get(item.task_id);
+      if (previous && ACTIVE_STATUSES.has(previous) && item.status === 'completed') {
+        this.toast.success(`Finished processing “${item.title || item.raw_title}”`);
+      }
+      this.lastStatus.set(item.task_id, item.status);
     }
   }
 

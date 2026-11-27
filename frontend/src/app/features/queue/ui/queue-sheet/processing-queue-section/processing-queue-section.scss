@@ -1,0 +1,218 @@
+:host {
+  display: contents;
+}
+
+.queue-section.processing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  flex: 0 1 auto;
+  max-height: calc(100% - 9rem);
+  padding-top: 0.75rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.25rem;
+  scroll-behavior: smooth;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+  &.is-empty {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 7rem;
+  }
+
+  &.collapsed {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+}
+
+.section-header {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.6rem;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0.65rem;
+  background: rgba(18, 22, 28, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: rgba(26, 30, 38, 0.96);
+  }
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  h2 {
+    margin: 0;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.collapse-icon {
+  color: rgba(255, 255, 255, 0.9);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &.is-collapsed {
+    transform: rotate(-90deg);
+  }
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.track-list-wrapper {
+  display: grid;
+  flex: 1 0 auto;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &.is-collapsed {
+    grid-template-rows: 0fr;
+  }
+}
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-height: 0;
+  overflow: visible;
+
+  .drop-zone {
+    flex: 1 1 auto;
+  }
+}
+
+.track-list li.queue-row {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  cursor: grab;
+  background: transparent;
+  min-width: 0;
+
+  &.is-static {
+    cursor: default;
+  }
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &.is-active {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &.is-paused {
+    opacity: 0.65;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.cdk-drop-list-dragging .queue-row:not(.cdk-drag-placeholder) {
+  transition: transform 220ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.cdk-drag-animating {
+  transition: transform 220ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.cdk-drag-preview {
+  box-sizing: border-box;
+  display: grid !important;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border-radius: 0.75rem;
+  z-index: 2000 !important;
+  background-color: rgba(26, 30, 36, 0.96) !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  list-style: none;
+  cursor: grabbing !important;
+}
+
+.cdk-drag-placeholder {
+  opacity: 0 !important;
+}
+
+.drop-zone {
+  display: grid;
+  place-items: center;
+  flex: 1 1 auto;
+  min-height: 6rem;
+  padding: 1rem;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  &.is-over {
+    border-color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+  }
+}

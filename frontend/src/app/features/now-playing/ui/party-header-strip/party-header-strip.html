@@ -1,54 +1,11 @@
 <div class="party-header-strip">
-  <!-- Queue Preview & Up Next Track -->
-  <nav class="next-tracks" aria-label="Queue preview">
-    @for (item of queuePreview(); track item.task_id) {
-      @let s1 = primarySingerFor(item);
-      @let s2 = secondarySingerFor(item);
-      <span
-        class="next-track"
-        [class.up-next]="isUpNext(item)"
-        [class.is-duet]="isDuetTrack(item)"
-        [style.--singer-color]="s1?.accentColor ?? '#96ecd7'"
-        [style.--singer-color-2]="s2?.accentColor ?? s1?.accentColor ?? '#96ecd7'"
-        [attr.aria-label]="isUpNext(item) ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
-        [attr.title]="isUpNext(item) ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
-      >
-        @if (s1) {
-          <span
-            class="singer-badge-morph"
-            [class.expanded]="isUpNext(item)"
-            [class.is-duet]="isDuetTrack(item)"
-            [attr.aria-label]="upNextSingersLabel(item) + '\'s turn'"
-          >
-            <span class="morph-pill-content">
-              <span class="up-next-prefix">Up next</span>
-              <span class="up-next-sep">·</span>
-              @if (s2) {
-                <span class="duet-names">
-                  <span class="singer-tag">
-                    <i class="mini-dot" [style.background]="s1.accentColor"></i>
-                    <strong class="up-next-name">{{ s1.name }}</strong>
-                  </span>
-                  <span class="up-next-amp">&amp;</span>
-                  <span class="singer-tag">
-                    <i class="mini-dot" [style.background]="s2.accentColor"></i>
-                    <strong class="up-next-name">{{ s2.name }}</strong>
-                  </span>
-                </span>
-              } @else {
-                <strong class="up-next-name">{{ s1.name }}</strong>
-              }
-            </span>
-          </span>
-        }
-
-        <span class="next-track-text">
-          <strong>{{ item.raw_title || item.title }}</strong>
-          <small>{{ item.raw_artist || item.artist }}</small>
-        </span>
-      </span>
-    }
-  </nav>
+  <!-- Queue Preview & Up Next -->
+  <app-party-queue-preview
+    [queuePreview]="queuePreview()"
+    [playing]="playing()"
+    [currentTime]="currentTime()"
+    [duration]="duration()"
+  />
 
   <!-- Singer Roster -->
   @if (party.roster().length) {
@@ -71,9 +28,6 @@
               <img [src]="singer.avatar" [alt]="''" />
             } @else {
               {{ singerInitial(singer) }}
-            }
-            @if (singer.isGuest) {
-              <span class="avatar-guest-badge" title="Session Guest">G</span>
             }
           </i>
           <span class="singer-chip-copy">
@@ -119,139 +73,12 @@
     </div>
   }
 
-  <!-- Add Singer Popover -->
-  <app-popup-panel
-    popupId="party-roster-add"
-    group="player"
-    placement="below"
-    [closeOnContentClick]="false"
-    label="Add singer to session"
-  >
-    <button
-      popup-trigger
-      class="add-singer"
-      type="button"
-      aria-label="Add singer or guest to the session"
-      title="Add singer"
-    >
-      <svg class="party-add-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <line x1="19" y1="8" x2="19" y2="14" />
-        <line x1="16" y1="11" x2="22" y2="11" />
-      </svg>
-    </button>
+  <!-- Add Singer -->
+  <app-party-add-singer
+    (calibrateRequested)="openCalibration($event, 'guest-draft')"
+  />
 
-    <section popup-content class="party-add-popover">
-      <header class="popover-header">
-        <strong>Add Singer</strong>
-        <span>Session roster</span>
-      </header>
-
-      @if (savedProfilesNotInRoom().length) {
-        <div class="saved-profiles-section">
-          <span class="sub-label">Saved singers</span>
-          <div class="saved-profiles-list">
-            @for (profile of savedProfilesNotInRoom(); track profile.id) {
-              <button type="button" class="saved-profile-chip" (click)="addSavedProfile(profile.id)">
-                <i [style.background]="profile.accentColor">{{ singerInitial(profile) }}</i>
-                <span>{{ profile.name }}</span>
-                <span class="chip-plus">+</span>
-              </button>
-            }
-          </div>
-        </div>
-      }
-
-      <div class="guest-form">
-        <span class="sub-label">Quick guest</span>
-
-        <div class="guest-identity-row">
-          <div class="avatar-uploader" [style.background]="guestColor()">
-            @if (guestAvatar()) {
-              <img [src]="guestAvatar()" alt="Guest photo" />
-            } @else {
-              {{ guestName() ? guestName()[0].toUpperCase() : 'G' }}
-            }
-            <label class="avatar-file-label" title="Upload photo">
-              <input type="file" accept="image/*" (change)="chooseGuestPhoto($event)" />
-              <span>📷</span>
-            </label>
-          </div>
-
-          <label class="input-wrap flex-1">
-            <span>Name</span>
-            <input
-              type="text"
-              maxlength="32"
-              placeholder="Guest name"
-              [value]="guestName()"
-              (input)="updateGuestName($event)"
-            />
-          </label>
-        </div>
-
-        <div class="voice-row">
-          <label class="input-wrap flex-1">
-            <span>Voice preset</span>
-            <select [value]="guestVoice()" (change)="updateGuestVoice($event)">
-              @for (voice of voiceOptions; track voice) {
-                <option [value]="voice">{{ voice }}</option>
-              }
-            </select>
-          </label>
-
-          <button type="button" class="btn-calibrate" (click)="openCalibrationForGuestDraft()">
-            Calibrate Range
-          </button>
-        </div>
-
-        <div class="color-section">
-          <div class="color-header-row">
-            <span>Color</span>
-            <input
-              type="color"
-              class="native-color-picker"
-              [value]="guestColor()"
-              (input)="selectGuestColor($any($event.target).value)"
-            />
-          </div>
-          <div class="color-presets-row">
-            @for (color of guestColorPresets; track color) {
-              <button
-                type="button"
-                [style.background]="color"
-                [class.selected]="guestColor() === color"
-                (click)="selectGuestColor(color)"
-              ></button>
-            }
-          </div>
-        </div>
-
-        <button type="button" class="btn-action-primary" (click)="addGuest()">
-          Add Guest
-        </button>
-      </div>
-
-      <footer class="popover-footer">
-        <label class="round-robin-row">
-          <div class="toggle-text">
-            <strong>Take turns automatically</strong>
-            <small>Reorders queue based on singer turns</small>
-          </div>
-          <input
-            class="switch"
-            type="checkbox"
-            role="switch"
-            [checked]="party.roundRobinEnabled()"
-            (change)="party.setRoundRobinEnabled($any($event.target).checked)"
-          />
-        </label>
-      </footer>
-    </section>
-  </app-popup-panel>
-
-  <!-- Right-Click Context Menu -->
+  <!-- Singer Context Menu -->
   <app-popup-panel #singerMenu popupId="party-singer-context" group="context-menu" label="Singer Options">
     <div popup-content class="singer-context-menu" role="menu">
       @if (selectedSinger(); as singer) {
@@ -283,158 +110,26 @@
         }
 
         <hr />
-        <button type="button" role="menuitem" class="danger" (click)="promptRemoveSinger(singer)">
+        <button type="button" role="menuitem" class="danger" (click)="promptRemoveSinger(singer, $event)">
           Remove from party
         </button>
       }
     </div>
   </app-popup-panel>
 
-  <!-- Anchored Edit Profile Popup Panel -->
-  <app-popup-panel
-    #editPopup
-    popupId="party-singer-edit"
-    group="player"
-    placement="below"
-    [closeOnContentClick]="false"
-    label="Edit Singer Profile"
-  >
-    <section popup-content class="party-edit-popover">
-      @if (editingProfile(); as profile) {
-        <header class="popover-header">
-          <div>
-            <strong>Edit Profile</strong>
-            @if (profile.isGuest) {
-              <span class="guest-badge">Guest</span>
-            }
-          </div>
-          <button type="button" class="close-icon-btn" popup-close aria-label="Close">×</button>
-        </header>
+  <!-- Edit Singer Popover -->
+  <app-party-edit-singer
+    [profile]="editingProfile()"
+    (close)="editingProfile.set(null)"
+    (calibrateRequested)="openCalibration($event, 'edit-profile')"
+  />
 
-        <div class="edit-identity-row">
-          <div class="avatar-uploader" [style.background]="editColorDraft()">
-            @if (editAvatarDraft()) {
-              <img [src]="editAvatarDraft()" alt="Profile photo" />
-            } @else {
-              {{ editNameDraft() ? editNameDraft()[0].toUpperCase() : singerInitial(profile) }}
-            }
-            <label class="avatar-file-label" title="Change photo">
-              <input type="file" accept="image/*" (change)="chooseEditPhoto($event)" />
-              <span>📷</span>
-            </label>
-          </div>
+  <!-- Remove Singer Popover -->
+  <app-party-remove-singer
+    (confirmed)="confirmRemoveSinger($event)"
+  />
 
-          <label class="input-wrap flex-1">
-            <span>Name</span>
-            <input
-              type="text"
-              maxlength="40"
-              [value]="editNameDraft()"
-              (input)="editNameDraft.set($any($event.target).value)"
-            />
-          </label>
-        </div>
-
-        <div class="voice-row">
-          <label class="input-wrap flex-1">
-            <span>Voice preset</span>
-            <select [value]="editVoiceDraft()" (change)="onEditVoiceChange($event)">
-              @for (voice of voiceOptions; track voice) {
-                <option [value]="voice">{{ voice }}</option>
-              }
-            </select>
-          </label>
-
-          <button type="button" class="btn-calibrate" (click)="openCalibrationForEdit(profile)">
-            Calibrate Range
-          </button>
-        </div>
-
-        <!-- Intuitive Manual Range Note Pickers -->
-        <div class="manual-notes-section">
-          <span class="sub-label">Manual Range</span>
-          <div class="manual-pickers-grid">
-            <app-note-selector
-              label="Lowest note"
-              [midi]="editLowMidi()"
-              (midiChange)="editLowMidi.set($event)"
-            />
-            <app-note-selector
-              label="Highest note"
-              [midi]="editHighMidi()"
-              (midiChange)="editHighMidi.set($event)"
-            />
-          </div>
-        </div>
-
-        <div class="color-section">
-          <div class="color-header-row">
-            <span>Accent color</span>
-            <input
-              type="color"
-              class="native-color-picker"
-              [value]="editColorDraft()"
-              (input)="editColorDraft.set($any($event.target).value)"
-            />
-          </div>
-          <div class="color-presets-row">
-            @for (color of guestColorPresets; track color) {
-              <button
-                type="button"
-                [style.background]="color"
-                [class.selected]="editColorDraft() === color"
-                (click)="editColorDraft.set(color)"
-              ></button>
-            }
-          </div>
-        </div>
-
-        <footer class="edit-popover-footer">
-          <button type="button" class="btn-action-secondary" popup-close>Cancel</button>
-          <button type="button" class="btn-action-primary" (click)="saveProfileEdit()">Save changes</button>
-        </footer>
-      }
-    </section>
-  </app-popup-panel>
-
-  <!-- In-App Warning Confirmation Modal (Matching Vocal Range Modal Backdrop) -->
-  @if (pendingRemoveSinger(); as singer) {
-    <div class="modal-backdrop" (click)="cancelRemoveSinger()">
-      <div class="modal-dialog warning-dialog" (click)="$event.stopPropagation()" role="alertdialog" aria-modal="true">
-        <header class="modal-header">
-          <strong>Remove Singer</strong>
-        </header>
-
-        <div class="modal-body">
-          <p>Remove <strong>{{ singer.name }}</strong> from this session?</p>
-          
-          @let songs = singerAssignedSongs(singer.id);
-          @if (songs.length > 0) {
-            <div class="warning-callout">
-              <span class="warning-callout-title">
-                The following <strong>{{ songs.length }} assigned song{{ songs.length === 1 ? '' : 's' }}</strong> will be removed from the Karaoke Queue:
-              </span>
-              <ul class="warning-song-list">
-                @for (song of songs; track song.task_id) {
-                  <li>
-                    <span class="song-title">{{ song.raw_title || song.title }}</span>
-                    <small class="song-artist">{{ song.raw_artist || song.artist }}</small>
-                  </li>
-                }
-              </ul>
-            </div>
-          }
-        </div>
-
-        <footer class="modal-footer">
-          <button type="button" class="btn-action-secondary" (click)="cancelRemoveSinger()">Cancel</button>
-          <button type="button" class="btn-action-danger" (click)="confirmRemoveSinger(singer.id)">Remove</button>
-        </footer>
-      </div>
-    </div>
-  }
-
-  <!-- Vocal Range Calibration Portal Template -->
+  <!-- Calibration Portal -->
   <ng-template #calibrationModalTemplate>
     <app-vocal-range-modal
       [microphoneDeviceId]="selectedMicrophoneId()"

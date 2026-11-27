@@ -1,4 +1,7 @@
 import { Injectable, signal } from '@angular/core';
+import { Subject } from 'rxjs';
+import { SongRef } from './library.service';
+import { activeDragSongs } from '../util/drag-payload';
 
 export const KANTA_DRAG_TYPE = 'application/x-kanta-processed';
 
@@ -6,9 +9,13 @@ export const KANTA_DRAG_TYPE = 'application/x-kanta-processed';
 export class LayoutService {
   readonly sidebarOpen = signal(false);
   readonly queueOpen = signal(false);
-  // True while a library item (or file) is being dragged towards the queue.
   readonly dragActive = signal(false);
-  private queueAutoOpened = false;
+
+  readonly dropCompleted$ = new Subject<void>();
+
+  notifyDropped(): void {
+    this.dropCompleted$.next();
+  }
 
   toggleSidebar(): void {
     const next = !this.sidebarOpen();
@@ -17,20 +24,17 @@ export class LayoutService {
   }
 
   toggleQueue(): void {
-    this.queueAutoOpened = false;
     const next = !this.queueOpen();
     if (next) this.sidebarOpen.set(false);
     this.queueOpen.set(next);
   }
 
   openQueue(): void {
-    this.queueAutoOpened = false;
     this.sidebarOpen.set(false);
     this.queueOpen.set(true);
   }
 
   closeQueue(): void {
-    this.queueAutoOpened = false;
     this.queueOpen.set(false);
   }
 
@@ -38,10 +42,10 @@ export class LayoutService {
     this.sidebarOpen.set(false);
   }
 
-  beginDrag(): void {
+  beginDrag(songs: SongRef[] = []): void {
+    if (songs.length) activeDragSongs.set(songs);
     this.dragActive.set(true);
     if (!this.queueOpen()) {
-      this.queueAutoOpened = true;
       this.sidebarOpen.set(false);
       this.queueOpen.set(true);
     }
@@ -49,9 +53,6 @@ export class LayoutService {
 
   endDrag(): void {
     this.dragActive.set(false);
-    if (this.queueAutoOpened) {
-      this.queueAutoOpened = false;
-      this.queueOpen.set(false);
-    }
+    activeDragSongs.set([]);
   }
 }

@@ -6,10 +6,6 @@ type TauriWindow = {
   setFullscreen(fullscreen: boolean): Promise<void>;
 };
 
-/**
- * Single source of truth for fullscreen. The real window/document state is the only thing
- * that flips `active`, so shortcut, button, Esc and OS gestures can never disagree.
- */
 @Injectable({ providedIn: 'root' })
 export class FullscreenService {
   private readonly document = inject(DOCUMENT);
@@ -30,7 +26,6 @@ export class FullscreenService {
     });
   }
 
-  // Global so fullscreen survives (and can be toggled from) every page, not just now-playing.
   private onShortcut(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     const typing =
@@ -74,7 +69,13 @@ export class FullscreenService {
       await tauri.setFullscreen(on);
     } else if (on) {
       await this.document.documentElement.requestFullscreen();
+      try {
+        await (navigator as unknown as { keyboard?: { lock?: (keys: string[]) => Promise<void> } }).keyboard?.lock?.(['Escape']);
+      } catch {}
     } else if (this.document.fullscreenElement) {
+      try {
+        (navigator as unknown as { keyboard?: { unlock?: () => void } }).keyboard?.unlock?.();
+      } catch {}
       await this.document.exitFullscreen();
     }
   }
@@ -83,7 +84,6 @@ export class FullscreenService {
     const tauri = await this.getTauriWindow();
     if (tauri) return tauri.isFullscreen();
     const view = this.document.defaultView;
-    // F11 browser fullscreen does not set fullscreenElement, so also compare window and screen size.
     return (
       !!this.document.fullscreenElement ||
       (!!view && view.innerHeight === view.screen.height && view.innerWidth === view.screen.width)

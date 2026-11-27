@@ -19,7 +19,6 @@ export interface ActionTarget {
   playlistId?: string;
 }
 
-/** Runs the actions offered by the shared entry menu (library items and search results). */
 @Injectable({ providedIn: 'root' })
 export class EntryActionsService {
   private readonly playback = inject(PlaybackActions);
@@ -30,17 +29,23 @@ export class EntryActionsService {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
 
-  // Rendered once by the app shell so the editor works from any page.
   readonly editingSong = signal<SongManifest | null>(null);
+  private activeAnchor: HTMLElement | MouseEvent | null = null;
 
-  /** Returns false for actions the calling view must handle itself (rename, remove-from-playlist). */
-  async perform(target: ActionTarget, action: EntryAction): Promise<boolean> {
+  setAnchor(anchor: HTMLElement | MouseEvent | null): void {
+    this.activeAnchor = anchor;
+  }
+
+  async perform(target: ActionTarget, action: EntryAction, anchor?: HTMLElement | MouseEvent): Promise<boolean> {
+    const effectiveAnchor = anchor ?? this.activeAnchor;
+    this.activeAnchor = null;
+
     const playable = target.songs.filter(isPlayable);
-    if (action === 'play') await this.playback.playSongs(target.songs);
-    else if (action === 'shuffle') await this.playback.playSongs(shuffled(target.songs));
-    else if (action === 'queue') await this.playback.enqueue(playable);
+    if (action === 'play') await this.playback.playSongs(target.songs, effectiveAnchor);
+    else if (action === 'shuffle') await this.playback.playSongs(shuffled(target.songs), effectiveAnchor);
+    else if (action === 'queue') await this.playback.enqueue(playable, null, false, effectiveAnchor);
     else if (action === 'play-next') {
-      await this.playback.enqueue(playable, this.songsService.currentQueueTaskId(), true);
+      await this.playback.enqueue(playable, this.songsService.currentQueueTaskId(), true, effectiveAnchor);
     } else if (action === 'edit') this.editingSong.set(target.songs[0] ?? null);
     else if (action === 'open') this.open(this.keyOf(target));
     else if (action === 'go-album' && target.songs[0]) {
@@ -49,8 +54,7 @@ export class EntryActionsService {
       const artists = splitMetadataValues(songArtist(target.songs[0]), this.settings.artistDelimiters());
       const artist = artists[0] ?? songArtist(target.songs[0]);
       this.open(`artist:${metadataValueKey(artist)}`);
-    }
-    else if (action === 'delete') await this.deleteSongs(target);
+    } else if (action === 'delete') await this.deleteSongs(target);
     else if (action === 'delete-playlist' && target.playlistId) {
       if (!confirm(`Delete the playlist “${target.title}”?`)) return true;
       await firstValueFrom(this.playlists.delete(target.playlistId));
