@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
@@ -22,6 +23,7 @@ from app.routes.setup import router as setup_router
 from app.routes.settings import fs_router, router as settings_router
 from app.services import library, log_buffer
 from app.services.fsutil import safe_join, safe_upload_name
+from app.services.image_cache import get_optimized_image, is_optimizable_image
 from app.services.paths import configure_environment, output_work_dir, upload_dir
 from app.services.metadata import sanitize_filename
 from app.services.lyrics import (
@@ -40,6 +42,7 @@ from app.services.settings import (
     warm_up_devices,
 )
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     log_buffer.install()
@@ -52,6 +55,22 @@ async def lifespan(_app: FastAPI):
         await queue_manager.stop()
 
 
+class StreamSafeGZipMiddleware:
+    """Compress JSON/API responses while bypassing SSE/NDJSON streams and already-compressed media."""
+
+    def __init__(self, app, minimum_size: int = 1024) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.endswith("/stream") or path.startswith(("/media/", "/media-roots/", "/separated/")):
+                await self.app(scope, receive, send)
+                return
+        await self.gzip(scope, receive, send)
+
+
 app = FastAPI(title="Kanta API", lifespan=lifespan)
 
 app.add_middleware(
@@ -61,8 +80,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(StreamSafeGZipMiddleware, minimum_size=1024)
 
 configure_environment()
+
 
 def _public_media_path(root: Path, relative: str) -> Optional[Path]:
     parts = PurePosixPath(relative.replace("\\", "/")).parts
@@ -78,10 +99,13 @@ def _public_media_path(root: Path, relative: str) -> Optional[Path]:
 
 class PublicMediaFiles(StaticFiles):
     async def get_response(self, path, scope):
+        if self.directory is None:
+            raise HTTPException(status_code=404, detail="Media file not found")
         root = Path(self.directory)
         if _public_media_path(root, path) is None:
             raise HTTPException(status_code=404, detail="Media file not found")
         return await super().get_response(path, scope)
+
 
 # check_dir=False: the default folder may live on a drive that is currently unplugged.
 app.mount(
@@ -101,23 +125,62 @@ app.include_router(artists_router)
 app.include_router(search_router)
 
 
-@app.get("/media/{file_path:path}")
-def get_media(file_path: str) -> FileResponse:
-    candidate = _public_media_path(get_output_dir(), file_path)
-    if candidate is None or not candidate.is_file():
+async def _serve_media_file(
+    candidate: Optional[Path],
+    request: Request,
+    width: Optional[int],
+) -> FileResponse:
+    if candidate is None or not await asyncio.to_thread(candidate.is_file):
         raise HTTPException(status_code=404, detail="Media file not found")
-    return FileResponse(candidate)
+
+    headers: dict[str, str] = {}
+    has_version = bool(request.query_params.get("v"))
+
+    if width is not None and is_optimizable_image(candidate):
+        prefer_webp = "image/webp" in request.headers.get("accept", "").lower()
+        target, media_type = await asyncio.to_thread(
+            get_optimized_image, candidate, width, prefer_webp
+        )
+        headers["Vary"] = "Accept"
+        headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable"
+            if has_version
+            else "public, max-age=86400, stale-while-revalidate=604800"
+        )
+        return FileResponse(target, media_type=media_type, headers=headers)
+
+    if is_optimizable_image(candidate):
+        headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable"
+            if has_version
+            else "public, max-age=86400, stale-while-revalidate=604800"
+        )
+    return FileResponse(candidate, headers=headers)
+
+
+@app.get("/media/{file_path:path}")
+async def get_media(
+    file_path: str,
+    request: Request,
+    w: Optional[int] = Query(default=None, ge=32, le=2048),
+) -> FileResponse:
+    candidate = _public_media_path(get_output_dir(), file_path)
+    return await _serve_media_file(candidate, request, w)
 
 
 @app.get("/media-roots/{root_index}/{file_path:path}")
-def get_media_from_root(root_index: int, file_path: str) -> FileResponse:
+async def get_media_from_root(
+    root_index: int,
+    file_path: str,
+    request: Request,
+    w: Optional[int] = Query(default=None, ge=32, le=2048),
+) -> FileResponse:
     roots = get_output_dirs()
     if root_index < 0 or root_index >= len(roots):
         raise HTTPException(status_code=404, detail="Media file not found")
     candidate = _public_media_path(roots[root_index], file_path)
-    if candidate is None or not candidate.is_file():
-        raise HTTPException(status_code=404, detail="Media file not found")
-    return FileResponse(candidate)
+    return await _serve_media_file(candidate, request, w)
+
 
 async def process_audio_input(file: Optional[UploadFile], url: Optional[str]) -> Path:
     if not (file and file.filename) and not url:
@@ -166,6 +229,7 @@ def _output_http_base_url(output_song_dir: Path, output_root: Path, base_url: st
         return f"{base_url.rstrip('/')}/media-roots/{roots.index(output_root)}/{relative}"
     return None
 
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "app": "Kanta Backend"}
@@ -200,7 +264,7 @@ async def get_better_lyrics(
         local_line = next(iter(local_files), None)
         if local_line is None:
             raise HTTPException(status_code=404, detail="No lyrics available")
-        payload = {"ttml": None, "lrc": None}
+        payload: dict[str, Optional[str]] = {"ttml": None, "lrc": None}
         payload["ttml" if local_line.suffix.lower() == ".ttml" else "lrc"] = (
             local_line.read_text(encoding="utf-8")
         )
@@ -235,7 +299,7 @@ async def get_better_lyrics(
             library.invalidate(song_dir)
             return JSONResponse(content=saved_result, status_code=response.status_code)
         if saved_line:
-            payload = {"ttml": None, "lrc": None}
+            payload: dict[str, Optional[str]] = {"ttml": None, "lrc": None}
             payload["ttml" if saved_line.suffix.lower() == ".ttml" else "lrc"] = (
                 saved_line.read_text(encoding="utf-8")
             )
@@ -243,18 +307,20 @@ async def get_better_lyrics(
         return JSONResponse(content=data, status_code=response.status_code)
     except (httpx.HTTPError, ValueError) as exc:
         if saved_line:
-            payload = {"ttml": None, "lrc": None}
+            payload: dict[str, Optional[str]] = {"ttml": None, "lrc": None}
             payload["ttml" if saved_line.suffix.lower() == ".ttml" else "lrc"] = (
                 saved_line.read_text(encoding="utf-8")
             )
             return payload
         raise HTTPException(status_code=502, detail=f"Lyrics provider request failed: {exc}") from exc
 
+
 @app.get("/api/status/{task_id}")
 def get_task_status(task_id: str):
     if task_id not in tasks_db:
         raise HTTPException(status_code=404, detail="Task ID not found")
     return tasks_db[task_id]
+
 
 @app.post("/api/cancel/{task_id}")
 def cancel_task(task_id: str):
@@ -268,10 +334,23 @@ def cancel_task(task_id: str):
     task["step"] = "Abortion requested..."
     return {"status": "cancelling", "task_id": task_id}
 
+
 @app.post("/api/separate-basic")
-async def separate_basic_endpoint(request: Request, file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
+async def separate_basic_endpoint(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
+    task_id: Optional[str] = Form(None),
+):
     active_task_id = task_id or str(uuid.uuid4())
-    tasks_db[active_task_id] = {"task_id": active_task_id, "status": "pending", "progress": 0, "step": "Initializing...", "cancel_requested": False, "created_at": time.time()}
+    tasks_db[active_task_id] = {
+        "task_id": active_task_id,
+        "status": "pending",
+        "progress": 0,
+        "step": "Initializing...",
+        "cancel_requested": False,
+        "created_at": time.time(),
+    }
 
     input_path = await process_audio_input(file, url)
     try:
@@ -280,7 +359,13 @@ async def separate_basic_endpoint(request: Request, file: Optional[UploadFile] =
         )
         library.invalidate(output_song_dir)
         output_root = input_path.parent.parent.parent
-        result = {"status": "success", "task_id": active_task_id, "type": "basic", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url))}
+        result = {
+            "status": "success",
+            "task_id": active_task_id,
+            "type": "basic",
+            "folder_path": str(output_song_dir.resolve()),
+            "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url)),
+        }
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:
@@ -290,12 +375,26 @@ async def separate_basic_endpoint(request: Request, file: Optional[UploadFile] =
         tasks_db[active_task_id].update({"status": "failed", "step": "Error.", "error": str(e)})
         raise HTTPException(status_code=500, detail=f"Separation failed: {str(e)}")
     finally:
-        if input_path.exists(): input_path.unlink()
+        if input_path.exists():
+            input_path.unlink()
+
 
 @app.post("/api/separate-full")
-async def separate_full_endpoint(request: Request, file: Optional[UploadFile] = File(None), url: Optional[str] = Form(None), task_id: Optional[str] = Form(None)):
+async def separate_full_endpoint(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
+    task_id: Optional[str] = Form(None),
+):
     active_task_id = task_id or str(uuid.uuid4())
-    tasks_db[active_task_id] = {"task_id": active_task_id, "status": "pending", "progress": 0, "step": "Initializing...", "cancel_requested": False, "created_at": time.time()}
+    tasks_db[active_task_id] = {
+        "task_id": active_task_id,
+        "status": "pending",
+        "progress": 0,
+        "step": "Initializing...",
+        "cancel_requested": False,
+        "created_at": time.time(),
+    }
 
     input_path = await process_audio_input(file, url)
     try:
@@ -304,7 +403,13 @@ async def separate_full_endpoint(request: Request, file: Optional[UploadFile] = 
         )
         library.invalidate(output_song_dir)
         output_root = input_path.parent.parent.parent
-        result = {"status": "success", "task_id": active_task_id, "type": "full", "folder_path": str(output_song_dir.resolve()), "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url))}
+        result = {
+            "status": "success",
+            "task_id": active_task_id,
+            "type": "full",
+            "folder_path": str(output_song_dir.resolve()),
+            "http_base_url": _output_http_base_url(output_song_dir, output_root, str(request.base_url)),
+        }
         tasks_db[active_task_id].update({"status": "completed", "progress": 100, "step": "Completed.", "result": result})
         return result
     except TaskCancelledException as e:
@@ -314,4 +419,5 @@ async def separate_full_endpoint(request: Request, file: Optional[UploadFile] = 
         tasks_db[active_task_id].update({"status": "failed", "step": "Error.", "error": str(e)})
         raise HTTPException(status_code=500, detail=f"Separation failed: {str(e)}")
     finally:
-        if input_path.exists(): input_path.unlink()
+        if input_path.exists():
+            input_path.unlink()

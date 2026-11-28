@@ -3,6 +3,7 @@ import { LyricsSizeService } from '../../../../shared/services/lyrics-size.servi
 import { LyricsColorService, paletteFromCanvas } from '../../../../shared/services/lyrics-color.service';
 import { LyricsDisplayService } from '../../../../shared/services/lyrics-display.service';
 import { lyricsForDisplay } from '../../../../shared/util/lyrics-display';
+import { sizedImageUrl } from '../../../../shared/util/image-url';
 import type { BraccatoLyricsElement } from '@braccato/core/element';
 import type { Lyric } from '@braccato/parsers';
 import { stabilizeLyricsLayout } from './lyrics-layout';
@@ -105,8 +106,16 @@ export class LyricsStage {
       image.onerror = () => {
         if (!cancelled) console.warn('Could not load album cover for lyric colors:', cover);
       };
-      const sampleUrl = new URL(cover, document.baseURI);
+      const sampleUrl = new URL(sizedImageUrl(cover, 128) ?? cover, document.baseURI);
       if (sampleUrl.protocol === 'http:' || sampleUrl.protocol === 'https:') {
+        // Override any larger ?w= (e.g. w=768 from NowPlaying) so the 64x64 sampler always uses a 128px thumbnail.
+        if (
+          sampleUrl.pathname.includes('/media/')
+          || sampleUrl.pathname.includes('/media-roots/')
+          || sampleUrl.pathname.includes('/api/artists/photo/')
+        ) {
+          sampleUrl.searchParams.set('w', '128');
+        }
         // Keep CORS sampling separate from cached non-CORS artwork requests.
         sampleUrl.searchParams.set('kanta-palette', '1');
       }

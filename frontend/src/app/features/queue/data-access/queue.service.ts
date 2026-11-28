@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
-  BehaviorSubject,
   EMPTY,
   Observable,
   Subject,
@@ -38,7 +37,8 @@ export function sanitizeQueueSnapshot(snapshot: QueueSnapshot): QueueSnapshot {
   };
 }
 
-const POLL_INTERVAL_MS = 1500;
+const POLL_INITIAL_DELAY_MS = 800;
+const POLL_INTERVAL_MS = 2000;
 const REQUEST_TIMEOUT_MS = 20000;
 
 const EMPTY_QUEUE_SNAPSHOT: QueueSnapshot = {
@@ -50,20 +50,24 @@ const EMPTY_QUEUE_SNAPSHOT: QueueSnapshot = {
 @Injectable({ providedIn: 'root' })
 export class QueueService {
   private readonly http = inject(HttpClient);
-  private readonly refresh$ = new BehaviorSubject<void>(undefined);
+  private readonly refresh$ = new Subject<void>();
+  private streaming = false;
 
-  // Emits the removed task id, or null when the whole karaoke queue was cleared.
   readonly karaokeRemoved$ = new Subject<string | null>();
   readonly trackAdded$ = new Subject<QueueItem>();
 
-  // Live snapshot: SSE when the backend supports it, otherwise non-overlapping polling.
-  // Failed or slow requests never replace the last known snapshot with an empty one.
   readonly queue$: Observable<QueueSnapshot> = new Observable<QueueSnapshot>((subscriber) => {
-    let streaming = false;
+    this.streaming = false;
     const source = typeof EventSource === 'undefined' ? null : new EventSource(`${API_URL}/api/queue/stream`);
+    const closeSource = (): void => {
+      this.streaming = false;
+      source?.close();
+    };
+
     if (source) {
-      source.onopen = () => (streaming = true);
+      source.onopen = () => (this.streaming = true);
       source.onmessage = (event) => {
+        this.streaming = true;
         try {
           const raw = JSON.parse(event.data) as QueueSnapshot;
           subscriber.next(sanitizeQueueSnapshot(raw));
@@ -71,9 +75,16 @@ export class QueueService {
           // ignore malformed frames
         }
       };
-      source.onerror = () => (streaming = false);
+      source.onerror = () => (this.streaming = false);
+      if (typeof window !== 'undefined') {
+        window.addEventListener('beforeunload', closeSource);
+      }
     }
-    const polling = merge(timer(0, POLL_INTERVAL_MS).pipe(filter(() => !streaming)), this.refresh$)
+
+    const polling = merge(
+      timer(source ? POLL_INITIAL_DELAY_MS : 0, POLL_INTERVAL_MS).pipe(filter(() => !this.streaming)),
+      this.refresh$,
+    )
       .pipe(
         exhaustMap(() =>
           this.http.get<QueueSnapshot>(`${API_URL}/api/queue`).pipe(
@@ -84,8 +95,12 @@ export class QueueService {
         ),
       )
       .subscribe((snapshot) => subscriber.next(snapshot));
+
     return () => {
-      source?.close();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', closeSource);
+      }
+      closeSource();
       polling.unsubscribe();
     };
   }).pipe(
@@ -93,8 +108,10 @@ export class QueueService {
     shareReplay({ bufferSize: 1, refCount: true }),
   );
 
-  refresh(): void {
-    this.refresh$.next();
+  refresh(force = true): void {
+    if (force || !this.streaming) {
+      this.refresh$.next();
+    }
   }
 
   addTrack(
@@ -112,7 +129,7 @@ export class QueueService {
         map((res) => (res.item ? { ...res, item: sanitizeQueueItem(res.item) } : res)),
         tap(({ item }) => {
           if (item) this.trackAdded$.next(item);
-          this.refresh();
+          this.refresh(false);
         }),
       );
   }
@@ -134,7 +151,7 @@ export class QueueService {
         map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
         tap(({ item }) => {
           this.trackAdded$.next(item);
-          this.refresh();
+          this.refresh(false);
         }),
       );
   }
@@ -147,7 +164,7 @@ export class QueueService {
       )
       .pipe(
         map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
-        tap(() => this.refresh()),
+        tap(() => this.refresh(false)),
       );
   }
 
@@ -158,7 +175,7 @@ export class QueueService {
         map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
         tap(() => {
           this.karaokeRemoved$.next(taskId);
-          this.refresh();
+          this.refresh(false);
         }),
       );
   }
@@ -170,7 +187,7 @@ export class QueueService {
       .pipe(
         tap(() => {
           if (priority === 1) this.karaokeRemoved$.next(null);
-          this.refresh();
+          this.refresh(false);
         }),
       );
   }
@@ -183,13 +200,13 @@ export class QueueService {
       .pipe(
         tap(() => {
           this.karaokeRemoved$.next(taskId);
-          this.refresh();
+          this.refresh(false);
         }),
       );
   }
 
   clearAllQueue(): Observable<[{ message: string }, { message: string }]> {
-    return forkJoin([this.clearQueue(1), this.clearQueue(2)]).pipe(tap(() => this.refresh()));
+    return forkJoin([this.clearQueue(1), this.clearQueue(2)]).pipe(tap(() => this.refresh(false)));
   }
 
   pauseTrack(taskId: string): Observable<{ item: QueueItem }> {
@@ -200,7 +217,7 @@ export class QueueService {
       )
       .pipe(
         map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
-        tap(() => this.refresh()),
+        tap(() => this.refresh(false)),
       );
   }
 
@@ -212,20 +229,20 @@ export class QueueService {
       )
       .pipe(
         map((res) => ({ ...res, item: sanitizeQueueItem(res.item) })),
-        tap(() => this.refresh()),
+        tap(() => this.refresh(false)),
       );
   }
 
   pauseAll(): Observable<{ message: string }> {
     return this.http
       .post<{ message: string }>(`${API_URL}/api/queue/pause-all`, {})
-      .pipe(tap(() => this.refresh()));
+      .pipe(tap(() => this.refresh(false)));
   }
 
   resumeAll(): Observable<{ message: string }> {
     return this.http
       .post<{ message: string }>(`${API_URL}/api/queue/resume-all`, {})
-      .pipe(tap(() => this.refresh()));
+      .pipe(tap(() => this.refresh(false)));
   }
 
   reorderProcessingTracks(processingQueue: string[]): Observable<{ message: string }> {

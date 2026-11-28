@@ -3,6 +3,23 @@ import type { SongManifest } from './songs.service';
 
 export type SoloFitStatus = 'natural' | 'adjusted' | 'reach' | 'unanalyzed' | 'uncalibrated';
 
+export interface VocalPartRange {
+  min_hz: number | null;
+  max_hz: number | null;
+  min_note?: string | null;
+  max_note?: string | null;
+  tessitura_min_hz?: number | null;
+  tessitura_max_hz?: number | null;
+  tessitura_min_note?: string | null;
+  tessitura_max_note?: string | null;
+  voice_type?: string | null;
+}
+
+export interface DuetVocalRanges {
+  v1?: VocalPartRange | null;
+  v2?: VocalPartRange | null;
+}
+
 export interface SoloKeyRecommendation {
   kind: 'solo';
   semitones: number;
@@ -11,12 +28,26 @@ export interface SoloKeyRecommendation {
   hitsPhysicalLimit: boolean;
 }
 
-export type SongVocalRange = Pick<SongManifest, 'is_duet' | 'vocal_min_hz' | 'vocal_max_hz'>;
+export type SongVocalRange = Pick<SongManifest, 'is_duet' | 'vocal_min_hz' | 'vocal_max_hz'> & {
+  duet_vocal_ranges?: DuetVocalRanges | null;
+};
 
 export function clampKeyShift(semitones: number): number {
   if (!Number.isFinite(semitones)) return 0;
   const rounded = Math.round(semitones);
   return rounded === 0 ? 0 : Math.max(-6, Math.min(6, rounded));
+}
+
+export function rangeForDuetPart(song: SongVocalRange, part: 'v1' | 'v2'): SongVocalRange {
+  const partRange = song.duet_vocal_ranges?.[part];
+  if (partRange && partRange.max_hz != null && Number.isFinite(partRange.max_hz) && partRange.max_hz > 0) {
+    return {
+      is_duet: song.is_duet,
+      vocal_min_hz: partRange.min_hz ?? song.vocal_min_hz,
+      vocal_max_hz: partRange.max_hz,
+    };
+  }
+  return song;
 }
 
 export function recommendSoloKey(

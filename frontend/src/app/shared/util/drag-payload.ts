@@ -1,13 +1,13 @@
 import { signal } from '@angular/core';
 import { KANTA_DRAG_TYPE } from '../services/layout.service';
 import { SongRef } from '../services/library.service';
+import { sizedImageUrl } from './image-url';
 
 export interface DragPreviewOptions {
   songs: { title: string; artist: string; coverUrl: string | null }[];
   count?: number;
 }
 
-// Global in-memory signal so drag-targets (like the Queue Sheet) can read the phantom payload during dragover
 export const activeDragSongs = signal<SongRef[]>([]);
 
 export function writeDragPayload(event: DragEvent, songs: SongRef[]): void {
@@ -38,7 +38,6 @@ export function readDragPayload(event: DragEvent): SongRef[] {
   }
 }
 
-// Builds an off-screen card that mimics a karaoke queue row; multiple items render as a stack.
 export function setQueueItemDragImage(event: DragEvent, options: DragPreviewOptions): void {
   const transfer = event.dataTransfer;
   if (!transfer || !options.songs.length) return;
@@ -54,7 +53,8 @@ export function setQueueItemDragImage(event: DragEvent, options: DragPreviewOpti
     card.style.zIndex = String(10 - depth);
     const cover = document.createElement('div');
     cover.className = 'kanta-drag-cover';
-    if (song.coverUrl) cover.style.backgroundImage = `url("${song.coverUrl}")`;
+    const thumb = sizedImageUrl(song.coverUrl, 128);
+    if (thumb) cover.style.backgroundImage = `url("${thumb}")`;
     const text = document.createElement('div');
     text.className = 'kanta-drag-text';
     const title = document.createElement('strong');

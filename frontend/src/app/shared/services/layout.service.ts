@@ -12,6 +12,9 @@ export class LayoutService {
   readonly dragActive = signal(false);
 
   readonly dropCompleted$ = new Subject<void>();
+  readonly clearQueueSelection$ = new Subject<void>();
+  readonly clearLibrarySelection$ = new Subject<void>();
+  readonly clearProcessingSelection$ = new Subject<void>();
 
   notifyDropped(): void {
     this.dropCompleted$.next();

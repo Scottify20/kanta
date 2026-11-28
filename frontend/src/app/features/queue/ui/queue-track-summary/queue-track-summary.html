@@ -1,9 +1,11 @@
 <span class="cover-art-wrap">
-  @if (item().cover_url) {
+  @if (coverSrc(); as src) {
     <img
       class="cover-image"
-      [src]="item().cover_url"
+      [src]="src"
       [alt]="'Album cover for ' + item().raw_album"
+      loading="lazy"
+      decoding="async"
     />
   } @else {
     <span class="cover-placeholder" aria-hidden="true"></span>

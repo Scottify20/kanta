@@ -1,9 +1,13 @@
+import gc
 import json
 import logging
+import os
 import shutil
+import stat
 import subprocess
-import time
+import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 import tqdm
@@ -42,6 +46,37 @@ from app.services.settings import (
 
 logger = logging.getLogger(__name__)
 
+
+def _release_separator_memory(separator: Optional["Separator"] = None) -> None:
+    """Explicitly release model weights and VRAM to prevent CUDA/WSL2 OOM crashes."""
+    if separator is not None:
+        try:
+            if hasattr(separator, "model_instance"):
+                separator.model_instance = None
+        except Exception:
+            pass
+    gc.collect()
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+        except Exception:
+            pass
+
+
+def _rmtree_safe(target: Path) -> None:
+    """Remove a directory tree even when Windows/WSL files carry read-only bits."""
+    for root, dirs, files in os.walk(target):
+        for name in (*dirs, *files):
+            try:
+                os.chmod(os.path.join(root, name), stat.S_IWRITE | stat.S_IREAD)
+            except OSError:
+                pass
+    shutil.rmtree(target)
+
+
 class TaskProgressTqdm(tqdm.tqdm):
     """Interception wrapper for tqdm to update tasks_db during audio-separator inference."""
     _current_task_id: Optional[str] = None
@@ -63,12 +98,11 @@ class TaskProgressTqdm(tqdm.tqdm):
         if self._current_task_id and self.total:
             fraction = self.n / self.total
             scaled_pct = int(self._start_pct + fraction * (self._end_pct - self._start_pct))
-            
-            # Format ETA if available from tqdm rate calculations
+
             rate = self.format_dict.get("rate")
             remaining = (self.total - self.n) / rate if rate else None
             eta_str = f" - ~{int(remaining)}s left" if remaining and remaining > 0 else ""
-            
+
             step_text = f"{self._step_prefix} [{self.n}/{self.total} chunks]{eta_str}"
             check_cancellation_and_update(self._current_task_id, step_text, scaled_pct)
             now = time.monotonic()
@@ -86,10 +120,7 @@ tqdm.tqdm = TaskProgressTqdm
 
 
 def _patch_librosa_compat() -> None:
-    """audio-separator still calls librosa.get_duration(filename=...), removed in librosa 1.0.
-
-    Without this every stem write fails (the error is swallowed and no stems are produced).
-    """
+    """audio-separator still calls librosa.get_duration(filename=...), removed in librosa 1.0."""
     import inspect
     import librosa
 
@@ -194,7 +225,6 @@ def _separator_input_path(input_path: Path, temp_dir: Path) -> Path:
 
 
 def _create_separator(temp_dir: Path) -> "Separator":
-    # Imported lazily: audio_separator pulls in torch, which would delay API startup by many seconds.
     from audio_separator.separator import Separator
 
     configure_environment()
@@ -227,7 +257,6 @@ def _apply_inference_device(separator: "Separator") -> None:
 
         separator.torch_device = torch.device("vulkan")
         separator.onnx_execution_provider = ["CPUExecutionProvider"]
-    # "cuda" (or an unavailable choice) keeps audio-separator's own detection.
 
 
 def _preserve_existing_lyrics(existing_song_dir: Path, temp_song_dir: Path) -> None:
@@ -285,7 +314,7 @@ def _run_basic_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path
 
     if final_song_dir.exists():
         _preserve_existing_lyrics(final_song_dir, temp_song_dir)
-        shutil.rmtree(final_song_dir)
+        _rmtree_safe(final_song_dir)
     temp_song_dir.rename(final_song_dir)
     _copy_input_lyrics(input_file_path, final_song_dir)
 
@@ -313,12 +342,15 @@ def _run_basic_pipeline(input_file_path: Path, output_root: Path, temp_dir: Path
             raw_title,
         )
 
-    # Attach task context for live tqdm progress (25% -> 80%)
-    TaskProgressTqdm.set_task_context(task_id, 25, 80, "BS-RoFormer Separating")
-
-    separator = _create_separator(temp_dir)
-    separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = _separate(separator, separator_input, 2, temp_dir)
+    separator: Optional["Separator"] = None
+    try:
+        TaskProgressTqdm.set_task_context(task_id, 25, 80, "BS-RoFormer Separating")
+        separator = _create_separator(temp_dir)
+        separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
+        pass1_files = _separate(separator, separator_input, 2, temp_dir)
+    finally:
+        _release_separator_memory(separator)
+        separator = None
 
     check_cancellation_and_update(task_id, "Converting stems...", 85)
     convert_and_tag_stem(
@@ -378,7 +410,7 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
 
     if final_song_dir.exists():
         _preserve_existing_lyrics(final_song_dir, temp_song_dir)
-        shutil.rmtree(final_song_dir)
+        _rmtree_safe(final_song_dir)
     temp_song_dir.rename(final_song_dir)
     _copy_input_lyrics(input_file_path, final_song_dir)
 
@@ -406,65 +438,76 @@ def _run_karaoke_pipeline(input_file_path: Path, output_root: Path, temp_dir: Pa
             raw_title,
         )
 
-    separator = _create_separator(temp_dir)
+    separator: Optional["Separator"] = None
+    try:
+        separator = _create_separator(temp_dir)
 
-    # Pass 1: BS-RoFormer (15% -> 40%)
-    TaskProgressTqdm.set_task_context(task_id, 15, 40, "Pass 1/3 (BS-RoFormer)")
-    separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
-    pass1_files = _separate(separator, separator_input, 2, temp_dir)
-    vocal_pass2_input = temp_dir / "vocal_temp.wav"
-    shutil.copy(pass1_files[1], vocal_pass2_input)
+        # Pass 1: BS-RoFormer (15% -> 40%)
+        TaskProgressTqdm.set_task_context(task_id, 15, 40, "Pass 1/3 (BS-RoFormer)")
+        separator.load_model("model_bs_roformer_ep_317_sdr_12.9755.ckpt")
+        pass1_files = _separate(separator, separator_input, 2, temp_dir)
+        _release_separator_memory(separator)
 
-    convert_and_tag_stem(
-        pass1_files[0],
-        stems_dir / f"{title} (Instrumental){ext}",
-        raw_artist,
-        raw_album,
-        f"{raw_title} (Instrumental)",
-        input_file_path,
-        cover_path,
-    )
-    vocal_stem_path = stems_dir / f"{title} (Vocals){ext}"
-    convert_and_tag_stem(
-        pass1_files[1],
-        vocal_stem_path,
-        raw_artist,
-        raw_album,
-        f"{raw_title} (Vocals)",
-        input_file_path,
-        cover_path,
-    )
-    # Pass 2: Lead/Backing Vocals (40% -> 65%)
-    TaskProgressTqdm.set_task_context(task_id, 40, 65, "Pass 2/3 (Karaoke Split)")
-    separator.load_model("mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt")
-    pass2_files = _separate(separator, vocal_pass2_input, 2, temp_dir)
-    lead_vocal_stem_path = stems_dir / f"{title} (Lead Vocals){ext}"
-    convert_and_tag_stem(
-        pass2_files[1],
-        lead_vocal_stem_path,
-        raw_artist,
-        raw_album,
-        f"{raw_title} (Lead Vocals)",
-        input_file_path,
-        cover_path,
-    )
-    convert_and_tag_stem(
-        pass2_files[0],
-        stems_dir / f"{title} (Backing Vocals){ext}",
-        raw_artist,
-        raw_album,
-        f"{raw_title} (Backing Vocals)",
-        input_file_path,
-        cover_path,
-    )
-    analyze_and_save_vocal_range(final_song_dir, lead_vocal_stem_path)
-    if vocal_pass2_input.exists():
-        vocal_pass2_input.unlink()
+        vocal_pass2_input = temp_dir / "vocal_temp.wav"
+        shutil.copy(pass1_files[1], vocal_pass2_input)
 
-    # Pass 3: Multi-Instruments (65% -> 90%)
-    TaskProgressTqdm.set_task_context(task_id, 65, 90, "Pass 3/3 (Demucs 6s)")
-    separator.load_model("htdemucs_6s.yaml")
-    pass3_files = _separate(separator, separator_input, 1, temp_dir)
+        convert_and_tag_stem(
+            pass1_files[0],
+            stems_dir / f"{title} (Instrumental){ext}",
+            raw_artist,
+            raw_album,
+            f"{raw_title} (Instrumental)",
+            input_file_path,
+            cover_path,
+        )
+        vocal_stem_path = stems_dir / f"{title} (Vocals){ext}"
+        convert_and_tag_stem(
+            pass1_files[1],
+            vocal_stem_path,
+            raw_artist,
+            raw_album,
+            f"{raw_title} (Vocals)",
+            input_file_path,
+            cover_path,
+        )
+
+        # Pass 2: Lead/Backing Vocals (40% -> 65%)
+        TaskProgressTqdm.set_task_context(task_id, 40, 65, "Pass 2/3 (Karaoke Split)")
+        separator.load_model("mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt")
+        pass2_files = _separate(separator, vocal_pass2_input, 2, temp_dir)
+        _release_separator_memory(separator)
+
+        lead_vocal_stem_path = stems_dir / f"{title} (Lead Vocals){ext}"
+        convert_and_tag_stem(
+            pass2_files[1],
+            lead_vocal_stem_path,
+            raw_artist,
+            raw_album,
+            f"{raw_title} (Lead Vocals)",
+            input_file_path,
+            cover_path,
+        )
+        convert_and_tag_stem(
+            pass2_files[0],
+            stems_dir / f"{title} (Backing Vocals){ext}",
+            raw_artist,
+            raw_album,
+            f"{raw_title} (Backing Vocals)",
+            input_file_path,
+            cover_path,
+        )
+        analyze_and_save_vocal_range(final_song_dir, lead_vocal_stem_path)
+        if vocal_pass2_input.exists():
+            vocal_pass2_input.unlink()
+
+        # Pass 3: Multi-Instruments (65% -> 90%)
+        TaskProgressTqdm.set_task_context(task_id, 65, 90, "Pass 3/3 (Demucs 6s)")
+        separator.load_model("htdemucs_6s.yaml")
+        pass3_files = _separate(separator, separator_input, 1, temp_dir)
+    finally:
+        _release_separator_memory(separator)
+        separator = None
+
     for wav_file in pass3_files:
         stem_type = wav_file.name.split("_(")[-1].split(")")[0].title()
         if stem_type.lower() in ["vocals", "instrumental"]:

@@ -95,7 +95,9 @@
       [progress]="progressOf(entry)"
       [playlists]="playlists()"
       [inPlaylist]="!!detail()?.playlistId"
+      [selectedCount]="isSelected(entry) ? selection().size : 0"
       (activate)="activate(entry, visibleIndex(entry), $event)"
+      (selectOnly)="selectOnly(entry)"
       (action)="onAction(entry, $event)"
       (dragStarted)="onDragStart($event, entry)"
       (dragEnded)="onDragEnd()"
@@ -105,18 +107,18 @@
     <p class="loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading songs…</p>
   }
 
-<!-- Floating Selection Pill -->
-    @if (selection().size > 1) {
-      <div class="library-floating-pill" role="status" aria-live="polite">
-        <span class="pill-bold">{{ selection().size }} selected</span>
-        <span class="pill-sep">·</span>
-        <span class="pill-text">drag to queue</span>
-        <span class="pill-sep">·</span>
-        <span class="pill-text">Enter to play</span>
-        <span class="pill-sep">·</span>
-        <button type="button" class="pill-clear-btn" (click)="clearSelection()">
-          Esc to clear
-        </button>
-      </div>
-    }
+  <!-- Floating Selection Pill (Fixed to Viewport, Never Shifts Content) -->
+  @if (selection().size > 1) {
+    <div class="library-floating-pill" role="status" aria-live="polite">
+      <span class="pill-bold">{{ selection().size }} selected</span>
+      <span class="pill-sep">·</span>
+      <span class="pill-text">drag to queue</span>
+      <span class="pill-sep">·</span>
+      <span class="pill-text">Enter to play</span>
+      <span class="pill-sep">·</span>
+      <button type="button" class="pill-clear-btn" (click)="clearSelection()">
+        Esc to clear
+      </button>
+    </div>
+  }
 </div>

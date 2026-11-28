@@ -4,6 +4,7 @@
 }
 
 .queue-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -11,12 +12,159 @@
   overflow: hidden;
   box-sizing: border-box;
   border-radius: 1.5rem 0 0 1.5rem;
-  background: rgba(14, 17, 22, 0.7);
-  backdrop-filter: var(--glass-blur, blur(24px));
-  -webkit-backdrop-filter: var(--glass-blur, blur(24px));
-  padding: 1.25rem 1rem;
-  gap: 1rem;
+  background: rgba(14, 17, 22, 0.76);
+  backdrop-filter: var(--glass-blur, blur(28px));
+  -webkit-backdrop-filter: var(--glass-blur, blur(28px));
   color: rgba(255, 255, 255, 0.9);
+}
+
+.queue-sheet-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.15rem 1.15rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 22, 28, 0.55);
+}
+
+.queue-tabs-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 99rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.queue-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 99rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .tab-count-pill {
+    padding: 0.08rem 0.4rem;
+    border-radius: 99rem;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+
+    &.pulse {
+      background: rgba(56, 189, 248, 0.25);
+      color: #7dd3fc;
+    }
+  }
+}
+
+.queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.queue-duration-badge {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.25rem;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.queue-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.5rem 0.65rem 0.75rem;
+}
+
+.queue-floating-pill {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 1.15rem;
+  border-radius: 99rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(18, 22, 28, 0.94);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.8rem;
+  animation: pill-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  pointer-events: auto;
+
+  .pill-bold { font-weight: 700; color: #fff; }
+  .pill-sep { opacity: 0.4; }
+  .pill-text { opacity: 0.78; font-size: 0.76rem; }
+  .pill-clear-btn {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.4rem;
+    &:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+  }
+}
+
+@keyframes pill-pop-in {
+  from { opacity: 0; transform: translate(-50%, 8px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .visually-hidden {
@@ -26,11 +174,4 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-@media (max-width: 700px) {
-  .queue-panel {
-    border-radius: 1.5rem 0 0 1.5rem;
-    padding: 1rem 0.75rem;
-  }
 }

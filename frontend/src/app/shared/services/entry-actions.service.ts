@@ -1,8 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { Overlay } from '@angular/cdk/overlay';
+import { ComponentPortal } from '@angular/cdk/portal';
 import { firstValueFrom } from 'rxjs';
 
 import { EntryAction, EntryKind } from '../components/entry-menu/entry-menu';
+import { ConfirmDialog } from '../components/confirm-dialog/confirm-dialog';
 import { genreKey } from '../../features/library/data/library-entries';
 import { LibraryService } from './library.service';
 import { PlaybackActions, isPlayable } from './playback-actions.service';
@@ -28,6 +31,7 @@ export class EntryActionsService {
   private readonly settings = inject(SettingsService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly overlay = inject(Overlay);
 
   readonly editingSong = signal<SongManifest | null>(null);
   private activeAnchor: HTMLElement | MouseEvent | null = null;
@@ -56,7 +60,11 @@ export class EntryActionsService {
       this.open(`artist:${metadataValueKey(artist)}`);
     } else if (action === 'delete') await this.deleteSongs(target);
     else if (action === 'delete-playlist' && target.playlistId) {
-      if (!confirm(`Delete the playlist “${target.title}”?`)) return true;
+      const ok = await this.confirmAction(
+        'Delete playlist',
+        `Delete the playlist “${target.title}”?`,
+      );
+      if (!ok) return true;
       await firstValueFrom(this.playlists.delete(target.playlistId));
     } else if (action.startsWith('playlist:')) {
       await this.addToPlaylist(action.slice('playlist:'.length), target.songs);
@@ -92,21 +100,65 @@ export class EntryActionsService {
   private keyOf(target: ActionTarget): string {
     const first = target.songs[0];
     if (target.kind === 'playlist') return `playlist:${target.playlistId}`;
-    if (target.kind === 'artist') return `artist:${first?.artist}`;
+    if (target.kind === 'artist') return `artist:${metadataValueKey(target.title)}`;
     if (target.kind === 'genre') return `genre:${genreKey(target.title)}`;
     return `album:${first?.artist}\u0000${first?.album}`;
+  }
+
+  private confirmAction(title: string, message: string, confirmLabel = 'Delete'): Promise<boolean> {
+    return new Promise((resolve) => {
+      const overlayRef = this.overlay.create({
+        hasBackdrop: true,
+        backdropClass: 'cdk-overlay-dark-backdrop',
+        positionStrategy: this.overlay.position().global().centerHorizontally().centerVertically(),
+        scrollStrategy: this.overlay.scrollStrategies.block(),
+      });
+      const ref = overlayRef.attach(new ComponentPortal(ConfirmDialog));
+      ref.setInput('title', title);
+      ref.setInput('message', message);
+      ref.setInput('confirmLabel', confirmLabel);
+
+      const finish = (result: boolean): void => {
+        overlayRef.dispose();
+        resolve(result);
+      };
+      ref.instance.confirmed.subscribe(() => finish(true));
+      ref.instance.cancelled.subscribe(() => finish(false));
+      overlayRef.backdropClick().subscribe(() => finish(false));
+    });
   }
 
   private async deleteSongs(target: ActionTarget): Promise<void> {
     const count = target.songs.length;
     if (!count) return;
-    const what = count === 1 ? `“${target.title}”` : `${count} songs (${target.title})`;
-    if (!confirm(`Permanently delete ${what} from disk? This cannot be undone.`)) return;
-    try {
-      for (const song of target.songs) await firstValueFrom(this.songsService.deleteSong(song));
-    } finally {
-      await this.library.load(true);
+    const what = count === 1 ? `“${target.title}”` : `${count} songs`;
+    const ok = await this.confirmAction(
+      'Delete from disk',
+      `Permanently delete ${what} from disk? This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    const deleted: SongManifest[] = [];
+    let failed = 0;
+    for (const song of target.songs) {
+      try {
+        await firstValueFrom(this.songsService.deleteSong(song));
+        deleted.push(song);
+      } catch (error: unknown) {
+        console.error(`Could not delete "${song.title}":`, error);
+        failed++;
+      }
+    }
+
+    if (deleted.length) {
+      this.library.removeSongs(deleted);
       this.playlists.refresh();
+      this.toast.success(
+        deleted.length === 1 ? `Deleted “${target.title}”.` : `Deleted ${deleted.length} songs.`,
+      );
+    }
+    if (failed) {
+      this.toast.error(`Could not delete ${failed} ${failed === 1 ? 'song' : 'songs'}.`);
     }
   }
 }

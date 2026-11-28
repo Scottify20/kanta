@@ -1,0 +1,8 @@
+    <div class="confirm-card" role="alertdialog" aria-modal="true" [attr.aria-label]="title()">
+      <h3>{{ title() }}</h3>
+      <p>{{ message() }}</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-cancel" (click)="cancelled.emit()">Cancel</button>
+        <button type="button" class="btn-danger" (click)="confirmed.emit()">{{ confirmLabel() }}</button>
+      </div>
+    </div>

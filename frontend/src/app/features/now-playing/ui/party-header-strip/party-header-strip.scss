@@ -33,14 +33,28 @@
   background: color-mix(in srgb, var(--singer-color, #666) 36%, rgba(12, 14, 18, 0.8));
   cursor: pointer;
   user-select: none;
-  animation: chip-pop-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   transition:
     transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.3s ease,
     background 0.3s ease,
     opacity 0.25s ease;
 
-  &:hover { transform: translateY(-1px); }
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &.is-added {
+    animation: chip-pop-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  &.is-leaving {
+    pointer-events: none;
+    animation: chip-pop-out 0.24s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  &.is-activating {
+    animation: chip-activate 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 .singer-chip:not(.current-singer) {
@@ -49,20 +63,50 @@
 
 .singer-chip.current-singer {
   opacity: 1;
-  animation: chip-activate 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.8),
     0 0 12px var(--singer-color);
 }
 
+.singer-chip.duet-merged {
+  border-color: color-mix(in srgb, var(--singer-color, #96ecd7) 50%, var(--singer-color-2, #38bdf8));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--singer-color, #666) 40%, rgba(12, 14, 18, 0.86)) 0%,
+    color-mix(in srgb, var(--singer-color-2, #666) 40%, rgba(12, 14, 18, 0.86)) 100%
+  );
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.8),
+    -4px 0 12px var(--singer-color),
+    4px 0 12px var(--singer-color-2);
+
+  .singer-chip-copy strong {
+    max-width: 12rem;
+  }
+}
+
+.duet-avatars {
+  display: inline-flex;
+  align-items: center;
+
+  .singer-avatar.second {
+    margin-left: -0.65rem;
+  }
+}
+
 @keyframes chip-pop-in {
-  from { opacity: 0; transform: scale(0.7) translateY(-6px); }
+  from { opacity: 0; transform: scale(0.75) translateY(-6px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes chip-pop-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.75) translateY(-4px); }
 }
 
 @keyframes chip-activate {
   0% { transform: scale(0.92); }
-  60% { transform: scale(1.08); }
+  60% { transform: scale(1.07); }
   100% { transform: scale(1); }
 }
 
@@ -151,24 +195,26 @@
 
 .roster-more-list {
   display: grid;
-  min-width: 12.5rem;
-  gap: 0.25rem;
-  padding: 0.5rem;
+  min-width: 15.5rem;
+  gap: 0.35rem;
+  padding: 0.6rem;
 
   button {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    min-height: 2.3rem;
-    padding: 0.3rem 0.5rem;
+    gap: 0.7rem;
+    min-height: 2.85rem;
+    padding: 0.45rem 0.65rem;
     border: 0;
-    border-radius: 0.55rem;
+    border-radius: 0.65rem;
     color: #fff;
     background: transparent;
     text-align: left;
     cursor: pointer;
+    transition: background 0.15s ease;
 
-    &.active, &:hover {
+    &.active,
+    &:hover {
       background: rgba(255, 255, 255, 0.12);
     }
   }
@@ -176,15 +222,122 @@
   i {
     display: grid;
     place-items: center;
-    width: 1.6rem;
-    height: 1.6rem;
+    width: 2rem;
+    height: 2rem;
     border-radius: 50%;
-    font-size: 0.65rem;
+    font-size: 0.76rem;
+    font-style: normal;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  small {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.74rem;
+    white-space: nowrap;
+  }
+}
+
+.duet-assign-popover {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 15.5rem;
+  max-width: 20rem;
+  padding: 0.75rem;
+}
+
+.duet-assign-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+
+  .swap-btn {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 99rem;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+    font: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+  }
+}
+
+.duet-part-group {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.45rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.04);
+
+  &.highlighted {
+    box-shadow: inset 0 0 0 1px rgba(150, 236, 215, 0.45);
+    background: rgba(150, 236, 215, 0.08);
+  }
+}
+
+.part-label {
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.part-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.part-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 99rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+
+  i {
+    display: grid;
+    place-items: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    font-size: 0.62rem;
     font-style: normal;
     font-weight: 700;
   }
-  span { flex: 1; font-size: 0.78rem; font-weight: 600; }
-  small { color: rgba(255, 255, 255, 0.6); font-size: 0.64rem; }
+
+  &.selected {
+    border-color: var(--singer-color, #96ecd7);
+    background: color-mix(in srgb, var(--singer-color, #96ecd7) 26%, rgba(18, 22, 28, 0.9));
+  }
+
+  &:hover:not(.selected) {
+    background: rgba(255, 255, 255, 0.12);
+  }
 }
 
 .singer-context-menu {
@@ -213,8 +366,13 @@
     text-align: left;
     transition: background var(--motion-fast, 0.15s ease);
 
-    &:hover { background: var(--surface-hover, rgba(255, 255, 255, 0.1)); }
-    &.danger { color: #ff8a80; }
+    &:hover {
+      background: var(--surface-hover, rgba(255, 255, 255, 0.1));
+    }
+
+    &.danger {
+      color: #ff8a80;
+    }
   }
 }
 
@@ -237,7 +395,11 @@
     font-weight: 700;
     overflow: hidden;
 
-    img { width: 100%; height: 100%; object-fit: cover; }
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   }
 
   .context-meta {
@@ -251,7 +413,11 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    small { color: rgba(255, 255, 255, 0.58); font-size: 0.64rem; }
+
+    small {
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 0.64rem;
+    }
   }
 }
 
@@ -265,6 +431,11 @@
 }
 
 @media (max-width: 840px) {
-  .singer-roster { gap: 0.3rem; }
-  .singer-chip:not(.current-singer) .singer-chip-copy { display: none; }
+  .singer-roster {
+    gap: 0.3rem;
+  }
+
+  .singer-chip:not(.current-singer) .singer-chip-copy {
+    display: none;
+  }
 }

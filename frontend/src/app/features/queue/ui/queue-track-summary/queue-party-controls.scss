@@ -7,9 +7,7 @@
 .queue-party-controls {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 3.5rem;
-  max-width: 12rem;
+  min-width: 3.25rem;
 }
 
 .assignment-content {
@@ -19,6 +17,7 @@
 }
 
 .singer-buttons {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
@@ -32,6 +31,11 @@
     outline: 2px solid rgba(255, 255, 255, 0.5);
     outline-offset: 2px;
     border-radius: 99rem;
+  }
+
+  &.has-conflict .singer-avatar {
+    border-color: #fbbf24;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.55);
   }
 }
 
@@ -47,12 +51,30 @@
   font-size: 0.65rem;
   font-weight: 700;
   pointer-events: none;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease;
 
   &.secondary {
     margin-left: -0.35rem;
     box-shadow: 0 0 0 1.5px rgba(18, 22, 28, 0.9);
   }
+}
+
+.conflict-badge {
+  position: absolute;
+  top: -0.22rem;
+  right: -0.25rem;
+  display: grid;
+  place-items: center;
+  width: 0.92rem;
+  height: 0.92rem;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #111418;
+  font-size: 0.6rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px rgba(18, 22, 28, 0.95);
+  pointer-events: none;
 }
 
 .singer-buttons:hover .singer-avatar {
@@ -86,21 +108,4 @@
   &.fit-adjusted { background: #38bdf8; }
   &.fit-reach { background: #fbbf24; }
   &.fit-unknown { background: rgba(255, 255, 255, 0.2); }
-}
-
-.conflict-pill {
-  padding: 0.2rem 0.5rem;
-  border: 0;
-  border-radius: 999px;
-  color: #111;
-  background: #fcd34d;
-  font-size: 0.62rem;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: transform 0.15s ease;
-
-  &:hover {
-    transform: scale(1.05);
-  }
 }

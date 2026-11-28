@@ -42,17 +42,17 @@
       </div>
 
       <div class="voice-row">
-        <label class="input-wrap flex-1">
+        <div class="input-wrap flex-1">
           <span>Voice preset</span>
-          <select [value]="editVoiceDraft()" (change)="onVoiceChange($event)">
-            @for (voice of voiceOptions; track voice) {
-              <option [value]="voice">{{ voice }}</option>
-            }
-          </select>
-        </label>
+          <app-dropdown
+            [options]="voiceDropdownOptions"
+            [value]="editVoiceDraft()"
+            (valueChange)="setVoiceDraft($event)"
+          />
+        </div>
 
         <button type="button" class="btn-calibrate" (click)="openCalibration()">
-          Calibrate Range
+          Calibrate
         </button>
       </div>
 
@@ -72,27 +72,12 @@
         </div>
       </div>
 
-      <div class="color-section">
-        <div class="color-header-row">
-          <span>Accent color</span>
-          <input
-            type="color"
-            class="native-color-picker"
-            [value]="editColorDraft()"
-            (input)="editColorDraft.set($any($event.target).value)"
-          />
-        </div>
-        <div class="color-presets-row">
-          @for (color of guestColorPresets; track color) {
-            <button
-              type="button"
-              [style.background]="color"
-              [class.selected]="editColorDraft() === color"
-              (click)="editColorDraft.set(color)"
-            ></button>
-          }
-        </div>
-      </div>
+      <app-color-picker
+        label="Accent color"
+        [value]="editColorDraft()"
+        [presets]="guestColorPresets"
+        (valueChange)="editColorDraft.set($event)"
+      />
 
       <footer class="edit-popover-footer">
         <button type="button" class="btn-action-secondary" popup-close (click)="close.emit()">Cancel</button>

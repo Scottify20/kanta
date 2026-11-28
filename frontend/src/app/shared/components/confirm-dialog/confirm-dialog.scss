@@ -1,0 +1,48 @@
+.confirm-card {
+      width: min(24rem, calc(100vw - 2rem));
+      padding: 1.25rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(24, 27, 32, 0.96);
+      backdrop-filter: blur(24px);
+      color: #fff;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+      display: grid;
+      gap: 0.75rem;
+    }
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    p {
+      margin: 0;
+      font-size: 0.86rem;
+      line-height: 1.45;
+      color: rgba(255, 255, 255, 0.76);
+    }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+    button {
+      padding: 0.5rem 0.95rem;
+      border: 0;
+      border-radius: 0.55rem;
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-cancel {
+      color: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.1);
+      &:hover { background: rgba(255, 255, 255, 0.18); }
+    }
+    .btn-danger {
+      color: #fff;
+      background: #dc2626;
+      &:hover { background: #ef4444; }
+    }

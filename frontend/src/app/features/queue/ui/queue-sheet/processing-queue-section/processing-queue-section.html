@@ -1,81 +1,28 @@
 <article
-  cdkScrollable
+  #sectionElement
   class="queue-section processing"
-  [class.collapsed]="collapsed()"
   [class.is-empty]="items().length === 0"
+  (pointerdown)="onSectionPointerDown($event)"
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave($event)"
   (drop)="onDropFiles($event)"
 >
-  <header
-    class="section-header"
-    (click)="toggleCollapse.emit()"
-    role="button"
-    tabindex="0"
-  >
-    <div class="section-title">
-      <svg
-        lucideChevronDown
-        [size]="16"
-        class="collapse-icon"
-        [class.is-collapsed]="collapsed()"
-      ></svg>
-      <h2>Processing Queue</h2>
-    </div>
-    <div class="section-actions" (click)="$event.stopPropagation()">
-      <button
-        class="icon-button"
-        type="button"
-        appTooltip="Browse a folder"
-        aria-label="Browse an audio folder"
-        (click)="browseFolder.emit()"
-      >
-        <svg lucideFolderPlus [size]="16"></svg>
-      </button>
-      <button
-        class="icon-button"
-        type="button"
-        appTooltip="Browse audio files"
-        aria-label="Browse audio files"
-        (click)="browseFiles.emit()"
-      >
-        <svg lucideFilePlus [size]="16"></svg>
-      </button>
-      @if (items().length > 0) {
-        <button
-          class="icon-button"
-          type="button"
-          [appTooltip]="paused() ? 'Resume all' : 'Pause all'"
-          [attr.aria-label]="paused() ? 'Resume all' : 'Pause all'"
-          (click)="togglePause.emit()"
-        >
-          @if (paused()) {
-            <svg lucidePlay [size]="16"></svg>
-          } @else {
-            <svg lucidePause [size]="16"></svg>
-          }
-        </button>
-      }
-      <button
-        class="icon-button"
-        type="button"
-        appTooltip="Clear queue"
-        aria-label="Clear processing queue"
-        [disabled]="items().length === 0"
-        (click)="clear.emit()"
-      >
-        <svg lucideTrash2 [size]="16"></svg>
-      </button>
-    </div>
-  </header>
+  @if (marqueeBox(); as box) {
+    <div
+      class="marquee-selection"
+      [style.left.px]="box.left"
+      [style.top.px]="box.top"
+      [style.width.px]="box.width"
+      [style.height.px]="box.height"
+    ></div>
+  }
 
-  <div class="track-list-wrapper" [class.is-collapsed]="collapsed()">
+  <div class="track-list-wrapper">
     <ol
+      #trackListElement
       class="track-list"
-      cdkDropList
-      [cdkDropListData]="items()"
-      [cdkDropListSortPredicate]="canSortProcessing"
-      (cdkDropListDropped)="onDrop($event)"
+      [class.is-reordering]="drag.active()"
+      [style.padding-bottom.px]="drag.active() ? drag.slotHeight() : null"
     >
       @if (items().length === 0) {
         <li
@@ -90,23 +37,33 @@
         </li>
       }
 
-      @for (item of items(); track item.task_id) {
+      @for (item of items(); track item.task_id; let i = $index) {
         <li
-          cdkDrag
-          cdkDragLockAxis="y"
-          cdkDragPreviewContainer="parent"
-          [cdkDragDisabled]="!canDragProcessing(item)"
+          [attr.data-task-id]="item.task_id"
           class="queue-row"
+          [class.is-selected]="isItemSelected(item)"
           [class.is-active]="item.status === 'processing'"
           [class.is-paused]="item.status === 'paused'"
           [class.is-static]="!canDragProcessing(item)"
           [class.is-entering]="isUpload(item)"
-          (contextmenu)="!isUpload(item) && actions.openAt($event)"
+          [class.is-dragged-hidden]="drag.draggedIds().has(item.task_id)"
+          [class.is-unstacking]="drag.justDroppedIds().has(item.task_id)"
+          [style.transform]="rowShiftPx(item) ? 'translateY(' + rowShiftPx(item) + 'px)' : null"
+          tabindex="0"
+          (pointerdown)="drag.handleRowPointerDown(item, $event)"
+          (click)="handleRowClick(item, $event)"
+          (contextmenu)="handleContextMenu(item, $event, actions)"
         >
           <app-queue-track-summary [item]="item" variant="processing" />
           <app-queue-item-actions #actions
             [item]="item"
             queue="processing_queue"
+            [selectedCount]="isItemSelected(item) ? selectedTaskIds().size : 0"
+            [isFirst]="i === 0 || items()[i - 1]?.status !== 'pending'"
+            [isLast]="i === items().length - 1"
+            (moveUp)="moveItem(i, 'up')"
+            (moveDown)="moveItem(i, 'down')"
+            (batchRemove)="removeSelectedItems()"
             (pause)="pause.emit(item)"
             (resume)="resume.emit(item)"
             (remove)="remove.emit(item)"
@@ -115,4 +72,30 @@
       }
     </ol>
   </div>
+
+@if (drag.preview(); as p) {
+    <div
+      class="queue-drag-preview"
+      [style.left.px]="p.left"
+      [style.top.px]="p.top"
+      [style.width.px]="p.width"
+      [style.--row-height.px]="p.height"
+      aria-hidden="true"
+    >
+      @if (p.items.length > 1) {
+        <div class="drag-stack-visual">
+          @for (s of p.items.slice(0, 3); track s.task_id; let depth = $index) {
+            <div class="drag-stack-card" [style.--depth]="depth">
+              <app-queue-track-summary [item]="s" variant="processing" />
+            </div>
+          }
+          <span class="drag-stack-badge">{{ p.items.length }} tasks</span>
+        </div>
+      } @else {
+        <div class="drag-single-card">
+          <app-queue-track-summary [item]="p.primary" variant="processing" />
+        </div>
+      }
+    </div>
+  }
 </article>

@@ -1,49 +1,65 @@
-<nav class="next-tracks" aria-label="Queue preview">
-  @for (item of queuePreview(); track item.task_id) {
+<nav class="next-tracks" [class.has-up-next]="hasActiveUpNext()" aria-label="Queue preview">
+  @for (track of renderedTracks(); track track.item.task_id) {
+    @let item = track.item;
     @let s1 = primarySingerFor(item);
     @let s2 = secondarySingerFor(item);
-    <span
-      class="next-track"
-      [class.up-next]="isUpNext(item)"
-      [class.is-duet]="isDuetTrack(item)"
-      [style.--singer-color]="s1?.accentColor ?? '#96ecd7'"
-      [style.--singer-color-2]="s2?.accentColor ?? s1?.accentColor ?? '#96ecd7'"
-      [attr.aria-label]="isUpNext(item) ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
-      [attr.title]="isUpNext(item) ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
+    @let activeUpNext = isUpNext(track);
+    @let collapsed = hasActiveUpNext() && !activeUpNext && track.state !== 'leaving';
+
+    <div
+      class="track-slot"
+      [class.is-up-next-slot]="activeUpNext"
+      [class.is-collapsed]="collapsed"
+      [class.is-entering]="track.state === 'entering'"
+      [class.is-leaving]="track.state === 'leaving'"
+      [style.--enter-delay]="track.staggerMs + 'ms'"
     >
-      @if (s1) {
+      <div class="track-slot-inner">
         <span
-          class="singer-badge-morph"
-          [class.expanded]="isUpNext(item)"
+          class="next-track"
+          [class.up-next]="activeUpNext"
+          [class.was-up-next]="track.state === 'leaving' && track.wasUpNext"
           [class.is-duet]="isDuetTrack(item)"
-          [attr.aria-label]="upNextSingersLabel(item) + '\'s turn'"
+          [style.--singer-color]="s1?.accentColor ?? '#96ecd7'"
+          [style.--singer-color-2]="s2?.accentColor ?? s1?.accentColor ?? '#96ecd7'"
+          [attr.aria-label]="activeUpNext ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
+          [attr.title]="activeUpNext ? 'Up next: ' + upNextSingersLabel(item) + ' — ' + (item.raw_title || item.title) : null"
         >
-          <span class="morph-pill-content">
-            <span class="up-next-prefix">Up next</span>
-            <span class="up-next-sep">·</span>
-            @if (s2) {
-              <span class="duet-names">
-                <span class="singer-tag">
-                  <i class="mini-dot" [style.background]="s1.accentColor"></i>
+          @if (s1) {
+            <span
+              class="singer-badge-morph"
+              [class.expanded]="activeUpNext || (track.state === 'leaving' && track.wasUpNext)"
+              [class.is-duet]="isDuetTrack(item)"
+              [attr.aria-label]="upNextSingersLabel(item) + '\'s turn'"
+            >
+              <span class="morph-pill-content">
+                <span class="up-next-prefix">Up next</span>
+                <span class="up-next-sep">·</span>
+                @if (s2) {
+                  <span class="duet-names">
+                    <span class="singer-tag">
+                      <i class="mini-dot" [style.background]="s1.accentColor"></i>
+                      <strong class="up-next-name">{{ s1.name }}</strong>
+                    </span>
+                    <span class="up-next-amp">&amp;</span>
+                    <span class="singer-tag">
+                      <i class="mini-dot" [style.background]="s2.accentColor"></i>
+                      <strong class="up-next-name">{{ s2.name }}</strong>
+                    </span>
+                  </span>
+                } @else {
                   <strong class="up-next-name">{{ s1.name }}</strong>
-                </span>
-                <span class="up-next-amp">&amp;</span>
-                <span class="singer-tag">
-                  <i class="mini-dot" [style.background]="s2.accentColor"></i>
-                  <strong class="up-next-name">{{ s2.name }}</strong>
-                </span>
+                }
               </span>
-            } @else {
-              <strong class="up-next-name">{{ s1.name }}</strong>
-            }
+            </span>
+          }
+
+          <span class="next-track-text">
+            <strong>{{ item.raw_title || item.title }}</strong>
+            <small>{{ item.raw_artist || item.artist }}</small>
           </span>
         </span>
-      }
-
-      <span class="next-track-text">
-        <strong>{{ item.raw_title || item.title }}</strong>
-        <small>{{ item.raw_artist || item.artist }}</small>
-      </span>
-    </span>
+      </div>
+    </div>
   }
 </nav>

@@ -1,4 +1,4 @@
-import { clampKeyShift, recommendSoloKey, singerHitsLimit } from './vocal-fit';
+import { clampKeyShift, rangeForDuetPart, recommendSoloKey, singerHitsLimit } from './vocal-fit';
 import type { SongVocalRange } from './vocal-fit';
 import type {
   DuetKeyRecommendation,
@@ -10,6 +10,14 @@ import type {
 
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
+const FLAT_TO_SHARP: Record<string, string> = {
+  DB: 'C#',
+  EB: 'D#',
+  GB: 'F#',
+  AB: 'G#',
+  BB: 'A#',
+};
+
 export const midiToHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 export const hzToMidi = (hz: number): number => 69 + 12 * Math.log2(hz / 440);
 export const midiToNote = (midi: number): string => {
@@ -20,7 +28,8 @@ export const midiToNote = (midi: number): string => {
 export const noteToMidi = (noteStr: string): number | null => {
   const match = /^([A-G](?:#|b)?)(-?\d+)$/i.exec(noteStr.trim());
   if (!match) return null;
-  const name = match[1].toUpperCase();
+  const rawName = match[1].toUpperCase();
+  const name = FLAT_TO_SHARP[rawName] ?? rawName;
   const octave = parseInt(match[2], 10);
   const noteIndex = NOTE_NAMES.indexOf(name as (typeof NOTE_NAMES)[number]);
   if (noteIndex < 0) return null;
@@ -151,8 +160,10 @@ export function recommendDuetKey(
 ): DuetKeyRecommendation | null {
   if (!song.is_duet) return null;
 
-  const fit1 = recommendSoloKey(song, singer1);
-  const fit2 = recommendSoloKey(song, singer2);
+  const part1 = rangeForDuetPart(song, 'v1');
+  const part2 = rangeForDuetPart(song, 'v2');
+  const fit1 = recommendSoloKey(part1, singer1);
+  const fit2 = recommendSoloKey(part2, singer2);
   const unanalyzed = fit1.unanalyzed || fit2.unanalyzed;
   const uncalibrated = fit1.status === 'uncalibrated' || fit2.status === 'uncalibrated';
   if (unanalyzed || uncalibrated) {
@@ -169,10 +180,12 @@ export function recommendDuetKey(
     };
   }
 
-  const hitsPhysicalLimit = singerHitsLimit(song, singer1, fit1.semitones)
-    || singerHitsLimit(song, singer2, fit2.semitones);
   let semitones = Math.round((fit1.semitones + fit2.semitones) / 2);
   let biasedToward: string | null = null;
+  const hitsPhysicalLimit =
+    singerHitsLimit(part1, singer1, semitones)
+    || singerHitsLimit(part2, singer2, semitones);
+
   if (hitsPhysicalLimit) {
     const singer1Width = profileRangeWidth(singer1);
     const singer2Width = profileRangeWidth(singer2);
@@ -183,7 +196,6 @@ export function recommendDuetKey(
     biasedToward = narrower.id;
   }
 
-  // Meaningful conflict threshold: optimal keys diverge by 2+ semitones or hit boundaries
   const conflict = Math.abs(fit1.semitones - fit2.semitones) >= 2 || hitsPhysicalLimit;
 
   return {

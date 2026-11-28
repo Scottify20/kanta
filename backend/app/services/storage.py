@@ -23,6 +23,8 @@ _REMOVABLE_ROOTS = ("/media", "/run/media")
 _cache_lock = threading.Lock()
 _volumes_cache: dict[str, Any] = {"at": 0.0, "value": None}
 _VOLUMES_TTL = 2.0
+_dir_status_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_DIR_STATUS_TTL = 10.0
 
 
 def _volume_id(path: str) -> str:
@@ -242,15 +244,24 @@ def _probe_writable(path: Path) -> bool:
 
 
 def output_dir_status(path: Path) -> dict[str, Any]:
+    key = str(path)
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _dir_status_cache.get(key)
+        if hit and now - hit[0] < _DIR_STATUS_TTL:
+            return hit[1]
     available = is_available(path)
     writable = available and _probe_writable(path)
-    free = _usage(str(path))[1] if available else 0
-    return {
-        "path": str(path),
+    free = _usage(key)[1] if available else 0
+    result = {
+        "path": key,
         "available": available,
         "writable": writable,
         "free_bytes": free,
     }
+    with _cache_lock:
+        _dir_status_cache[key] = (now, result)
+    return result
 
 
 def output_dirs_status(paths: list[Path]) -> list[dict[str, Any]]:
@@ -298,6 +309,8 @@ def prepare_output_dir(path: Path) -> None:
         raise ValueError(
             f"'{path}' is not writable (read-only drive or insufficient permissions)"
         )
+    with _cache_lock:
+        _dir_status_cache.pop(str(path), None)
 
 
 def ensure_output_root_available(root: Path) -> None:

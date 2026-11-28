@@ -58,7 +58,7 @@ app-root {
 .kanta-popup-pane .popup-content {
   @include tokens.glass-surface;
   width: max-content;
-  max-width: min(22rem, calc(100vw - 2rem));
+  max-width: min(26rem, calc(100vw - 2rem));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popup);
   overflow: clip;

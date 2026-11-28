@@ -12,18 +12,27 @@ export interface ArtistInfo {
   sources: string[];
 }
 
-const MAX_PARALLEL = 3;
+interface StoredArtistEntry {
+  at: number;
+  info: ArtistInfo | null;
+}
+
+const MAX_PARALLEL = 2;
+const STORAGE_KEY = 'kanta-artist-info-v1';
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_STORED = 250;
+
 const keyOf = (name: string): string => name.trim().normalize('NFKC').toLocaleLowerCase();
 
-/** Artist bios and photos from the backend lookup; requests are queued and cached per session. */
+/** Artist bios and photos from the backend lookup; requests are queued and cached persistently. */
 @Injectable({ providedIn: 'root' })
 export class ArtistInfoService {
   private readonly http = inject(HttpClient);
-  // null = looked up with nothing found (or failed); absent = not requested yet.
-  private readonly cache = signal<ReadonlyMap<string, ArtistInfo | null>>(new Map());
+  private readonly cache = signal<ReadonlyMap<string, ArtistInfo | null>>(this.loadStored());
   private readonly pending: { name: string; folder?: string }[] = [];
   private readonly queued = new Set<string>();
   private running = 0;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
 
   info(name: string): ArtistInfo | null {
     return this.cache().get(keyOf(name)) ?? null;
@@ -62,5 +71,47 @@ export class ArtistInfoService {
     const key = keyOf(name);
     this.queued.delete(key);
     this.cache.update((current) => new Map(current).set(key, info));
+    this.schedulePersist();
+  }
+
+  private loadStored(): ReadonlyMap<string, ArtistInfo | null> {
+    const map = new Map<string, ArtistInfo | null>();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return map;
+      const parsed = JSON.parse(raw) as Record<string, StoredArtistEntry>;
+      const cutoff = Date.now() - CACHE_TTL_MS;
+      for (const [key, entry] of Object.entries(parsed)) {
+        if (entry && typeof entry.at === 'number' && entry.at >= cutoff) {
+          map.set(key, entry.info ?? null);
+        }
+      }
+    } catch {
+      // ignore corrupted storage
+    }
+    return map;
+  }
+
+  private schedulePersist(): void {
+    if (this.persistTimer) return;
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      try {
+        const now = Date.now();
+        const out: Record<string, StoredArtistEntry> = {};
+        let count = 0;
+        for (const [key, info] of this.cache().entries()) {
+          if (count >= MAX_STORED) break;
+          // Persist found entries; allow missing ones to retry after reload.
+          if (info) {
+            out[key] = { at: now, info };
+            count++;
+          }
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+      } catch {
+        // ignore storage quota errors
+      }
+    }, 500);
   }
 }

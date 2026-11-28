@@ -1,4 +1,6 @@
 import { Component, computed, inject, output, signal } from '@angular/core';
+import { ColorPicker } from '../../../../../shared/components/color-picker/color-picker';
+import { Dropdown, DropdownOption } from '../../../../../shared/components/dropdown/dropdown';
 import { PopupPanel } from '../../../../../shared/components/popup-panel/popup-panel';
 import { PopupStateService } from '../../../../../shared/services/popup-state.service';
 import {
@@ -9,10 +11,11 @@ import {
   VOCAL_PROFILE_PRESETS,
 } from '../../../../../shared/services/party-session.service';
 import { ToastService } from '../../../../../shared/services/toast.service';
+import { PlaybackActions } from '../../../../../shared/services/playback-actions.service';
 
 @Component({
   selector: 'app-party-add-singer',
-  imports: [PopupPanel],
+  imports: [PopupPanel, Dropdown, ColorPicker],
   templateUrl: './party-add-singer.html',
   styleUrl: './party-add-singer.scss',
 })
@@ -42,10 +45,26 @@ export class PartyAddSinger {
     ...VOCAL_PROFILE_PRESETS.map((preset) => preset.voiceType),
   ];
 
+  readonly voiceDropdownOptions: readonly DropdownOption<ProfileVoiceType>[] =
+    this.voiceOptions.map((voice) => ({ value: voice, label: voice }));
+
+  readonly canAddGuest = computed(
+    () => this.guestName().trim().length > 0 && this.guestColor().trim().length > 0,
+  );
+
   readonly savedProfilesNotInRoom = computed(() => {
     const inRoom = new Set(this.party.roster().map((p) => p.id));
     return this.party.savedProfiles().filter((p) => !inRoom.has(p.id));
   });
+
+  private readonly playbackActions = inject(PlaybackActions);
+
+  toggleRoundRobin(enabled: boolean): void {
+    this.party.setRoundRobinEnabled(enabled);
+    if (enabled) {
+      void this.playbackActions.reorderQueueRoundRobin();
+    }
+  }
 
   singerInitial(profile: UserProfile): string {
     return profile.initials || profile.name.slice(0, 1).toUpperCase() || '?';
@@ -60,9 +79,10 @@ export class PartyAddSinger {
   }
 
   addGuest(): void {
+    if (!this.canAddGuest()) return;
     try {
       this.party.quickAddGuest(
-        this.guestName(),
+        this.guestName().trim(),
         this.guestVoice(),
         this.guestColor(),
         this.guestAvatar(),
@@ -72,7 +92,6 @@ export class PartyAddSinger {
       this.guestAvatar.set(null);
       this.guestCalibratedRange.set(null);
       this.popups.close('player', 'party-roster-add');
-      this.toast.success('Guest added to party session.');
     } catch {
       this.toast.error('Could not add guest.');
     }
@@ -86,8 +105,7 @@ export class PartyAddSinger {
     this.guestColor.set(color);
   }
 
-  updateGuestVoice(event: Event): void {
-    const voice = (event.target as HTMLSelectElement).value as ProfileVoiceType;
+  setGuestVoice(voice: ProfileVoiceType): void {
     this.guestVoice.set(voice);
     const preset = VOCAL_PROFILE_PRESETS.find((p) => p.voiceType === voice);
     if (preset?.minHz && preset.maxHz) {

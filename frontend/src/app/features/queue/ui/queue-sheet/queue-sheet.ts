@@ -2,9 +2,9 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  Injector,
   OnInit,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -13,15 +13,24 @@ import {
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  LucideCrosshair,
+  LucideFilePlus,
+  LucideFolderPlus,
+  LucidePause,
+  LucidePlay,
+  LucideTrash2,
+} from '@lucide/angular';
 import { EMPTY, catchError, from, mergeMap, tap } from 'rxjs';
 
+import { Tooltip } from '../../../../shared/directives/tooltip';
 import { QueueItem } from '../../interfaces/queue.models';
 import { QueueService } from '../../data-access/queue.service';
 import { ToastService } from '../../../../shared/services/toast.service';
 import { filterImportFiles, matchImportFiles } from './import-files';
 import { KaraokeQueueSection } from './karaoke-queue-section/karaoke-queue-section';
 import { ProcessingQueueSection } from './processing-queue-section/processing-queue-section';
-import type { PartySessionService } from '../../../../shared/services/party-session.service';
+import { LayoutService } from '../../../../shared/services/layout.service';
 
 const formatPlaytime = (seconds: number): string => {
   const total = Math.round(seconds);
@@ -37,23 +46,36 @@ const UPLOAD_PREFIX = 'upload:';
 
 @Component({
   selector: 'app-queue-sheet',
-  imports: [KaraokeQueueSection, ProcessingQueueSection],
+  imports: [
+    KaraokeQueueSection,
+    ProcessingQueueSection,
+    Tooltip,
+    LucideCrosshair,
+    LucideTrash2,
+    LucideFolderPlus,
+    LucideFilePlus,
+    LucidePlay,
+    LucidePause,
+  ],
   templateUrl: './queue-sheet.html',
   styleUrl: './queue-sheet.scss',
 })
 export class QueueSheet implements OnInit {
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private readonly folderInput = viewChild<ElementRef<HTMLInputElement>>('folderInput');
+  readonly karaokeSection = viewChild(KaraokeQueueSection);
+  readonly processingSection = viewChild(ProcessingQueueSection);
+
+  readonly activeTab = signal<'karaoke' | 'processing'>('karaoke');
 
   private browseTarget: 'karaoke' | 'processing' = 'karaoke';
   private readonly queueService = inject(QueueService);
-  private readonly injector = inject(Injector);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly layout = inject(LayoutService);
   private readonly lastStatus = new Map<string, string>();
 
   private tempCounter = 0;
-  private partySessionPromise: Promise<PartySessionService> | null = null;
   private isReordering = false;
   private reorderLockTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -62,8 +84,9 @@ export class QueueSheet implements OnInit {
   readonly processedItemDrag = input(false);
   readonly hideProcessingQueue = input(false);
 
-  readonly karaokeCollapsed = signal(false);
-  readonly processingCollapsed = signal(false);
+  readonly effectiveTab = computed<'karaoke' | 'processing'>(() =>
+    this.processedItemDrag() || this.hideProcessingQueue() ? 'karaoke' : this.activeTab(),
+  );
 
   readonly karaokeItems = signal<QueueItem[]>([]);
   readonly processingItems = signal<QueueItem[]>([]);
@@ -83,8 +106,20 @@ export class QueueSheet implements OnInit {
     return [...base, ...this.uploads().filter((item) => !known.has(item.task_id))];
   });
 
+  readonly processingActiveCount = computed(() =>
+    this.processingView().filter((item) => item.status === 'processing' || item.status === 'pending').length,
+  );
+
   readonly close = output<void>();
   readonly trackSelected = output<QueueItem>();
+
+  constructor() {
+    effect(() => {
+      if (this.processedItemDrag() || this.hideProcessingQueue()) {
+        this.activeTab.set('karaoke');
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.queueService.queue$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((snapshot) => {
@@ -100,7 +135,6 @@ export class QueueSheet implements OnInit {
       this.processingPaused.set(snapshot.processing_paused ?? false);
 
       if (this.isReordering) {
-        // Update track metadata/status without reverting client list ordering
         this.karaokeItems.update((current) =>
           current.map((item) => {
             const updated = snapshot.karaoke_queue.find((s) => s.task_id === item.task_id);
@@ -112,6 +146,12 @@ export class QueueSheet implements OnInit {
 
       this.karaokeItems.set([...snapshot.karaoke_queue]);
     });
+  }
+
+  setTab(tab: 'karaoke' | 'processing'): void {
+    this.activeTab.set(tab);
+    this.layout.clearQueueSelection$.next();
+    this.layout.clearProcessingSelection$.next();
   }
 
   clearQueue(priority: 1 | 2): void {
@@ -135,14 +175,13 @@ export class QueueSheet implements OnInit {
   }
 
   reorderKaraoke(taskIds: string[]): void {
-    // Optimistically reorder locally to eliminate momentary reversion
     const map = new Map(this.karaokeItems().map((item) => [item.task_id, item]));
     const next = taskIds.map((id) => map.get(id)!).filter(Boolean);
     this.karaokeItems.set(next);
 
     this.lockReorder();
     this.queueService.reorderKaraokeTracks(taskIds).subscribe({
-      next: () => this.unlockReorder(400),
+      next: () => this.unlockReorder(450),
       error: () => {
         this.unlockReorder(0);
         this.queueService.refresh();
@@ -163,6 +202,10 @@ export class QueueSheet implements OnInit {
   }
 
   reorderProcessing(taskIds: string[]): void {
+    const map = new Map(this.processingItems().map((item) => [item.task_id, item]));
+    const next = taskIds.map((id) => map.get(id)!).filter(Boolean);
+    this.processingItems.set(next);
+
     this.queueService.reorderProcessingTracks(taskIds).subscribe({
       error: () => this.queueService.refresh(),
     });

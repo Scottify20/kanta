@@ -2,7 +2,7 @@ import { computed, effect, inject, Injectable, signal, untracked } from '@angula
 import type { SongManifest } from './songs.service';
 import { SongsService } from './songs.service';
 import { AudioPlayerService } from './audio-player.service';
-import { clampKeyShift, recommendSoloKey } from './vocal-fit';
+import { clampKeyShift, rangeForDuetPart, recommendSoloKey } from './vocal-fit';
 import {
   UserProfile,
   QueueSingerAssignment,
@@ -382,7 +382,7 @@ export class PartySessionService {
     } catch {}
   }
 
-  recommendQueueItem(taskId: string, song: SongManifest): KeyRecommendation | null {
+recommendQueueItem(taskId: string, song: SongManifest): KeyRecommendation | null {
     const assignment = this.queueAssignment(taskId);
     const primary = this.roster().find((singer) => singer.id === assignment.primarySingerId);
     if (!primary) return null;
@@ -400,7 +400,8 @@ export class PartySessionService {
       const priority = this.roster().find((singer) => singer.id === assignment.prioritySingerId);
       if (!priority) return duet;
 
-      const fit = recommendSoloKey(song, priority);
+      const partRange = rangeForDuetPart(song, priority.id === secondary.id ? 'v2' : 'v1');
+      const fit = recommendSoloKey(partRange, priority);
       return { ...duet, semitones: fit.semitones, biasedToward: priority.id };
     }
 
@@ -504,25 +505,68 @@ export class PartySessionService {
       return changed ? next : assignments;
     });
   }
-
-  private nextSingerId(): string | null {
+private nextSingerId(): string | null {
     const singers = this.roster();
     if (!singers.length) return null;
-    if (!this.roundRobinEnabled() || singers.length === 1) {
-      return this.activeSingerId() ?? singers[0]?.id ?? null;
+    return this.activeSingerId() ?? singers[0]?.id ?? null;
+  }
+
+  /**
+   * Interleaves upcoming karaoke queue items by singer turns (preserving each singer's
+   * relative song order and keeping the currently playing track locked in place).
+   * Returns the new ordered task_id list, or null if no reorder is needed.
+   */
+  computeRoundRobinOrder(
+    items: readonly { task_id: string }[],
+    currentTaskId: string | null,
+  ): string[] | null {
+    if (!this.roundRobinEnabled() || items.length < 3) return null;
+
+    const currentIdx = currentTaskId
+      ? items.findIndex((item) => item.task_id === currentTaskId)
+      : -1;
+    const lockedCount = currentIdx >= 0 ? currentIdx + 1 : 0;
+    const locked = items.slice(0, lockedCount);
+    const upcoming = items.slice(lockedCount);
+    if (upcoming.length < 2) return null;
+
+    const buckets = new Map<string, string[]>();
+    for (const item of upcoming) {
+      const singerKey = this.queueAssignment(item.task_id).primarySingerId ?? '__unassigned__';
+      const list = buckets.get(singerKey);
+      if (list) list.push(item.task_id);
+      else buckets.set(singerKey, [item.task_id]);
+    }
+    if (buckets.size < 2) return null;
+
+    // Order turn rotation following the roster, starting after the currently playing singer.
+    const rosterIds = this.roster().map((s) => s.id).filter((id) => buckets.has(id));
+    const extraKeys = [...buckets.keys()].filter((k) => !rosterIds.includes(k));
+    let turnOrder = [...rosterIds, ...extraKeys];
+
+    if (currentIdx >= 0) {
+      const currentSingerId = this.queueAssignment(items[currentIdx].task_id).primarySingerId;
+      const anchor = currentSingerId ? turnOrder.indexOf(currentSingerId) : -1;
+      if (anchor >= 0) {
+        turnOrder = [...turnOrder.slice(anchor + 1), ...turnOrder.slice(0, anchor + 1)];
+      }
     }
 
-    const anchorId = this._lastAssignedSingerId() ?? this.activeSingerId();
-    const anchorIndex = singers.findIndex((s) => s.id === anchorId);
-    const nextIndex = anchorIndex >= 0 ? (anchorIndex + 1) % singers.length : 0;
-    const chosen = singers[nextIndex];
+    const interleaved: string[] = [];
+    let remaining = upcoming.length;
+    while (remaining > 0) {
+      for (const key of turnOrder) {
+        const list = buckets.get(key);
+        if (list?.length) {
+          interleaved.push(list.shift()!);
+          remaining--;
+        }
+      }
+    }
 
-    this._lastAssignedSingerId.set(chosen.id);
-    try {
-      globalThis.sessionStorage?.setItem(SESSION_LAST_ROUND_ROBIN_KEY, chosen.id);
-    } catch {}
-
-    return chosen.id;
+    const finalOrder = [...locked.map((i) => i.task_id), ...interleaved];
+    const changed = finalOrder.some((id, idx) => id !== items[idx].task_id);
+    return changed ? finalOrder : null;
   }
 
   private updateRoster(roster: UserProfile[], removedIds: Set<string>): void {

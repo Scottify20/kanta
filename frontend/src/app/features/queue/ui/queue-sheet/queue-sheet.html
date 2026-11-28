@@ -2,34 +2,161 @@
   <input #fileInput class="visually-hidden" type="file" multiple accept="audio/*,.flac,.mp3,.wav,.m4a,.ogg,.opus,.aac,.mp4,.webm,.ttml,.lrc" tabindex="-1" aria-hidden="true" (change)="onFilesChosen(fileInput)" />
   <input #folderInput class="visually-hidden" type="file" webkitdirectory multiple tabindex="-1" aria-hidden="true" (change)="onFilesChosen(folderInput, true)" />
 
-  <app-karaoke-queue-section
-    [items]="karaokeItems()"
-    [activeTaskId]="activeTaskId()"
-    [playbackActive]="playbackActive()"
-    [collapsed]="karaokeCollapsed()"
-    [totalLabel]="karaokeTotalLabel()"
-    (toggleCollapse)="karaokeCollapsed.set(!karaokeCollapsed())"
-    (clear)="clearQueue(1)"
-    (trackSelected)="trackSelected.emit($event)"
-    (pause)="pause($event)"
-    (resume)="resume($event)"
-    (remove)="remove($event, 'karaoke')"
-    (reordered)="reorderKaraoke($event)"
-  />
+  <!-- Fixed Tab Header (Outside the Scroll List) -->
+  <header class="queue-sheet-header">
+    <nav class="queue-tabs-nav" aria-label="Queue views">
+      <button
+        type="button"
+        class="queue-tab-btn"
+        [class.active]="effectiveTab() === 'karaoke'"
+        (click)="setTab('karaoke')"
+      >
+        <span>Karaoke</span>
+        @if (karaokeItems().length > 0) {
+          <span class="tab-count-pill">{{ karaokeItems().length }}</span>
+        }
+      </button>
+      @if (!processedItemDrag() && !hideProcessingQueue()) {
+        <button
+          type="button"
+          class="queue-tab-btn"
+          [class.active]="effectiveTab() === 'processing'"
+          (click)="setTab('processing')"
+        >
+          <span>Processing</span>
+          @if (processingActiveCount() > 0) {
+            <span class="tab-count-pill pulse">{{ processingActiveCount() }}</span>
+          }
+        </button>
+      }
+    </nav>
 
-  <app-processing-queue-section
-    [items]="processingView()"
-    [paused]="processingPaused()"
-    [collapsed]="processingCollapsed()"
-    (toggleCollapse)="processingCollapsed.set(!processingCollapsed())"
-    (togglePause)="toggleProcessingPause()"
-    (clear)="clearQueue(2)"
-    (browseFiles)="browseFiles('processing')"
-    (browseFolder)="browseFolder()"
-    (pause)="pause($event)"
-    (resume)="resume($event)"
-    (remove)="remove($event, 'processing')"
-    (reordered)="reorderProcessing($event)"
-    (droppedFiles)="addFiles($event, 'processing')"
-  />
+    <div class="queue-header-actions">
+      @if (effectiveTab() === 'karaoke') {
+        @if (karaokeTotalLabel(); as total) {
+          <span class="queue-duration-badge" aria-label="Total queue playtime">{{ total }}</span>
+        }
+        @if (activeTaskId()) {
+          <button
+            class="icon-button"
+            type="button"
+            appTooltip="Scroll to playing"
+            aria-label="Scroll to currently playing track"
+            (click)="karaokeSection()?.scrollToCurrentTrack(true)"
+          >
+            <svg lucideCrosshair [size]="16"></svg>
+          </button>
+        }
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Clear queue"
+          aria-label="Clear karaoke queue"
+          [disabled]="karaokeItems().length === 0"
+          (click)="clearQueue(1)"
+        >
+          <svg lucideTrash2 [size]="16"></svg>
+        </button>
+      } @else {
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Browse folder"
+          aria-label="Browse folder"
+          (click)="browseFolder()"
+        >
+          <svg lucideFolderPlus [size]="16"></svg>
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Browse audio files"
+          aria-label="Browse audio files"
+          (click)="browseFiles('processing')"
+        >
+          <svg lucideFilePlus [size]="16"></svg>
+        </button>
+        @if (processingView().length > 0) {
+          <button
+            class="icon-button"
+            type="button"
+            [appTooltip]="processingPaused() ? 'Resume all' : 'Pause all'"
+            (click)="toggleProcessingPause()"
+          >
+            @if (processingPaused()) {
+              <svg lucidePlay [size]="16"></svg>
+            } @else {
+              <svg lucidePause [size]="16"></svg>
+            }
+          </button>
+        }
+        <button
+          class="icon-button"
+          type="button"
+          appTooltip="Clear processing queue"
+          [disabled]="processingView().length === 0"
+          (click)="clearQueue(2)"
+        >
+          <svg lucideTrash2 [size]="16"></svg>
+        </button>
+      }
+    </div>
+  </header>
+
+  <!-- Full Height Scrollable Body -->
+  <div class="queue-body">
+    @if (effectiveTab() === 'karaoke') {
+      <app-karaoke-queue-section
+        [items]="karaokeItems()"
+        [activeTaskId]="activeTaskId()"
+        [playbackActive]="playbackActive()"
+        [collapsed]="false"
+        [totalLabel]="karaokeTotalLabel()"
+        (trackSelected)="trackSelected.emit($event)"
+        (pause)="pause($event)"
+        (resume)="resume($event)"
+        (remove)="remove($event, 'karaoke')"
+        (reordered)="reorderKaraoke($event)"
+      />
+    } @else {
+      <app-processing-queue-section
+        [items]="processingView()"
+        [paused]="processingPaused()"
+        [collapsed]="false"
+        (togglePause)="toggleProcessingPause()"
+        (clear)="clearQueue(2)"
+        (browseFiles)="browseFiles('processing')"
+        (browseFolder)="browseFolder()"
+        (pause)="pause($event)"
+        (resume)="resume($event)"
+        (remove)="remove($event, 'processing')"
+        (reordered)="reorderProcessing($event)"
+        (droppedFiles)="addFiles($event, 'processing')"
+      />
+    }
+  </div>
+
+  <!-- Shared Floating Selection Bar (Outside scroll flow) -->
+  @if (effectiveTab() === 'karaoke' && (karaokeSection()?.selectedTaskIds()?.size ?? 0) > 1) {
+    <div class="queue-floating-pill" role="status" aria-live="polite">
+      <span class="pill-bold">{{ karaokeSection()!.selectedTaskIds().size }} selected</span>
+      <span class="pill-sep">·</span>
+      <span class="pill-text">drag to reorder</span>
+      <span class="pill-sep">·</span>
+      <button type="button" class="pill-clear-btn" (click)="karaokeSection()!.clearSelection()">
+        Esc to clear
+      </button>
+    </div>
+  }
+  @if (effectiveTab() === 'processing' && (processingSection()?.selectedTaskIds()?.size ?? 0) > 1) {
+    <div class="queue-floating-pill" role="status" aria-live="polite">
+      <span class="pill-bold">{{ processingSection()!.selectedTaskIds().size }} selected</span>
+      <span class="pill-sep">·</span>
+      <span class="pill-text">drag to reorder</span>
+      <span class="pill-sep">·</span>
+      <button type="button" class="pill-clear-btn" (click)="processingSection()!.clearSelection()">
+        Esc to clear
+      </button>
+    </div>
+  }
 </section>

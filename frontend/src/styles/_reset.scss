@@ -95,14 +95,14 @@ img {
 }
 
 // remove outline for all elements on focus and increase brightness to 200% for all elements except images
-*:not(img):focus {
-  outline: none;
-  filter: brightness(150%);
-  background-color: rgba(255, 255, 255, 0.075);
-}
+// *:not(img):focus {
+//   outline: none;
+//   filter: brightness(150%);
+//   background-color: rgba(255, 255, 255, 0.075);
+// }
 
-/* Cancel out the 200% brightness on child images (200% * 50% = 100%) */
-*:focus {
-  img, .lyrics-chip, .fit-pill {
-  filter: brightness(66.67%);}
-}
+// /* Cancel out the 200% brightness on child images (200% * 50% = 100%) */
+// *:focus {
+//   img, .lyrics-chip, .fit-pill {
+//   filter: brightness(66.67%);}
+// }

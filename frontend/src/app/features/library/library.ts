@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   computed,
@@ -19,7 +20,7 @@ import { SearchBar } from '../../shared/components/search-bar/search-bar';
 import { Tooltip } from '../../shared/directives/tooltip';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ArtistInfoService } from '../../shared/services/artist-info.service';
-import { LibraryService, SongRef, songKey } from '../../shared/services/library.service';
+import { LibraryService, songKey } from '../../shared/services/library.service';
 import { EntryActionsService } from '../../shared/services/entry-actions.service';
 import { PlaybackActions, isPlayable } from '../../shared/services/playback-actions.service';
 import { PlaylistsService } from '../../shared/services/playlists.service';
@@ -27,6 +28,7 @@ import { SettingsService } from '../../shared/services/settings.service';
 import { PartySessionService } from '../../shared/services/party-session.service';
 import { SongManifest, SongsService, songArtist } from '../../shared/services/songs.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../shared/util/drag-payload';
+import { MarqueeBox, MarqueeController, applyExplorerClick } from '../../shared/util/explorer-selection';
 import {
   LibraryEntry,
   LibraryTab,
@@ -74,6 +76,7 @@ export class Library {
   private readonly queueService = inject(QueueService);
   private readonly artistInfo = inject(ArtistInfoService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly queueSnapshot = toSignal(this.queueService.queue$, { initialValue: null });
 
   readonly libraryPage = viewChild<ElementRef<HTMLElement>>('libraryPage');
@@ -101,8 +104,16 @@ export class Library {
     return active;
   });
 
+  songProcessing(song: SongManifest): boolean {
+    return this.processingSongs().has(songKey(song));
+  }
+
+  entryProcessing(entry: LibraryEntry): boolean {
+    return entry.kind === 'song' && this.songProcessing(entry.songs[0]);
+  }
+
   songUnavailable(song: SongManifest): boolean {
-    return !isPlayable(song) || this.processingSongs().has(songKey(song));
+    return !isPlayable(song) || this.songProcessing(song);
   }
 
   entryUnavailable(entry: LibraryEntry): boolean {
@@ -135,27 +146,58 @@ export class Library {
   readonly lyricsFilter = this.library.lyricsFilter;
   readonly detail = signal<LibraryEntry | null>(null);
   readonly selection = signal<ReadonlySet<string>>(new Set());
+  readonly selectedKind = signal<string | null>(null);
   readonly collapsedAlbums = signal<ReadonlySet<string>>(new Set());
   readonly playlistDraft = signal<{ id: string | null; name: string } | null>(null);
   readonly actionError = signal('');
   readonly playlists = this.playlistsService.playlists;
   readonly currentTaskId = this.songsService.currentQueueTaskId;
-  private anchorIndex = -1;
+  readonly marqueeBox = signal<MarqueeBox | null>(null);
+  readonly marqueeActive = computed(() => this.marqueeBox() !== null);
+
+  private anchorId: string | null = null;
   private skipTabReset = false;
   private detailScrollTop: number | null = null;
   private detailScrollTab: LibraryTab | null = null;
   private previousProcessing = new Set<string>();
   private temporaryDragKey: string | null = null;
 
-  // Marquee rectangle selection state
-  readonly marqueeActive = signal(false);
-  readonly marqueeBox = signal<{ left: number; top: number; width: number; height: number } | null>(null);
-  private marqueeStart = { x: 0, y: 0 };
-  private marqueeInitialSelection = new Set<string>();
-
-  private readonly songIndex = computed(
-    () => new Map(this.library.songs().map((song) => [songKey(song), song])),
-  );
+  private readonly marquee = new MarqueeController({
+    getBoxHost: () => this.libraryPage()?.nativeElement ?? null,
+    getScrollContainer: () => this.host.nativeElement.closest<HTMLElement>('.content'),
+    ignoreSelector: 'app-library-item, .library-header, app-library-toolbar, app-library-detail-header, .album-heading, .playlist-form, .library-floating-pill, button, input, a',
+    getTargets: () => {
+      const container = this.libraryPage()?.nativeElement;
+      if (!container) return [];
+      const visible = this.visibleEntries();
+      const elements = Array.from(container.querySelectorAll<HTMLElement>('app-library-item'));
+      const targets: { id: string; element: HTMLElement }[] = [];
+      elements.forEach((element, idx) => {
+        const entry = visible[idx];
+        if (entry && !this.entryProcessing(entry)) {
+          targets.push({ id: entry.key, element });
+        }
+      });
+      return targets;
+    },
+    getSelection: () => this.selection(),
+    setSelection: (next) => {
+      this.selection.set(next);
+      if (next.size === 0) {
+        this.selectedKind.set(null);
+      } else {
+        const firstKey = next.values().next().value;
+        const firstEntry = this.visibleEntries().find((e) => e.key === firstKey);
+        if (firstEntry) this.selectedKind.set(firstEntry.kind);
+      }
+    },
+    onMarqueeStart: () => {
+      this.layoutService.clearQueueSelection$.next();
+      this.layoutService.clearProcessingSelection$.next();
+    },
+    onEmptyClick: () => this.clearSelection(),
+    onBoxChange: (box) => this.marqueeBox.set(box),
+  });
 
   readonly entries = computed<LibraryEntry[]>(() => {
     const detail = this.detail();
@@ -169,7 +211,7 @@ export class Library {
         return sortEntries(genreEntries(this.library.songs(), this.settingsService.genreDelimiters()), this.sort());
       case 'playlists':
         return sortEntries(
-          this.playlists().map((p) => playlistEntry(p, this.songIndex())),
+          this.playlists().map((p) => playlistEntry(p, this.library.songByKey())),
           this.sort(),
         );
       default: {
@@ -232,7 +274,7 @@ export class Library {
       this.selection.update((selected) => new Set([...selected].filter((item) => !hidden.has(item))));
     }
     this.collapsedAlbums.set(collapsed);
-    this.anchorIndex = -1;
+    this.anchorId = null;
   }
 
   visibleIndex(entry: LibraryEntry): number {
@@ -244,10 +286,14 @@ export class Library {
     this.playlistsService.refresh();
 
     this.layoutService.dropCompleted$
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => {
-        this.selection.set(new Set());
-      });
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearSelection());
+
+    this.layoutService.clearLibrarySelection$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearSelection());
+
+    this.destroyRef.onDestroy(() => this.marquee.destroy());
 
     effect(() => {
       const detail = this.detail();
@@ -277,13 +323,12 @@ export class Library {
       this.detailScrollTop = null;
       this.detailScrollTab = null;
       this.detail.set(null);
-      this.selection.set(new Set());
+      this.clearSelection();
     });
 
     effect(() => {
       this.lyricsFilter();
-      this.selection.set(new Set());
-      this.anchorIndex = -1;
+      this.clearSelection();
     });
 
     effect(() => {
@@ -304,7 +349,7 @@ export class Library {
           this.skipTabReset = true;
           this.tab.set(tab);
         }
-        this.selection.set(new Set());
+        this.clearSelection();
         this.detailScrollTop = null;
         this.detailScrollTab = null;
         this.detail.set(entry);
@@ -313,30 +358,51 @@ export class Library {
     });
   }
 
+  @HostListener('pointerdown', ['$event'])
+  startMarquee(event: PointerEvent): void {
+    this.marquee.handlePointerDown(event);
+  }
+
+  clearSelection(): void {
+    this.selection.set(new Set());
+    this.selectedKind.set(null);
+    this.anchorId = null;
+  }
+
+  selectOnly(entry: LibraryEntry): void {
+    this.layoutService.clearQueueSelection$.next();
+    this.layoutService.clearProcessingSelection$.next();
+    this.selection.set(new Set([entry.key]));
+    this.selectedKind.set(entry.kind);
+    this.anchorId = entry.key;
+  }
+
   setSort(mode: SortMode): void {
     this.library.sorts.update((sorts) => ({ ...sorts, [this.tab()]: mode }));
   }
 
-  back(): void {
-    if (this.detail()) {
-      const scrollTop = this.detailScrollTop;
-      const tab = this.detailScrollTab;
-      this.detailScrollTop = null;
-      this.detailScrollTab = null;
-      this.detail.set(null);
-      this.selection.set(new Set());
-      if (scrollTop !== null && tab === this.tab()) {
+back(): void {
+  if (this.detail()) {
+    const scrollTop = this.detailScrollTop;
+    const tab = this.detailScrollTab;
+    this.detailScrollTop = null;
+    this.detailScrollTab = null;
+    this.detail.set(null);
+    this.clearSelection();
+    if (scrollTop !== null && tab === this.tab()) {
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const content = this.host.nativeElement.closest<HTMLElement>('.content');
           if (content?.isConnected && !this.detail() && this.tab() === tab) {
             content.scrollTop = scrollTop;
           }
         });
-      }
-    } else {
-      void this.router.navigateByUrl('/');
+      });
     }
+  } else {
+    void this.router.navigateByUrl('/');
   }
+}
 
   isSelected(entry: LibraryEntry): boolean {
     return this.selection().has(entry.key);
@@ -347,116 +413,52 @@ export class Library {
     return !!song && entry.kind === 'song' && entry.key === `song:${songKey(song)}`;
   }
 
-  activate(entry: LibraryEntry, index: number, event: MouseEvent | KeyboardEvent): void {
-    if (this.entryUnavailable(entry)) return;
-    const additive = event.ctrlKey || event.metaKey;
-    if (event.shiftKey && this.anchorIndex >= 0) {
-      const [from, to] = [this.anchorIndex, index].sort((a, b) => a - b);
-      this.selection.set(
-        new Set(
-          this.visibleEntries()
-            .slice(from, to + 1)
-            .filter((e) => !this.entryUnavailable(e))
-            .map((e) => e.key),
-        ),
-      );
-      return;
-    }
-    if (additive || this.selection().size > 0) {
-      this.toggleSelection(entry);
-      this.anchorIndex = index;
-      return;
-    }
-    this.anchorIndex = index;
-    this.open(entry);
-  }
+  activate(entry: LibraryEntry, _index: number, event: MouseEvent | KeyboardEvent): void {
+    if (this.entryProcessing(entry)) return;
+    this.layoutService.clearQueueSelection$.next();
+    this.layoutService.clearProcessingSelection$.next();
 
-  private toggleSelection(entry: LibraryEntry): void {
-    const next = new Set(this.selection());
-    next.has(entry.key) ? next.delete(entry.key) : next.add(entry.key);
-    this.selection.set(next);
-  }
+    if (this.selectedKind() !== null && this.selectedKind() !== entry.kind) {
+      this.clearSelection();
+    }
 
-  private open(entry: LibraryEntry): void {
-    if (entry.kind === 'song') {
-      void this.run(() => this.actions.playSongs(entry.songs));
-    } else {
-      if (!this.detail()) {
-        this.detailScrollTop = this.host.nativeElement.closest<HTMLElement>('.content')?.scrollTop ?? null;
-        this.detailScrollTab = this.tab();
-      }
-      this.detail.set(entry);
-      this.selection.set(new Set());
+    const selectableIds = this.visibleEntries()
+      .filter((e) => !this.entryProcessing(e))
+      .map((e) => e.key);
+
+    const result = applyExplorerClick(
+      selectableIds,
+      entry.key,
+      this.selection(),
+      this.anchorId,
+      { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey },
+      'clear-and-activate',
+    );
+    this.anchorId = result.anchorId;
+    this.selection.set(result.selection);
+    this.selectedKind.set(result.selection.size ? entry.kind : null);
+
+    if (result.activate && !this.entryUnavailable(entry)) {
+      this.open(entry);
     }
   }
 
-  startMarquee(event: PointerEvent): void {
-    if (!event.ctrlKey && !event.metaKey) return;
-    const container = this.libraryPage()?.nativeElement;
-    if (!container) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    this.marqueeActive.set(true);
-    this.marqueeInitialSelection = new Set(this.selection());
-
-    const rect = container.getBoundingClientRect();
-    this.marqueeStart = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    };
-    this.marqueeBox.set({ left: this.marqueeStart.x, top: this.marqueeStart.y, width: 0, height: 0 });
-
-    window.addEventListener('pointermove', this.updateMarquee);
-    window.addEventListener('pointerup', this.endMarquee, { once: true });
-  }
-
-  private updateMarquee = (event: PointerEvent): void => {
-    if (!this.marqueeActive()) return;
-    const container = this.libraryPage()?.nativeElement;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const currentX = event.clientX - rect.left;
-    const currentY = event.clientY - rect.top;
-
-    const left = Math.min(this.marqueeStart.x, currentX);
-    const top = Math.min(this.marqueeStart.y, currentY);
-    const width = Math.abs(currentX - this.marqueeStart.x);
-    const height = Math.abs(currentY - this.marqueeStart.y);
-
-    this.marqueeBox.set({ left, top, width, height });
-
-    const items = container.querySelectorAll<HTMLElement>('app-library-item');
-    const nextSelection = new Set(this.marqueeInitialSelection);
-
-    items.forEach((item, index) => {
-      const entry = this.visibleEntries()[index];
-      if (!entry || this.entryUnavailable(entry)) return;
-
-      const itemRect = item.getBoundingClientRect();
-      const relativeTop = itemRect.top - rect.top;
-      const relativeBottom = itemRect.bottom - rect.top;
-      const relativeLeft = itemRect.left - rect.left;
-      const relativeRight = itemRect.right - rect.left;
-
-      const collides =
-        left < relativeRight &&
-        left + width > relativeLeft &&
-        top < relativeBottom &&
-        top + height > relativeTop;
-
-      if (collides) nextSelection.add(entry.key);
+private open(entry: LibraryEntry): void {
+  if (entry.kind === 'song') {
+    void this.run(() => this.actions.playSongs(entry.songs));
+  } else {
+    const content = this.host.nativeElement.closest<HTMLElement>('.content');
+    if (!this.detail()) {
+      this.detailScrollTop = content?.scrollTop ?? null;
+      this.detailScrollTab = this.tab();
+    }
+    this.detail.set(entry);
+    this.clearSelection();
+    requestAnimationFrame(() => {
+      if (content?.isConnected) content.scrollTop = 0;
     });
-
-    this.selection.set(nextSelection);
-  };
-
-  private endMarquee = (): void => {
-    this.marqueeActive.set(false);
-    this.marqueeBox.set(null);
-    window.removeEventListener('pointermove', this.updateMarquee);
-  };
+  }
+}
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
@@ -467,7 +469,7 @@ export class Library {
       if (this.selection().size) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        this.selection.set(new Set());
+        this.clearSelection();
       } else if (this.detail()) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -475,7 +477,13 @@ export class Library {
       }
     } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault();
-      this.selection.set(new Set(this.visibleEntries().filter((e) => !this.entryUnavailable(e)).map((e) => e.key)));
+      const visible = this.visibleEntries().filter((e) => !this.entryProcessing(e));
+      if (visible.length) {
+        this.selection.set(new Set(visible.map((e) => e.key)));
+        this.selectedKind.set(visible[0].kind);
+        this.layoutService.clearQueueSelection$.next();
+        this.layoutService.clearProcessingSelection$.next();
+      }
     } else if (event.key === 'Enter' && this.selection().size && !event.defaultPrevented) {
       const songs = this.selectedSongs();
       if (songs.length) void this.run(() => this.actions.playSongs(songs));
@@ -483,13 +491,7 @@ export class Library {
   }
 
   onDragStart(event: DragEvent, entry: LibraryEntry): void {
-    // If Ctrl is pressed, suppress dragstart so pointerdown marquee selection takes over
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-      return;
-    }
-
-    if (this.entryUnavailable(entry)) {
+    if (event.ctrlKey || event.metaKey || this.entryUnavailable(entry)) {
       event.preventDefault();
       return;
     }
@@ -535,18 +537,29 @@ export class Library {
   }
 
   onAction(entry: LibraryEntry, action: EntryAction): void {
-    if (this.entryUnavailable(entry)) return;
+    if (this.entryProcessing(entry)) return;
+    const isPlaybackAction = ['play', 'shuffle', 'play-next', 'queue'].includes(action);
+    if (isPlaybackAction && this.entryUnavailable(entry)) return;
+
     if (action === 'rename-playlist' && entry.playlistId) {
       this.playlistDraft.set({ id: entry.playlistId, name: entry.title });
-    } else if (action === 'remove-from-playlist') this.removeFromPlaylist(entry);
-    else {
+    } else if (action === 'remove-from-playlist') {
+      this.removeFromPlaylist(entry);
+    } else {
       const ownSongsOnly = ['edit', 'open', 'go-album', 'go-artist'].includes(action);
-      const songs = ownSongsOnly ? entry.songs : this.playable(this.actionSongs(entry));
+      const allowUnplayable = ['edit', 'open', 'go-album', 'go-artist', 'delete', 'delete-playlist'].includes(action);
+      const source = ownSongsOnly ? entry.songs : this.actionSongs(entry);
+      const songs = allowUnplayable ? source : this.playable(source);
+      if (!songs.length && action !== 'delete-playlist') return;
       const target = { kind: entry.kind, title: entry.title, songs, playlistId: entry.playlistId };
-      void this.run(async () => {
-        await this.entryActions.perform(target, action);
-        if (action === 'delete') this.dropDeletedFromDetail();
-      });
+void this.run(async () => {
+     await this.entryActions.perform(target, action);
+     if (action === 'delete') {
+       this.dropDeletedFromDetail();
+     } else if (['queue', 'play-next', 'play', 'shuffle'].includes(action)) {
+       this.clearSelection();
+     }
+   });
     }
   }
 
@@ -593,11 +606,11 @@ export class Library {
   }
 
   private dropDeletedFromDetail(): void {
-    const index = this.songIndex();
+    const index = this.library.songByKey();
     this.detail.update((d) =>
       d ? { ...d, songs: d.songs.filter((song) => index.has(songKey(song))) } : d,
     );
-    this.selection.set(new Set());
+    this.clearSelection();
   }
 
   private findEntry(key: string): LibraryEntry | null {
@@ -608,11 +621,12 @@ export class Library {
     const genre = genreEntries(this.library.songs(), this.settingsService.genreDelimiters()).find((entry) => entry.key === key);
     if (genre) return genre;
     const playlist = this.playlists().find((p) => `playlist:${p.id}` === key);
-    return playlist ? playlistEntry(playlist, this.songIndex()) : null;
+    return playlist ? playlistEntry(playlist, this.library.songByKey()) : null;
   }
 
   private detailSongs(detail: LibraryEntry): LibraryEntry[] {
-    const current = detail.songs.map((song) => this.songIndex().get(songKey(song))).filter((song): song is SongManifest => !!song);
+    const index = this.library.songByKey();
+    const current = detail.songs.map((song) => index.get(songKey(song))).filter((song): song is SongManifest => !!song);
     const songs = detail.kind === 'artist' || detail.kind === 'genre' ? sortArtistSongs(current) : current;
     if (detail.kind === 'album') {
       songs.sort(
@@ -629,7 +643,7 @@ export class Library {
   }
 
   private actionSongs(entry: LibraryEntry): SongManifest[] {
-    return this.selection().has(entry.key) ? this.selectedSongs() : entry.songs;
+    return this.selection().has(entry.key) ? this.uniqueSongs(this.entries().filter((e) => this.selection().has(e.key))) : entry.songs;
   }
 
   private uniqueSongs(entries: LibraryEntry[]): SongManifest[] {
@@ -649,9 +663,5 @@ export class Library {
     } catch {
       this.actionError.set('Could not complete that action.');
     }
-  }
-
-  clearSelection(): void {
-    this.selection.set(new Set());
   }
 }

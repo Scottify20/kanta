@@ -188,7 +188,11 @@ export class MetadataEditor {
   }
 
   analysisAudioAvailable(song = this.manifest()): boolean {
-    return !!song && (!!song.master || song.stems.some((stem) => /\(instrumental\)\.[a-z0-9]+$/i.test(stem.name)));
+    return !!song && (
+      hasVocalStem(song)
+      || !!song.master
+      || song.stems.some((stem) => /\(instrumental\)\.[a-z0-9]+$/i.test(stem.name))
+    );
   }
 
   vocalRangeAvailable(): boolean {

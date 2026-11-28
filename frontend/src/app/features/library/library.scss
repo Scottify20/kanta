@@ -9,7 +9,8 @@
   gap: 1.5rem;
   width: min(72rem, calc(100% - 3rem));
   margin: 0 auto;
-  padding-bottom: 5rem;
+  padding: 0 1.5rem 5rem;
+  box-sizing: border-box;
   user-select: none;
 }
 
@@ -69,6 +70,8 @@
 .entries {
   display: grid;
   gap: 0.5rem;
+  padding: 0.5rem 0.5rem 4rem;
+  box-sizing: border-box;
 
   &.grid {
     grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));

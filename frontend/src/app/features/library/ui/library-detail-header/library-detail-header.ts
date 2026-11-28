@@ -2,6 +2,7 @@ import { Component, computed, input, output, signal } from '@angular/core';
 import { LucidePlay, LucideListPlus, LucideShuffle, LucideSkipForward } from '@lucide/angular';
 
 import { ArtistInfo } from '../../../../shared/services/artist-info.service';
+import { sizedImageUrl } from '../../../../shared/util/image-url';
 import { LibraryEntry, formatRuntime } from '../../data/library-entries';
 
 @Component({
@@ -20,11 +21,14 @@ export class LibraryDetailHeader {
   readonly addToQueue = output<HTMLElement | void>();
   readonly playNext = output<HTMLElement | void>();
 
+  readonly single = computed(() => this.entry().covers.length <= 1);
   readonly covers = computed(() => {
     const covers = this.entry().covers;
-    return Array.from({ length: 4 }, (_, i) => covers[i % Math.max(covers.length, 1)] ?? null);
+    const width = this.single() ? 768 : 384;
+    return Array.from({ length: 4 }, (_, i) =>
+      sizedImageUrl(covers[i % Math.max(covers.length, 1)] ?? null, width),
+    );
   });
-  readonly single = computed(() => this.entry().covers.length <= 1);
   readonly summary = computed(() => {
     const songs = this.entry().songs;
     const seconds = songs.reduce((sum, song) => sum + (song.duration_seconds ?? 0), 0);

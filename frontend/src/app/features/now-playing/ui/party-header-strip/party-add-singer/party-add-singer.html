@@ -70,43 +70,33 @@
       </div>
 
       <div class="voice-row">
-        <label class="input-wrap flex-1">
+        <div class="input-wrap flex-1">
           <span>Voice preset</span>
-          <select [value]="guestVoice()" (change)="updateGuestVoice($event)">
-            @for (voice of voiceOptions; track voice) {
-              <option [value]="voice">{{ voice }}</option>
-            }
-          </select>
-        </label>
+          <app-dropdown
+            [options]="voiceDropdownOptions"
+            [value]="guestVoice()"
+            (valueChange)="setGuestVoice($event)"
+          />
+        </div>
 
         <button type="button" class="btn-calibrate" (click)="openCalibration()">
-          Calibrate Range
+          Calibrate
         </button>
       </div>
 
-      <div class="color-section">
-        <div class="color-header-row">
-          <span>Color</span>
-          <input
-            type="color"
-            class="native-color-picker"
-            [value]="guestColor()"
-            (input)="selectGuestColor($any($event.target).value)"
-          />
-        </div>
-        <div class="color-presets-row">
-          @for (color of guestColorPresets; track color) {
-            <button
-              type="button"
-              [style.background]="color"
-              [class.selected]="guestColor() === color"
-              (click)="selectGuestColor(color)"
-            ></button>
-          }
-        </div>
-      </div>
+      <app-color-picker
+        label="Accent color"
+        [value]="guestColor()"
+        [presets]="guestColorPresets"
+        (valueChange)="selectGuestColor($event)"
+      />
 
-      <button type="button" class="btn-action-primary" (click)="addGuest()">
+      <button
+        type="button"
+        class="btn-action-primary"
+        [disabled]="!canAddGuest()"
+        (click)="addGuest()"
+      >
         Add Guest
       </button>
     </div>
@@ -117,13 +107,13 @@
           <strong>Take turns automatically</strong>
           <small>Reorders queue based on singer turns</small>
         </div>
-        <input
+          <input
           class="switch"
           type="checkbox"
           role="switch"
           [checked]="party.roundRobinEnabled()"
-          (change)="party.setRoundRobinEnabled($any($event.target).checked)"
-        />
+          (change)="toggleRoundRobin($any($event.target).checked)"
+          />
       </label>
     </footer>
   </section>

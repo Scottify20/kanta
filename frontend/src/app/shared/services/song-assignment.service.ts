@@ -6,21 +6,65 @@ import { SongManifest } from './songs.service';
 import { DuetAnalyzerService } from './duet-analyzer.service';
 import { SongAssignmentDialog } from '../components/song-assignment-dialog/song-assignment-dialog';
 
+export interface AnchorPoint {
+  x: number;
+  y: number;
+}
+
+export type AssignmentAnchor = HTMLElement | MouseEvent | AnchorPoint | null | undefined;
+
 @Injectable({ providedIn: 'root' })
 export class SongAssignmentService {
   private readonly party = inject(PartySessionService);
   private readonly duetAnalyzer = inject(DuetAnalyzerService);
   private readonly overlay = inject(Overlay);
 
+  /** Snapshots a stable viewport anchor point before async work or multi-song batch loops. */
+  captureAnchor(anchor?: AssignmentAnchor): AnchorPoint | null {
+    if (!anchor) return null;
+
+    if (anchor instanceof HTMLElement) {
+      if (!anchor.isConnected) return null;
+      const rect = anchor.getBoundingClientRect();
+      return rect.width > 0 || rect.height > 0 ? { x: rect.left, y: rect.top } : null;
+    }
+
+    if ('clientX' in anchor) {
+      // For drag-and-drop, anchor directly to the drop coordinates rather than an underlying button.
+      const isDrop = anchor.type === 'drop' || (typeof DragEvent !== 'undefined' && anchor instanceof DragEvent);
+      if (!isDrop) {
+        const target =
+          anchor.target instanceof Element
+            ? anchor.target.closest<HTMLElement>('[role="menuitem"], button')
+            : null;
+        if (target && target.isConnected) {
+          const rect = target.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) {
+            return { x: rect.left, y: rect.top };
+          }
+        }
+      }
+      if (anchor.clientX === 0 && anchor.clientY === 0) return null;
+      return { x: anchor.clientX, y: anchor.clientY };
+    }
+
+    if (typeof anchor.x === 'number' && typeof anchor.y === 'number') {
+      return { x: anchor.x, y: anchor.y };
+    }
+
+    return null;
+  }
+
   async resolveAssignment(
     song: SongManifest,
     isDuet: boolean,
-    anchor?: HTMLElement | MouseEvent | null,
+    anchor?: AssignmentAnchor,
     batchIndex = 1,
     batchTotal = 1,
     forcePrompt = false,
     customInitial?: QueueSingerAssignment,
   ): Promise<QueueSingerAssignment> {
+    const capturedPoint = this.captureAnchor(anchor);
     const roster = this.party.roster();
 
     if (!forcePrompt) {
@@ -61,40 +105,39 @@ export class SongAssignmentService {
       };
     }
 
-    return this.showPromptDialog(song, isDuet, initialAssignment, anchor, batchIndex, batchTotal);
+    return this.showPromptDialog(song, isDuet, initialAssignment, anchor, capturedPoint, batchIndex, batchTotal);
   }
 
   private showPromptDialog(
     song: SongManifest,
     isDuet: boolean,
     initial: QueueSingerAssignment,
-    anchor?: HTMLElement | MouseEvent | null,
+    anchor?: AssignmentAnchor,
+    capturedPoint?: AnchorPoint | null,
     batchIndex = 1,
     batchTotal = 1,
   ): Promise<QueueSingerAssignment> {
     return new Promise((resolve) => {
       let positionStrategy;
 
-      if (anchor instanceof HTMLElement) {
+      const liveElement = anchor instanceof HTMLElement && anchor.isConnected ? anchor : null;
+      const target = liveElement ?? capturedPoint;
+
+      if (target) {
         positionStrategy = this.overlay
           .position()
-          .flexibleConnectedTo(anchor)
+          .flexibleConnectedTo(target)
+          .withFlexibleDimensions(false)
           .withPositions([
+            // 1. Top-left of popover aligned to top-left of trigger / drop point
             { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'top' },
-            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+            // 2. Lower-left quadrant fallback
+            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
+            // 3. Flip upward keeping left edge aligned
+            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'bottom' },
+            // 4. Right-aligned fallbacks if near right viewport edge
             { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'top' },
-            { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
-          ])
-          .withPush(true)
-          .withViewportMargin(16);
-      } else if (anchor && 'clientX' in anchor) {
-        positionStrategy = this.overlay
-          .position()
-          .flexibleConnectedTo({ x: anchor.clientX, y: anchor.clientY })
-          .withPositions([
-            { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'top' },
-            { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
-            { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'top' },
+            { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'bottom' },
           ])
           .withPush(true)
           .withViewportMargin(16);
@@ -122,7 +165,23 @@ export class SongAssignmentService {
       componentRef.setInput('batchIndex', batchIndex);
       componentRef.setInput('batchTotal', batchTotal);
 
+      let rafId: number | null = null;
+      const resizeObserver = new ResizeObserver(() => {
+        if (!overlayRef) return;
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          overlayRef?.updatePosition();
+        });
+      });
+      resizeObserver.observe(overlayRef.overlayElement);
+
       const cleanup = (result: QueueSingerAssignment): void => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        resizeObserver.disconnect();
         if (overlayRef) {
           overlayRef.dispose();
           overlayRef = null;

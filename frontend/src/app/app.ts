@@ -264,6 +264,18 @@ export class App implements OnDestroy {
     this.layout.toggleQueue();
   }
 
+  refreshContextLibrary(): void {
+    this.contextMenu.set(null);
+    this.toast.show('Refreshing library…');
+    void this.library
+      .refreshFromDisk()
+      .then(() => this.toast.success(`Library refreshed (${this.library.songs().length} songs).`))
+      .catch((error: unknown) => {
+        console.error('Could not refresh library:', error);
+        this.toast.error('Could not refresh the library.');
+      });
+  }
+
   @HostListener('document:keydown', ['$event'])
   onPlaybackShortcut(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;

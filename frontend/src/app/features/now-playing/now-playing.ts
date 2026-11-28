@@ -36,6 +36,7 @@ import { SongManifest, SongsService, hasVocalRange, hasVocalStem } from '../../s
 import { LayoutService } from '../../shared/services/layout.service';
 import { PopupStateService } from '../../shared/services/popup-state.service';
 import { ToastService } from '../../shared/services/toast.service';
+import { sizedImageUrl } from '../../shared/util/image-url';
 import type { PartySessionService } from '../../shared/services/party-session.service';
 
 @Component({
@@ -88,8 +89,7 @@ export class NowPlaying implements OnDestroy {
     if (manifest) return manifest;
     const track = this.selectedTrack();
     if (!track || track.status !== 'completed') return null;
-    const key = songKey({ artist: track.artist, album: track.album, title: track.title });
-    return this.library.songs().find((song) => songKey(song) === key) ?? null;
+    return this.library.songByKey().get(songKey(track)) ?? null;
   });
   readonly currentPlaybackKey = computed(() => {
     const taskId = this.selectedTrack()?.task_id;
@@ -113,6 +113,7 @@ export class NowPlaying implements OnDestroy {
     const song = this.currentSong();
     if (song) void this.entryActions.addToNewPlaylist(name, [song]);
   }
+
   readonly lyricsOffsetMs = this.lyricsService.offsetMs;
   readonly selectedTrack = signal<QueueItem | null>(null);
 
@@ -158,7 +159,7 @@ export class NowPlaying implements OnDestroy {
       .filter((item) => !['failed', 'cancelled', 'cancelling'].includes(item.status))
       .slice(0, 3);
   });
-  private loadedTaskId: string | null = null;
+
   private loadedSongKey: string | null = null;
   private queuedAutoplayTaskId: string | null = null;
   private resumeAfterSeek = false;
@@ -232,7 +233,7 @@ export class NowPlaying implements OnDestroy {
             const song = this.songsService.currentSong();
             if (song && this.sameSong(song, savedTrack)) {
               this.selectedManifest.set(song);
-              this.coverUrl.set(songCover(song));
+              this.coverUrl.set(sizedImageUrl(songCover(song), 768));
               this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
             } else {
               void this.loadManifest(savedTrack);
@@ -533,7 +534,6 @@ export class NowPlaying implements OnDestroy {
     this.selectedManifest.set(null);
     this.coverUrl.set(null);
     this.loadedSongKey = null;
-    this.loadedTaskId = null;
     this.queuedAutoplayTaskId = null;
     this.lyricsOffsetMs.set(0);
     this.playbackError.set('');
@@ -653,8 +653,7 @@ export class NowPlaying implements OnDestroy {
     this.selectedManifest.set(song);
     this.songsService.setNowPlaying(song, queueTaskId);
     this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
-    this.coverUrl.set(songCover(song));
-    this.loadedTaskId = null;
+    this.coverUrl.set(sizedImageUrl(songCover(song), 768));
     this.loadedSongKey = null;
     this.queuedAutoplayTaskId = null;
     this.playbackError.set('');
@@ -680,8 +679,8 @@ export class NowPlaying implements OnDestroy {
     this.playbackError.set('');
     try {
       const resumeContext = this.audioPlayer.resumeAudioContext();
-      const songKey = `${manifest.artist}/${manifest.album}/${manifest.title}`;
-      if (this.loadedSongKey !== songKey) {
+      const currentKey = `${manifest.artist}/${manifest.album}/${manifest.title}`;
+      if (this.loadedSongKey !== currentKey) {
         const stems = findPlaybackStems(manifest.stems);
         if (!stems) {
           const error = new Error('This processed song is missing playback stems.');
@@ -701,7 +700,7 @@ export class NowPlaying implements OnDestroy {
             albumPeak: manifest.replaygain_album_peak,
           },
         });
-        this.loadedSongKey = songKey;
+        this.loadedSongKey = currentKey;
         await this.applyAutomaticSongKey();
       } else {
         await resumeContext;
@@ -755,9 +754,8 @@ export class NowPlaying implements OnDestroy {
       if (this.manifestRequest !== request || this.selectedTrack()?.task_id !== track.task_id) return null;
       this.selectedManifest.set(manifest);
       this.songsService.setNowPlaying(manifest, track.task_id);
-      this.coverUrl.set(songCover(manifest));
+      this.coverUrl.set(sizedImageUrl(songCover(manifest), 768));
       this.lyricsOffsetMs.set(manifest.lyrics_offset_ms ?? 0);
-      this.loadedTaskId = null;
       this.loadedSongKey = null;
       await this.loadLyrics(manifest);
       return this.manifestRequest === request && this.selectedTrack()?.task_id === track.task_id
@@ -808,7 +806,7 @@ export class NowPlaying implements OnDestroy {
   private restoreCurrentSong(song: SongManifest): void {
     this.selectedTrack.set(null);
     this.selectedManifest.set(song);
-    this.coverUrl.set(songCover(song));
+    this.coverUrl.set(sizedImageUrl(songCover(song), 768));
     this.lyricsOffsetMs.set(song.lyrics_offset_ms ?? 0);
   }
 

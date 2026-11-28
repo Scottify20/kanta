@@ -7,20 +7,46 @@
     [duration]="duration()"
   />
 
-  <!-- Singer Roster -->
+  <!-- Active Singer(s) Only on Surface -->
   @if (party.roster().length) {
-    <div class="singer-roster" aria-label="Party singers">
-      @for (singer of visibleSingers(); track singer.id) {
+    <div class="singer-roster" aria-label="Active singer">
+      @if (mergedDuetSingers(); as duet) {
         <button
-          class="singer-chip"
+          class="singer-chip duet-merged current-singer"
           type="button"
-          [class.current-singer]="isCurrentSinger(singer.id)"
+          [class.is-activating]="activatingSingerId() === 'duet-merged'"
+          [style.--singer-color]="duet.primary.accentColor"
+          [style.--singer-color-2]="duet.secondary.accentColor"
+          [attr.aria-label]="'Duet: ' + duet.primary.name + ' & ' + duet.secondary.name + ' (Click to reassign)'"
+          [title]="duet.primary.name + ' & ' + duet.secondary.name + ' · Click to reassign'"
+          (click)="openAssignPopover($event)"
+        >
+          <span class="duet-avatars" aria-hidden="true">
+            <i class="singer-avatar" [style.background]="duet.primary.accentColor">
+              @if (duet.primary.avatar) { <img [src]="duet.primary.avatar" [alt]="''" /> }
+              @else { {{ singerInitial(duet.primary) }} }
+            </i>
+            <i class="singer-avatar second" [style.background]="duet.secondary.accentColor">
+              @if (duet.secondary.avatar) { <img [src]="duet.secondary.avatar" [alt]="''" /> }
+              @else { {{ singerInitial(duet.secondary) }} }
+            </i>
+          </span>
+          <span class="singer-chip-copy">
+            <strong>{{ duet.primary.name }} &amp; {{ duet.secondary.name }}</strong>
+            <small>Duet · Tap to reassign</small>
+          </span>
+        </button>
+      } @else if (activeSoloSinger(); as singer) {
+        <button
+          class="singer-chip current-singer"
+          type="button"
           [class.is-guest]="singer.isGuest"
+          [class.is-added]="addedSingerIds().has(singer.id)"
+          [class.is-activating]="activatingSingerId() === singer.id"
           [style.--singer-color]="singer.accentColor"
-          [attr.aria-label]="'Make ' + singer.name + ' the active singer (Right click for options)'"
-          [attr.aria-pressed]="isCurrentSinger(singer.id)"
-          [title]="singer.name + (singer.isGuest ? ' (Guest · Right click for options)' : ' (Right click for options)')"
-          (click)="selectSinger(singer.id)"
+          [attr.aria-label]="singer.name + ' (Click to reassign, right click for options)'"
+          [title]="singer.name + ' · Click to reassign · Right click for options'"
+          (click)="openAssignPopover($event)"
           (contextmenu)="openSingerContextMenu($event, singer)"
         >
           <i class="singer-avatar" [style.background]="singer.accentColor">
@@ -42,30 +68,27 @@
         </button>
       }
 
-      @if (hiddenSingers() > 0) {
-        <app-popup-panel popupId="party-roster-more" group="player" placement="below" label="More singers">
+      @if (inactiveSingers().length > 0) {
+        <app-popup-panel popupId="party-roster-more" group="player" placement="below" label="Other singers">
           <button
             popup-trigger
             class="roster-more"
             type="button"
-            aria-label="Show {{ hiddenSingers() }} more singers"
+            aria-label="Show {{ inactiveSingers().length }} other singers"
           >
-            +{{ hiddenSingers() }}
+            +{{ inactiveSingers().length }}
           </button>
           <div popup-content class="roster-more-list">
-            @for (singer of party.roster(); track singer.id) {
-              @if (!isVisibleSinger(singer.id)) {
-                <button
-                  type="button"
-                  [class.active]="isCurrentSinger(singer.id)"
-                  (click)="selectSinger(singer.id)"
-                  (contextmenu)="openSingerContextMenu($event, singer)"
-                >
-                  <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
-                  <span>{{ singer.name }}</span>
-                  <small>{{ singer.isGuest ? 'Guest · ' : '' }}{{ rangeLabel(singer) }}</small>
-                </button>
-              }
+            @for (singer of inactiveSingers(); track singer.id) {
+              <button
+                type="button"
+                (click)="openSingerContextMenu($event, singer)"
+                (contextmenu)="openSingerContextMenu($event, singer)"
+              >
+                <i [style.background]="singer.accentColor">{{ singerInitial(singer) }}</i>
+                <span>{{ singer.name }}</span>
+                <small>{{ singer.isGuest ? 'Guest · ' : '' }}{{ rangeLabel(singer) }}</small>
+              </button>
             }
           </div>
         </app-popup-panel>
@@ -77,6 +100,21 @@
   <app-party-add-singer
     (calibrateRequested)="openCalibration($event, 'guest-draft')"
   />
+
+  <!-- Unified Song Assignment Popover -->
+  <app-popup-panel #songAssignMenu popupId="party-song-assign" group="player" placement="below" label="Assign singer">
+    <div popup-content>
+      @if (currentSong(); as song) {
+        <app-song-assignment-dialog
+          [song]="song"
+          [isDuet]="song.is_duet === true"
+          [headerMode]="true"
+          [initialAssignment]="currentSongAssignment()"
+          (assignmentChange)="onHeaderAssignmentChange($event)"
+        />
+      }
+    </div>
+  </app-popup-panel>
 
   <!-- Singer Context Menu -->
   <app-popup-panel #singerMenu popupId="party-singer-context" group="context-menu" label="Singer Options">
@@ -92,12 +130,6 @@
             <small>{{ singer.isGuest ? 'Guest' : 'Saved' }} · {{ rangeLabel(singer) }}</small>
           </div>
         </div>
-
-        @if (!isCurrentSinger(singer.id)) {
-          <button type="button" role="menuitem" (click)="selectSinger(singer.id)">
-            Set as active singer
-          </button>
-        }
 
         <button type="button" role="menuitem" (click)="startEditingProfile(singer, $event)">
           Edit profile

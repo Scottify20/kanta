@@ -1,0 +1,49 @@
+    <div class="color-picker">
+      <div class="color-header">
+        <span class="color-label">{{ label() }}</span>
+        <span class="color-hex" [style.--swatch]="value()">
+          <i class="hex-dot"></i>
+          {{ value().toUpperCase() }}
+        </span>
+      </div>
+
+      <div class="swatch-grid" role="radiogroup" [attr.aria-label]="label()">
+        @for (color of presets(); track color) {
+          <button
+            type="button"
+            class="swatch"
+            role="radio"
+            [attr.aria-checked]="isSelected(color)"
+            [attr.aria-label]="'Select color ' + color"
+            [style.--swatch]="color"
+            [class.selected]="isSelected(color)"
+            (click)="valueChange.emit(color)"
+          >
+            @if (isSelected(color)) {
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            }
+          </button>
+        }
+
+        <label
+          class="swatch custom-swatch"
+          [class.selected]="isCustom()"
+          [style.--swatch]="value()"
+          title="Pick custom color"
+        >
+          <input
+            type="color"
+            [value]="value()"
+            (input)="valueChange.emit($any($event.target).value)"
+            aria-label="Pick custom color"
+          />
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+        </label>
+      </div>
+    </div>
+  

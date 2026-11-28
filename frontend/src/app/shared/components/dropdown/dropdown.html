@@ -1,0 +1,69 @@
+<div class="dropdown-root">
+  <button
+    type="button"
+    class="dropdown-trigger"
+    [class.is-open]="open()"
+    [disabled]="disabled()"
+    [attr.aria-expanded]="open()"
+    aria-haspopup="listbox"
+    (click)="toggle($event)"
+  >
+    <span class="trigger-label" [class.placeholder]="!selectedOption()">
+      {{ selectedOption()?.label ?? placeholder() }}
+    </span>
+    @if (selectedOption()?.badge; as badge) {
+      <span class="trigger-badge">{{ badge }}</span>
+    }
+    <svg
+      class="trigger-chevron"
+      [class.rotated]="open()"
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  </button>
+
+  @if (open()) {
+    <div class="dropdown-menu" role="listbox">
+      @for (opt of options(); track opt.value) {
+        <button
+          type="button"
+          class="dropdown-item"
+          role="option"
+          [class.selected]="opt.value === value()"
+          [attr.aria-selected]="opt.value === value()"
+          (click)="pick(opt.value, $event)"
+        >
+          <span class="item-label">{{ opt.label }}</span>
+          @if (opt.badge) {
+            <span class="item-badge">{{ opt.badge }}</span>
+          }
+          @if (opt.value === value()) {
+            <svg
+              class="item-check"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          }
+        </button>
+      }
+    </div>
+  }
+</div>

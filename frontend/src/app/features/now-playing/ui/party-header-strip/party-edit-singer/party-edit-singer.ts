@@ -1,4 +1,6 @@
 import { Component, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { ColorPicker } from '../../../../../shared/components/color-picker/color-picker';
+import { Dropdown, DropdownOption } from '../../../../../shared/components/dropdown/dropdown';
 import { NoteSelector } from '../../../../../shared/components/note-selector/note-selector';
 import { PopupPanel } from '../../../../../shared/components/popup-panel/popup-panel';
 import {
@@ -14,7 +16,7 @@ import { ToastService } from '../../../../../shared/services/toast.service';
 
 @Component({
   selector: 'app-party-edit-singer',
-  imports: [PopupPanel, NoteSelector],
+  imports: [PopupPanel, NoteSelector, Dropdown, ColorPicker],
   templateUrl: './party-edit-singer.html',
   styleUrl: './party-edit-singer.scss',
 })
@@ -40,6 +42,9 @@ export class PartyEditSinger {
     'Uncalibrated',
     ...VOCAL_PROFILE_PRESETS.map((p) => p.voiceType),
   ];
+
+  readonly voiceDropdownOptions: readonly DropdownOption<ProfileVoiceType>[] =
+    this.voiceOptions.map((voice) => ({ value: voice, label: voice }));
 
   constructor() {
     effect(() => {
@@ -67,8 +72,7 @@ export class PartyEditSinger {
     return profile.initials || profile.name.slice(0, 1).toUpperCase() || '?';
   }
 
-  onVoiceChange(event: Event): void {
-    const voice = (event.target as HTMLSelectElement).value as ProfileVoiceType;
+  setVoiceDraft(voice: ProfileVoiceType): void {
     this.editVoiceDraft.set(voice);
     const preset = VOCAL_PROFILE_PRESETS.find((p) => p.voiceType === voice);
     if (preset?.minHz && preset.maxHz) {

@@ -41,6 +41,8 @@ export class EntryMenu {
   readonly inPlaylist = input(false);
   readonly canRename = input(true);
   readonly revealOnHover = input(false);
+  readonly selectedCount = input<number>(0);
+  readonly playable = input(true);
   readonly action = output<EntryAction>();
 
   private readonly popup = viewChild.required(PopupPanel);

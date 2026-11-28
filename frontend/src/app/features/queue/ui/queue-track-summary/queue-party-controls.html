@@ -3,13 +3,18 @@
     <button
       type="button"
       class="singer-buttons"
-      [attr.aria-label]="'Assign singers for ' + item().raw_title"
+      [class.has-conflict]="hasVocalConflict()"
+      [attr.aria-label]="
+        hasVocalConflict()
+          ? 'Vocal range conflict for ' + item().raw_title + '. Click to resolve.'
+          : 'Assign singers for ' + item().raw_title
+      "
+      [title]="hasVocalConflict() ? 'Key gap conflict — click to resolve' : (primarySinger()?.name ?? 'Assign singer')"
       (click)="openAssignment($event)"
     >
       <span
         class="singer-avatar"
         [style.background]="primarySinger()?.accentColor ?? '#444'"
-        [title]="primarySinger()?.name ?? 'Assign singer'"
       >
         {{ singerInitial(primarySinger()) }}
       </span>
@@ -17,10 +22,12 @@
         <span
           class="singer-avatar secondary"
           [style.background]="secondarySinger()?.accentColor ?? '#444'"
-          [title]="secondarySinger()?.name ?? 'Assign second singer'"
         >
           {{ singerInitial(secondarySinger()) }}
         </span>
+      }
+      @if (hasVocalConflict()) {
+        <span class="conflict-badge" aria-hidden="true">!</span>
       }
     </button>
 
@@ -35,15 +42,4 @@
       }
     </div>
   </div>
-
-  @if (hasVocalConflict()) {
-    <button
-      type="button"
-      class="conflict-pill"
-      [attr.aria-label]="'Vocal range conflict between singers. Click to resolve.'"
-      (click)="openAssignment($event)"
-    >
-      Conflict
-    </button>
-  }
 </div>

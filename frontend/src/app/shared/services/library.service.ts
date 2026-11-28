@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
 import { PlaylistsService } from './playlists.service';
 import { SettingsService } from './settings.service';
@@ -14,6 +15,7 @@ import {
 } from './songs.service';
 import type { LibraryTab, LyricsFilter, SortMode } from '../../features/library/data/library-entries';
 import { DEFAULT_ARTIST_DELIMITER_LIST, DEFAULT_GENRE_DELIMITER_LIST, metadataValueKey, splitMetadataValues } from '../util/metadata-delimiters';
+import { readCachedSongs, writeCachedSongs } from '../util/library-cache';
 
 export interface SongRef {
   artist: string;
@@ -59,7 +61,9 @@ const normalize = (value: string): string =>
 
 export const songKey = (song: SongRef): string => `${song.artist}\u0000${song.album}\u0000${song.title}`;
 export const songCover = (song: SongManifest): string | null =>
-  (song.covers.find((cover) => /\.(?:jpe?g|png|webp|gif|bmp|avif|svg)$/i.test(cover.name)) ?? song.covers[0])?.url ?? null;
+  song.cover_url
+  ?? (song.covers.find((cover) => /\.(?:jpe?g|png|webp|gif|bmp|avif|svg)$/i.test(cover.name)) ?? song.covers[0])?.url
+  ?? null;
 
 @Injectable({ providedIn: 'root' })
 export class LibraryService {
@@ -69,6 +73,9 @@ export class LibraryService {
   private readonly toast = inject(ToastService);
 
   readonly songs = signal<SongManifest[]>([]);
+  readonly songByKey = computed(
+    () => new Map(this.songs().map((song) => [songKey(song), song])),
+  );
   readonly loaded = signal(false);
   readonly loading = signal(false);
   readonly sorts = signal<Record<LibraryTab, SortMode>>({
@@ -77,9 +84,10 @@ export class LibraryService {
   readonly activeTab = signal<LibraryTab>('songs');
   readonly lyricsFilter = signal<LyricsFilter>('all');
   private inflight: Promise<void> | null = null;
+  private pendingForceReload = false;
+  private hydratedFromCache = false;
   private vocalRangeAnalysisQueue: Promise<void> = Promise.resolve();
   private readonly vocalRangeRequests = new Map<string, Promise<SongManifest | null>>();
-  // Entry key (album:/artist:/playlist:) the library page should open as soon as it is shown.
   readonly pendingOpen = signal<string | null>(null);
 
   constructor() {
@@ -135,7 +143,6 @@ export class LibraryService {
     return [...groups.values()];
   });
 
-  // Normalized haystacks are computed once per library change, so each keystroke is a cheap scan.
   private readonly index = computed(() => ({
     songs: this.songs().map((song) => ({
       song,
@@ -148,22 +155,71 @@ export class LibraryService {
 
   load(force = false): Promise<void> {
     if (this.loaded() && !force) return Promise.resolve();
-    if (this.inflight) return force ? this.inflight.then(() => this.load(true)) : this.inflight;
-    this.loading.set(true);
-    const collected: SongManifest[] = [];
-    this.inflight = this.songsService
-      .streamSongs((batch) => {
-        collected.push(...batch);
-      })
-      .then(() => {
-        this.songs.set(collected);
-        this.loaded.set(true);
-      })
-      .finally(() => {
-        this.loading.set(false);
-        this.inflight = null;
-      });
+    if (this.inflight) {
+      if (force) this.pendingForceReload = true;
+      return this.inflight;
+    }
+
+    this.inflight = this.runLoad().finally(() => {
+      this.inflight = null;
+      if (this.pendingForceReload) {
+        this.pendingForceReload = false;
+        void this.load(true);
+      }
+    });
     return this.inflight;
+  }
+
+  /** Forces a full disk rescan on the backend and updates both memory and IndexedDB. */
+  async refreshFromDisk(): Promise<void> {
+    const fresh = await firstValueFrom(this.songsService.listSongs(true));
+    this.songs.set(fresh);
+    this.loaded.set(true);
+    void writeCachedSongs(fresh);
+    this.playlistsService.refresh();
+  }
+
+  /** Immediately removes deleted songs from the UI signal and IndexedDB cache. */
+  removeSongs(targets: readonly SongRef[]): void {
+    if (!targets.length) return;
+    const keys = new Set(targets.map(songKey));
+    this.songs.update((songs) => songs.filter((song) => !keys.has(songKey(song))));
+    void writeCachedSongs(this.songs());
+  }
+
+  private async runLoad(): Promise<void> {
+    if (!this.hydratedFromCache && this.songs().length === 0) {
+      this.hydratedFromCache = true;
+      const cached = await readCachedSongs();
+      if (cached?.length) {
+        this.songs.set(cached);
+        this.loaded.set(true);
+      }
+    }
+
+    const showSpinner = this.songs().length === 0;
+    if (showSpinner) this.loading.set(true);
+
+    try {
+      if (!showSpinner) {
+        const fresh = await firstValueFrom(this.songsService.listSongs());
+        this.songs.set(fresh);
+        this.loaded.set(true);
+        void writeCachedSongs(fresh);
+        return;
+      }
+
+      const collected: SongManifest[] = [];
+      await this.songsService.streamSongs((batch) => {
+        collected.push(...batch);
+        this.songs.set([...collected]);
+      });
+      this.songs.set(collected);
+      this.loaded.set(true);
+      void writeCachedSongs(collected);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   async requestVocalRangeAnalysis(song: SongManifest, force = false): Promise<SongManifest | null> {
@@ -179,8 +235,9 @@ export class LibraryService {
       .then((updated) => {
         if (updated) {
           this.songs.update((songs) =>
-            songs.map((existing) => songKey(existing) === key ? updated : existing),
+            songs.map((existing) => (songKey(existing) === key ? updated : existing)),
           );
+          void writeCachedSongs(this.songs());
         }
         return updated;
       })
@@ -209,7 +266,7 @@ export class LibraryService {
         .filter((hit) => hit.score >= 0)
         .sort((a, b) => a.score - b.score);
 
-    const songIndex = new Map(this.songs().map((song) => [songKey(song), song]));
+    const songIndex = this.songByKey();
     const playlists = this.playlistsService.playlists().map((playlist) => {
       const name = normalize(playlist.name);
       return { playlist, text: name, title: name };
@@ -269,8 +326,6 @@ export class LibraryService {
     ];
     const prioritizedCollectionKeys = new Set(prioritizedCollections.map(({ key }) => key));
 
-    // Songs also match on artist/album text, so only count songs whose own title matches.
-    // Artist, album and playlist groups matching by name more often than songs lead the results.
     const titleMatches = songs.filter(({ score }) => score < 2).length;
     const groups: { hits: SearchHit[]; matches: number; cap: number; order: number }[] = [
       { hits: songHits, matches: titleMatches, cap: 5, order: 0 },

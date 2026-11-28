@@ -46,20 +46,70 @@
         @if (queue() === 'karaoke_queue' && item().status !== 'failed' && item().status !== 'cancelled' && item().status !== 'cancelling') {
           <button type="button" role="menuitem" (click)="select.emit()">Play</button>
         }
-        @if (item().status === 'pending' || item().status === 'processing') {
-          <button type="button" role="menuitem" (click)="pause.emit()">Pause processing</button>
-        } @else if (item().status === 'paused') {
-          <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
-        }
         @if (queue() === 'karaoke_queue') {
-          <button type="button" role="menuitem" (click)="assignSingers()">Assign singers</button>
+          <button
+            type="button"
+            role="menuitem"
+            [disabled]="isFirst()"
+            (click)="moveUp.emit()"
+          >
+            Move up
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            [disabled]="isLast()"
+            (click)="moveDown.emit()"
+          >
+            Move down
+          </button>
           <hr />
           <button type="button" role="menuitem" class="danger" (click)="remove.emit()">
             Remove from Karaoke Queue
           </button>
-        } @else if (item().status !== 'cancelled') {
+
+          <button
+            type="button"
+            role="menuitem"
+            [disabled]="isLast()"
+            (click)="moveDown.emit()"
+          >
+            Move down
+          </button>
+          @if (item().status === 'completed') {
+            <button type="button" role="menuitem" (click)="editMetadata()">
+              Edit metadata
+            </button>
+          }
           <hr />
-          <button type="button" role="menuitem" class="danger" (click)="remove.emit()">Cancel processing</button>
+        } @else {
+          @if (item().status === 'pending') {
+            <button
+              type="button"
+              role="menuitem"
+              [disabled]="isFirst()"
+              (click)="moveUp.emit()"
+            >
+              Move up
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              [disabled]="isLast()"
+              (click)="moveDown.emit()"
+            >
+              Move down
+            </button>
+            <hr />
+          }
+          @if (item().status === 'pending' || item().status === 'processing') {
+            <button type="button" role="menuitem" (click)="pause.emit()">Pause processing</button>
+          } @else if (item().status === 'paused') {
+            <button type="button" role="menuitem" (click)="resume.emit()">Resume processing</button>
+          }
+          @if (item().status !== 'cancelled') {
+            <button type="button" role="menuitem" class="danger" (click)="remove.emit()">Cancel processing</button>
+          }
         }
       }
     </app-context-menu>

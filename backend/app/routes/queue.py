@@ -18,7 +18,7 @@ from typing import Any, Dict, Literal, Optional
 
 import mutagen
 from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.tasks import (
@@ -156,6 +156,7 @@ async def add_to_queue(
     output_root = get_output_dir()
     input_path = upload_dir(output_root) / f"{task_id}_{safe_name}"
     lyrics_path = input_path.with_suffix(".ttml")
+    content: Optional[str] = None
 
     if lyrics is not None:
         lyrics_name = safe_upload_name(lyrics.filename)
@@ -187,7 +188,7 @@ async def add_to_queue(
             while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                 await asyncio.to_thread(buffer.write, chunk)
         metadata = await asyncio.to_thread(extract_raw_metadata, input_path)
-        if lyrics is not None:
+        if content is not None:
             await asyncio.to_thread(lyrics_path.write_text, content, encoding="utf-8")
     except Exception as exc:
         input_path.unlink(missing_ok=True)
@@ -201,7 +202,12 @@ async def add_to_queue(
         duration_seconds=duration,
         priority=QueuePriority(priority),
         status="pending",
-        **metadata,
+        raw_artist=metadata["raw_artist"],
+        raw_album=metadata["raw_album"],
+        raw_title=metadata["raw_title"],
+        artist=metadata["artist"],
+        album=metadata["album"],
+        title=metadata["title"],
     )
     location = find_song_directory(item.artist, item.album, item.title)
     if location and _has_playable_stems(location[0]):
@@ -330,11 +336,12 @@ async def stream_queue(request: Request) -> StreamingResponse:
     async def events():
         changed = queue_manager.subscribe()
         last_payload: Optional[str] = None
-        last_sent = time.monotonic()
+        last_sent = 0.0
         try:
             while not await request.is_disconnected():
                 changed.clear()
-                payload = json.dumps(await build_queue_snapshot(base_url))
+                snapshot = await build_queue_snapshot(base_url)
+                payload = json.dumps(snapshot)
                 now = time.monotonic()
                 if payload != last_payload:
                     last_payload = payload
@@ -343,8 +350,12 @@ async def stream_queue(request: Request) -> StreamingResponse:
                 elif now - last_sent >= HEARTBEAT_SECONDS:
                     last_sent = now
                     yield ": heartbeat\n\n"
+
+                # Only poll every 0.5s while a separation job is actively running.
+                is_active = snapshot.get("current_task") is not None
+                timeout = STREAM_POLL_SECONDS if is_active else HEARTBEAT_SECONDS
                 try:
-                    await asyncio.wait_for(changed.wait(), STREAM_POLL_SECONDS)
+                    await asyncio.wait_for(changed.wait(), timeout)
                 except asyncio.TimeoutError:
                     pass
         finally:
@@ -457,42 +468,41 @@ def _locate(artist: str, album: str, title: str) -> tuple[Path, Path, int]:
 
 
 @songs_router.get("/songs")
-async def list_songs(request: Request) -> list[Dict[str, Any]]:
-    return await asyncio.to_thread(library.list_songs, str(request.base_url))
+async def list_songs(
+    request: Request,
+    refresh: bool = Query(default=False),
+) -> Response:
+    if refresh:
+        await asyncio.to_thread(library.refresh_now)
+    etag = await asyncio.to_thread(library.get_etag)
+    if not refresh and request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    songs = await asyncio.to_thread(library.list_songs, str(request.base_url))
+    return JSONResponse(content=songs, headers={"ETag": etag, "Cache-Control": "no-cache"})
 
 
 @songs_router.get("/songs/stream")
 async def stream_songs(request: Request) -> StreamingResponse:
     """NDJSON: one JSON array of songs per line, so the UI can fill in while the library is scanned."""
     base_url = str(request.base_url)
-    batches = library.stream_songs(base_url)
+    cancel = threading.Event()
+    batches = library.stream_songs(base_url, cancel=cancel)
 
     async def body():
-        pending: asyncio.Task | None = None
-
-        def close_after_batch(task: asyncio.Task) -> None:
-            try:
-                task.result()
-            except Exception:
-                logger.exception("Library scan failed after the client disconnected")
-            finally:
-                batches.close()
-
         try:
-            while True:
-                pending = asyncio.create_task(asyncio.to_thread(next, batches, None))
-                batch = await asyncio.shield(pending)
-                pending = None
+            while not await request.is_disconnected():
+                batch = await asyncio.to_thread(next, batches, None)
                 if batch is None:
                     return
                 yield json.dumps(batch) + "\n"
         finally:
-            if pending is not None:
-                pending.add_done_callback(close_after_batch)
-            else:
-                batches.close()
+            cancel.set()
 
-    return StreamingResponse(body(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        body(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @songs_router.get("/songs/{artist}/{album}/{title}")

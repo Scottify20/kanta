@@ -1,13 +1,12 @@
 <div
   class="item"
+  tabindex="0"
   role="option"
-  [attr.tabindex]="disabled() ? -1 : 0"
-  [attr.draggable]="!disabled()"
-  [attr.aria-disabled]="disabled()"
   [attr.aria-selected]="selected()"
-  (click)="!disabled() && activate.emit($event)"
-  (keydown.enter)="!disabled() && activate.emit($any($event))"
-  (contextmenu)="!disabled() && menu.openAt($event)"
+  (click)="activate.emit($event)"
+  (contextmenu)="onContextMenu($event)"
+  (keydown.enter)="onEnter($event)"
+  [draggable]="!disabled()"
   (dragstart)="dragStarted.emit($event)"
   (dragend)="dragEnded.emit()"
 >
@@ -16,40 +15,47 @@
       @for (url of mosaicCovers(); track $index) {
         <span class="tile" [style.background-image]="url ? 'url(' + url + ')' : null"></span>
       }
-    } @else if (entry().covers[0]) {
-      <img [src]="entry().covers[0]" [alt]="entry().title + ' cover'" loading="lazy" draggable="false" />
+    } @else if (coverSrc(); as src) {
+      <img [src]="src" [alt]="entry().title + ' cover'" loading="lazy" decoding="async" />
     } @else {
-      <span class="placeholder"></span>
+      <div class="placeholder"></div>
     }
+
+    <span class="check"></span>
+
     @if (progress() !== null) {
-      <span class="progress" [style.--progress]="progress() + '%'" role="progressbar" [attr.aria-valuenow]="progress()" aria-label="Processing"></span>
+      <div class="progress" [style.--progress]="progress() + '%'"></div>
     }
-    <span class="check" aria-hidden="true"></span>
   </div>
+
   <div class="text">
     <div class="title-row">
       <strong>{{ entry().title }}</strong>
       @if (lyricsLevel(); as level) {
-        <span class="lyrics-chip" [class]="'level-' + level">{{ level }}</span>
+        @if (level !== 'none') {
+          <span class="lyrics-chip" [class]="'level-' + level">
+            {{ level === 'word' ? 'Word' : 'Line' }}
+          </span>
+        }
       }
       @if (entry().kind === 'song' && entry().songs[0]?.is_duet) {
         <span class="lyrics-chip duet">Duet</span>
       }
-      @if (vocalFitLabel(); as fitLabel) {
-        <span class="fit-pill" [class]="'fit-pill fit-' + vocalFit()?.status">{{ fitLabel }}</span>
+      @if (vocalFitLabel(); as fit) {
+        <span class="fit-pill" [class]="'fit-' + vocalFit()?.status">{{ fit }}</span>
       }
     </div>
     <small>{{ entry().subtitle }}</small>
   </div>
-  <app-entry-menu #menu
+
+<app-entry-menu
     class="menu"
-    [style.display]="disabled() ? 'none' : null"
     [kind]="entry().kind"
-    [popupId]="'lib:' + entry().key"
-    group="library"
+    [popupId]="'entry:' + entry().key"
     [playlists]="playlists()"
     [inPlaylist]="inPlaylist()"
-    [revealOnHover]="true"
+    [selectedCount]="selectedCount()"
+    [playable]="!disabled()"
     (action)="action.emit($event)"
   />
 </div>

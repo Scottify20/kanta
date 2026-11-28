@@ -1,4 +1,5 @@
 import type { QueueItem } from '../../features/queue/interfaces/queue.models';
+import type { DuetVocalRanges } from './vocal-fit';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, firstValueFrom, map } from 'rxjs';
@@ -47,6 +48,7 @@ export type SongMetadataUpdate = Partial<
     | 'stems'
     | 'lyrics'
     | 'covers'
+    | 'cover_url'
     | 'master'
     | 'duration_seconds'
     | 'date_added'
@@ -60,6 +62,7 @@ export type SongMetadataUpdate = Partial<
     | 'vocal_tessitura_min_note'
     | 'vocal_tessitura_max_note'
     | 'vocal_voice_type'
+    | 'duet_vocal_ranges'
     | 'replaygain_track_gain'
     | 'replaygain_track_peak'
     | 'replaygain_album_gain'
@@ -85,6 +88,7 @@ export interface SongManifest {
   is_duet?: boolean;
   lyrics_offset_ms?: number;
   covers: SongFile[];
+  cover_url?: string | null;
   master: string | null;
   album_artist?: string | null;
   year?: string | number | null;
@@ -111,6 +115,7 @@ export interface SongManifest {
   vocal_tessitura_min_note?: string | null;
   vocal_tessitura_max_note?: string | null;
   vocal_voice_type?: 'Bass' | 'Baritone' | 'Tenor' | 'Alto' | 'Mezzo-Soprano' | 'Soprano' | null;
+  duet_vocal_ranges?: DuetVocalRanges | null;
 }
 
 export function cleanStemTitle(title: string | null | undefined): string {
@@ -148,7 +153,6 @@ export class SongsService {
   readonly playRequested = signal(false);
   readonly currentSong = signal<SongManifest | null>(null);
   readonly currentQueueTaskId = signal<string | null>(null);
-  // A karaoke queue track picked from the shell-level queue; now-playing consumes it.
   readonly queueTrackRequest = signal<QueueItem | null>(null);
 
   requestQueueTrack(item: QueueItem): void {
@@ -244,7 +248,6 @@ export class SongsService {
     );
   }
 
-  // Looks for better lyrics before playback; the backend skips it when auto-fetch is disabled.
   autoFetchLyrics(song: { artist: string; album: string; title: string }): Observable<{ lyrics_level: LyricsLevel; changed: boolean }> {
     return this.http.post<{ lyrics_level: LyricsLevel; changed: boolean }>(
       `${API_URL}/api/songs/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.album)}/${encodeURIComponent(song.title)}/lyrics/auto-fetch`,
@@ -252,31 +255,39 @@ export class SongsService {
     );
   }
 
-  listSongs(): Observable<SongManifest[]> {
-    return this.http.get<SongManifest[]>(`${API_URL}/api/songs`).pipe(
+  listSongs(refresh = false): Observable<SongManifest[]> {
+    const url = refresh ? `${API_URL}/api/songs?refresh=true` : `${API_URL}/api/songs`;
+    return this.http.get<SongManifest[]>(url).pipe(
       map((songs) => songs.map(sanitizeManifest)),
     );
   }
 
-  // Reads the NDJSON stream; each line is a batch of songs, delivered while the backend is still scanning.
-  async streamSongs(onBatch: (songs: SongManifest[]) => void, onStart?: () => void): Promise<void> {
-    const response = await fetch(`${API_URL}/api/songs/stream`);
+  async streamSongs(
+    onBatch: (songs: SongManifest[]) => void,
+    onStart?: () => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const response = await fetch(`${API_URL}/api/songs/stream`, { signal });
     if (!response.ok || !response.body) throw new Error(`Could not load songs (${response.status})`);
     onStart?.();
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let pending = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      pending += value ?? '';
-      const lines = pending.split('\n');
-      pending = done ? '' : (lines.pop() ?? '');
-      for (const line of lines) {
-        if (line.trim()) {
-          const batch = JSON.parse(line) as SongManifest[];
-          onBatch(batch.map(sanitizeManifest));
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        pending += value ?? '';
+        const lines = pending.split('\n');
+        pending = done ? '' : (lines.pop() ?? '');
+        for (const line of lines) {
+          if (line.trim()) {
+            const batch = JSON.parse(line) as SongManifest[];
+            onBatch(batch.map(sanitizeManifest));
+          }
         }
+        if (done) return;
       }
-      if (done) return;
+    } finally {
+      reader.releaseLock();
     }
   }
 

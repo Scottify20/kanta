@@ -225,7 +225,7 @@ export class AudioPlayerService {
         } catch (error) {
           console.warn('Master audio is unavailable; using separated stems:', error);
           this.masterSource?.disconnect();
-          this.masterAudio.remove();
+          this.disposeAudio(this.masterAudio);
           this.masterSource = null;
           this.masterAudio = null;
         }
@@ -448,9 +448,9 @@ export class AudioPlayerService {
     this.masterBypassGain?.disconnect();
     this.masterGain?.disconnect();
     this.peakLimiter?.disconnect();
-    this.vocalsAudio?.remove();
-    this.instrumentalAudio?.remove();
-    this.masterAudio?.remove();
+    this.disposeAudio(this.vocalsAudio);
+    this.disposeAudio(this.instrumentalAudio);
+    this.disposeAudio(this.masterAudio);
     this.vocalsAudio = null;
     this.instrumentalAudio = null;
     this.masterAudio = null;
@@ -474,6 +474,14 @@ export class AudioPlayerService {
     this._isKeyShiftEnabled.set(true);
     this.currentTime.set(0);
     this.duration.set(0);
+  }
+
+  private disposeAudio(audio: HTMLAudioElement | null): void {
+    if (!audio) return;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    audio.remove();
   }
 
   private stopStretch(stretch: SignalsmithStretchNode | null): void {
@@ -524,12 +532,27 @@ export class AudioPlayerService {
 
   private attachTimeUpdates(): void {
     const update = (): void => {
-      if (this.usingMasterBypass && this.masterAudio) {
-        this.currentTime.set(this.masterAudio.currentTime);
+      const vocals = this.vocalsAudio;
+      const instrumental = this.instrumentalAudio;
+      const master = this.masterAudio;
+      if (this.usingMasterBypass && master) {
+        this.currentTime.set(master.currentTime);
+        if (this.isPlaying() && instrumental && Math.abs(instrumental.currentTime - master.currentTime) > 0.12) {
+          instrumental.currentTime = master.currentTime;
+        }
+        if (this.isPlaying() && vocals && Math.abs(vocals.currentTime - master.currentTime) > 0.12) {
+          vocals.currentTime = master.currentTime;
+        }
       } else {
-        const vocalsTime = this.vocalsAudio?.currentTime ?? 0;
-        const instrumentalTime = this.instrumentalAudio?.currentTime ?? 0;
-        this.currentTime.set((vocalsTime + instrumentalTime) / 2);
+        const vocalsTime = vocals?.currentTime ?? 0;
+        const instrumentalTime = instrumental?.currentTime ?? 0;
+        if (this.isPlaying() && vocals && instrumental && Math.abs(vocalsTime - instrumentalTime) > 0.08) {
+          vocals.currentTime = instrumentalTime;
+        }
+        if (this.isPlaying() && master && instrumental && Math.abs(master.currentTime - instrumentalTime) > 0.12) {
+          master.currentTime = instrumentalTime;
+        }
+        this.currentTime.set(instrumental ? instrumental.currentTime : (vocalsTime + instrumentalTime) / 2);
       }
     };
     this.vocalsAudio?.addEventListener('timeupdate', update);

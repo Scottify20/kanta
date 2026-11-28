@@ -7,8 +7,9 @@ import { EntryActionsService } from '../../services/entry-actions.service';
 import { PlaylistsService } from '../../services/playlists.service';
 import { EntryAction, EntryMenu } from '../entry-menu/entry-menu';
 import { songArtist, songTitle } from '../../services/songs.service';
-import { PlaybackActions } from '../../services/playback-actions.service';
+import { PlaybackActions, isPlayable } from '../../services/playback-actions.service';
 import { setQueueItemDragImage, writeDragPayload } from '../../util/drag-payload';
+import { sizedImageUrl } from '../../util/image-url';
 import { LayoutService } from '../../services/layout.service';
 import { ArtistInfoService } from '../../services/artist-info.service';
 
@@ -40,7 +41,7 @@ export class SearchBar {
   constructor() {
     effect(() => {
       if (!this.open()) return;
-      for (const hit of this.library.search(this.query())) {
+      for (const hit of this.hits()) {
         if (hit.kind === 'artist') this.artistInfo.request(hit.title, hit.songs[0]?.artist);
       }
     });
@@ -48,7 +49,6 @@ export class SearchBar {
 
   onFocus(): void {
     this.focused.set(true);
-    // The index is cached; this only hits the network the first time or after changes.
     void this.library.load();
     this.playlistsService.refresh();
   }
@@ -100,9 +100,10 @@ export class SearchBar {
   }
 
   private withArtistPhoto(hit: SearchHit): SearchHit {
-    if (hit.kind !== 'artist') return hit;
-    const photo = this.artistInfo.info(hit.title)?.photo_url;
-    return photo ? { ...hit, coverUrl: photo } : hit;
+    const rawCover = hit.kind === 'artist'
+      ? (this.artistInfo.info(hit.title)?.photo_url ?? hit.coverUrl)
+      : hit.coverUrl;
+    return { ...hit, coverUrl: sizedImageUrl(rawCover, 128) };
   }
 
   onAction(hit: SearchHit, action: EntryAction): void {
@@ -115,15 +116,20 @@ export class SearchBar {
   }
 
   dragStart(event: DragEvent, hit: SearchHit): void {
-    writeDragPayload(event, hit.songs);
+    const playable = hit.songs.filter(isPlayable);
+    if (!playable.length) {
+      event.preventDefault();
+      return;
+    }
+    writeDragPayload(event, playable);
     setQueueItemDragImage(event, {
-      songs: hit.songs.map((song) => ({
+      songs: playable.map((song) => ({
         title: hit.kind === 'song' ? songTitle(song) : hit.title,
         artist: hit.kind === 'song' ? songArtist(song) : hit.subtitle,
         coverUrl: hit.coverUrl,
       })),
     });
-    this.layout.beginDrag();
+    this.layout.beginDrag(playable);
   }
 
   dragEnd(): void {

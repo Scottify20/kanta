@@ -1,8 +1,8 @@
 import {
   Component,
   HostListener,
-  OnInit,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -12,7 +12,6 @@ import {
   PartySessionService,
   QueueSingerAssignment,
   UserProfile,
-  recommendSoloKey,
   recommendDuetKey,
 } from '../../services/party-session.service';
 import { SongManifest } from '../../services/songs.service';
@@ -22,33 +21,36 @@ import { SongManifest } from '../../services/songs.service';
   templateUrl: './song-assignment-dialog.html',
   styleUrl: './song-assignment-dialog.scss',
 })
-export class SongAssignmentDialog implements OnInit {
+export class SongAssignmentDialog {
   readonly song = input.required<SongManifest>();
   readonly isDuet = input(false);
   readonly initialAssignment = input.required<QueueSingerAssignment>();
   readonly batchIndex = input<number>(1);
   readonly batchTotal = input<number>(1);
+  readonly headerMode = input(false);
+  readonly highlightedPart = input<'primary' | 'secondary' | null>(null);
 
   readonly confirmed = output<QueueSingerAssignment>();
   readonly dismissed = output<QueueSingerAssignment>();
+  readonly assignmentChange = output<QueueSingerAssignment>();
 
   protected readonly party = inject(PartySessionService);
 
   readonly primarySingerId = signal<string | null>(null);
   readonly secondarySingerId = signal<string | null>(null);
   readonly prioritySingerId = signal<string | null>(null);
-
-  readonly primaryDropdownOpen = signal(false);
-  readonly secondaryDropdownOpen = signal(false);
+  readonly conflictExpanded = signal(false);
   readonly isClosing = signal(false);
 
-  ngOnInit(): void {
-    const init = this.initialAssignment();
-    if (init) {
+  constructor() {
+    effect(() => {
+      const init = this.initialAssignment();
+      if (!init) return;
       this.primarySingerId.set(init.primarySingerId);
       this.secondarySingerId.set(init.secondarySingerId);
       this.prioritySingerId.set(init.prioritySingerId);
-    }
+      this.conflictExpanded.set(false);
+    });
   }
 
   readonly currentAssignment = computed<QueueSingerAssignment>(() => ({
@@ -64,56 +66,52 @@ export class SongAssignmentDialog implements OnInit {
     this.party.roster().find((s) => s.id === this.secondarySingerId()) ?? null,
   );
 
-  readonly isCompactRow = computed(() => this.party.roster().length <= 3);
-
   readonly batchRemaining = computed(() =>
     Math.max(0, this.batchTotal() - this.batchIndex()),
   );
 
-  readonly recommendation = computed(() => {
-    const s = this.song();
-    const primary = this.primarySinger();
-    if (!s || !primary) return null;
-    const secondary = this.secondarySinger();
-    if (this.isDuet() && secondary) {
-      return recommendDuetKey(s, primary, secondary);
-    }
-    return recommendSoloKey(s, primary);
-  });
-
-  readonly hasVocalConflict = computed(() => {
-    const rec = this.recommendation();
-    return !!(rec && rec.kind === 'duet' && rec.conflict && this.primarySinger() && this.secondarySinger());
-  });
-
-  readonly conflictDifference = computed(() => {
-    const rec = this.recommendation();
-    if (!rec || rec.kind !== 'duet') return 0;
-    return Math.abs(rec.shift1 - rec.shift2);
-  });
-
-  readonly s1ShiftLabel = computed(() => {
+  /** Uses recommendDuetKey as the single source of truth so all shifts match playback. */
+  private readonly duetAnalysis = computed(() => {
     const s = this.song();
     const s1 = this.primarySinger();
-    if (!s || !s1) return '0 ST';
-    const shift = recommendSoloKey(s, s1).semitones;
-    return `${shift > 0 ? '+' : ''}${shift} ST`;
-  });
-
-  readonly s2ShiftLabel = computed(() => {
-    const s = this.song();
     const s2 = this.secondarySinger();
-    if (!s || !s2) return '0 ST';
-    const shift = recommendSoloKey(s, s2).semitones;
-    return `${shift > 0 ? '+' : ''}${shift} ST`;
+    if (!this.isDuet() || !s || !s1 || !s2) return null;
+
+    const rec = recommendDuetKey({ ...s, is_duet: true }, s1, s2);
+    if (!rec || rec.unanalyzed || rec.uncalibrated) return null;
+
+    return {
+      shift1: rec.shift1,
+      shift2: rec.shift2,
+      diff: Math.abs(rec.shift1 - rec.shift2),
+      compromise: rec.semitones,
+      conflict: rec.conflict,
+    };
   });
 
-  readonly compromiseShiftLabel = computed(() => {
-    const rec = this.recommendation();
-    if (!rec || rec.kind !== 'duet') return '0 ST';
-    const avg = Math.round((rec.shift1 + rec.shift2) / 2);
-    return `${avg > 0 ? '+' : ''}${avg} ST`;
+  readonly hasVocalConflict = computed(() => this.duetAnalysis()?.conflict === true);
+  readonly conflictDifference = computed(() => this.duetAnalysis()?.diff ?? 0);
+
+  readonly s1ShiftLabel = computed(() => this.formatShift(this.duetAnalysis()?.shift1 ?? 0));
+  readonly s2ShiftLabel = computed(() => this.formatShift(this.duetAnalysis()?.shift2 ?? 0));
+  readonly compromiseShiftLabel = computed(() => this.formatShift(this.duetAnalysis()?.compromise ?? 0));
+
+  readonly activeConflictSummary = computed(() => {
+    const prio = this.prioritySingerId();
+    if (prio === 'original') return 'Original · 0 ST';
+    if (prio && prio === this.primarySinger()?.id) {
+      return `${this.primarySinger()!.name} · ${this.s1ShiftLabel()}`;
+    }
+    if (prio && prio === this.secondarySinger()?.id) {
+      return `${this.secondarySinger()!.name} · ${this.s2ShiftLabel()}`;
+    }
+    return `Balanced · ${this.compromiseShiftLabel()}`;
   });
+
+  private formatShift(st: number): string {
+    if (st === 0) return '0 ST';
+    return `${st > 0 ? '+' : ''}${st} ST`;
+  }
 
   singerInitial(singer: UserProfile | null): string {
     return singer?.initials || singer?.name.slice(0, 1).toUpperCase() || '?';
@@ -124,33 +122,43 @@ export class SongAssignmentDialog implements OnInit {
     return `${singer.minNote}–${singer.maxNote}`;
   }
 
-  toggleDropdown(part: 'primary' | 'secondary'): void {
-    if (part === 'primary') {
-      this.primaryDropdownOpen.update((v) => !v);
-      this.secondaryDropdownOpen.set(false);
-    } else {
-      this.secondaryDropdownOpen.update((v) => !v);
-      this.primaryDropdownOpen.set(false);
-    }
+  toggleConflictExpanded(): void {
+    this.conflictExpanded.update((v) => !v);
   }
 
   selectSinger(singerId: string | null, part: 'primary' | 'secondary'): void {
+    const curPrimary = this.primarySingerId();
+    const curSecondary = this.secondarySingerId();
+
     if (part === 'primary') {
+      if (singerId !== null && singerId === curSecondary) {
+        this.secondarySingerId.set(curPrimary);
+      }
       this.primarySingerId.set(singerId);
-      this.primaryDropdownOpen.set(false);
     } else {
+      if (singerId !== null && singerId === curPrimary) {
+        this.primarySingerId.set(curSecondary);
+      }
       this.secondarySingerId.set(singerId);
-      this.secondaryDropdownOpen.set(false);
     }
+    this.prioritySingerId.set(null);
+    this.conflictExpanded.set(false);
+    this.assignmentChange.emit(this.currentAssignment());
   }
 
-  canAssign(singer: UserProfile, part: 'primary' | 'secondary'): boolean {
-    const otherId = part === 'primary' ? this.secondarySingerId() : this.primarySingerId();
-    return singer.id !== otherId;
+  swapParts(): void {
+    const p = this.primarySingerId();
+    const s = this.secondarySingerId();
+    if (!p && !s) return;
+    this.primarySingerId.set(s);
+    this.secondarySingerId.set(p);
+    this.prioritySingerId.set(null);
+    this.assignmentChange.emit(this.currentAssignment());
   }
 
   prioritizeSinger(singerId: string | null): void {
     this.prioritySingerId.set(singerId);
+    this.assignmentChange.emit(this.currentAssignment());
   }
 
   confirm(): void {
@@ -158,35 +166,22 @@ export class SongAssignmentDialog implements OnInit {
     this.isClosing.set(true);
     setTimeout(() => {
       this.confirmed.emit(this.currentAssignment());
-    }, 180);
+    }, 160);
   }
 
   dismiss(): void {
-    if (this.isClosing()) return;
+    if (this.headerMode() || this.isClosing()) return;
     this.isClosing.set(true);
     setTimeout(() => {
       this.dismissed.emit(this.currentAssignment());
-    }, 180);
+    }, 160);
   }
 
-@HostListener('document:keydown.escape', ['$event'])
+  @HostListener('document:keydown.escape', ['$event'])
   onEscape(event?: Event): void {
+    if (this.headerMode()) return;
     event?.preventDefault();
     event?.stopPropagation();
-    if (this.primaryDropdownOpen() || this.secondaryDropdownOpen()) {
-      this.primaryDropdownOpen.set(false);
-      this.secondaryDropdownOpen.set(false);
-    } else {
-      this.dismiss();
-    }
-  }
-
-  @HostListener('document:pointerdown', ['$event'])
-  onDocumentPointerDown(event: PointerEvent): void {
-    const target = event.target as HTMLElement | null;
-    if (!target?.closest('.custom-select-container')) {
-      this.primaryDropdownOpen.set(false);
-      this.secondaryDropdownOpen.set(false);
-    }
+    this.dismiss();
   }
 }
